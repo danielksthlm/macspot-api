@@ -177,6 +177,17 @@ async function getWeeklyBookingMinutes(db, meetingType, date) {
   return parseInt(res.rows[0].minutes) || 0;
 }
 
+/**
+ * Hämtar en bokning från databasen baserat på ID.
+ */
+async function getBookingById(db, bookingId) {
+  const result = await db.query(
+    `SELECT * FROM bookings WHERE id = $1`,
+    [bookingId]
+  );
+  return result.rows[0];
+}
+
 export {
   validateBookingInput,
   checkBookingConditions,
@@ -184,5 +195,6 @@ export {
   isWeekend,
   createBookingInDB,
   createBookingInDB as insertBooking,
-  getWeeklyBookingMinutes
+  getWeeklyBookingMinutes,
+  getBookingById
 };

@@ -28,33 +28,25 @@ func start
 
 ## 📁 Mappstruktur
 macspot-api/
-├── .github/
-│   └── workflows/
-│       └── deploy.yml
-├── lib/
-│   ├── calendar/
-│   │   ├── appleCalendar.js
-│   │   ├── caldav.js
-│   │   ├── roomBooking.js
-│   ├── maps/
-│   │   └── appleMaps.js
-│   ├── notification/
-│   │   ├── emailSender.js
-│   │   └── sendMail.js
-│   ├── log/
-│   │   └── eventLogger.js
-│   ├── utils/
-│   │   └── debug.js
-│   └── db/
-│       └── db.js
-├── routes/
-│   ├── bookings.js
-│   └── getAvailableSlots.js
-├── index.js            # Importerar routes
-├── host.json
-├── local.settings.json
-├── package.json
-└── README.md
+├── .github/workflows/       # GitHub Actions workflows (CI/CD)
+├── src/                     # All applikationslogik
+│   ├── lib/                 # Återanvändbara moduler
+│   │   ├── calendar/        # Kalender- och bokningslogik (MS365, CalDAV)
+│   │   ├── db/              # Databaskoppling (PostgreSQL)
+│   │   ├── log/             # Händelseloggning
+│   │   ├── maps/            # Apple Maps-integration
+│   │   ├── notification/    # E-postutskick
+│   │   └── utils/           # Hjälpfunktioner
+│   ├── routes/              # Azure Functions (HTTP triggers)
+│   │   ├── bookings.js
+│   │   ├── getAvailableSlots.js
+│   │   ├── health.js
+│   │   └── status.js
+├── index.js                 # Importerar alla routes
+├── host.json                # Azure Functions host-konfiguration
+├── local.settings.json      # Lokala miljövariabler
+├── package.json             # NPM-paket och skript
+└── README.md                # Dokumentation
 
 ## 🔗 Kommandoalias (förslag)
 

@@ -1,7 +1,7 @@
 // File: routes/bookings.js
 import { app } from '@azure/functions';
 import db from '../lib/utils/db.js';
-import { insertBooking, getBookingSettings } from '../lib/bookingService.js';
+import { insertBooking, getBookingSettings, getBookingById } from '../lib/bookingService.js';
 import { resolveLocationType, bookMeetingRoom } from '../lib/calendar/roomBooking.js';
 import { sendConfirmationEmail } from '../lib/notification/emailSender.js';
 import { logEvent } from '../lib/log/eventLogger.js';
@@ -86,6 +86,82 @@ app.http('bookings', {
       });
     } catch (err) {
       context.error("❌ Booking error", err);
+      return new Response(JSON.stringify({
+        success: false,
+        message: "Internal server error"
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+});
+
+app.http('getBookingById', {
+  methods: ['GET'],
+  route: 'bookings/{id}',
+  authLevel: 'anonymous',
+  handler: async (req, context) => {
+    const id = req.params.id;
+
+    if (!id) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: "Missing booking ID"
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    try {
+      const booking = await getBookingById(db, id);
+      if (!booking) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: "Booking not found"
+        }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        booking
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (err) {
+      context.error("❌ Get booking by ID error", err);
+      return new Response(JSON.stringify({
+        success: false,
+        message: "Internal server error"
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+});
+// GET /bookings - fetch all bookings
+app.http('getAllBookings', {
+  methods: ['GET'],
+  route: 'bookings',
+  authLevel: 'anonymous',
+  handler: async (req, context) => {
+    try {
+      const result = await db.query('SELECT * FROM bookings ORDER BY start_time DESC');
+      return new Response(JSON.stringify({
+        success: true,
+        bookings: result.rows
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (err) {
+      context.error("❌ Error fetching all bookings", err);
       return new Response(JSON.stringify({
         success: false,
         message: "Internal server error"
