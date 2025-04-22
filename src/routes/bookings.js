@@ -1,6 +1,6 @@
 // File: routes/bookings.js
 import { app } from '@azure/functions';
-import db from '../lib/utils/db.js';
+import db from '../lib/db/db.js';
 import { insertBooking, getBookingSettings, getBookingById } from '../lib/bookingService.js';
 import { resolveLocationType, bookMeetingRoom } from '../lib/calendar/roomBooking.js';
 import { sendConfirmationEmail } from '../lib/notification/emailSender.js';
