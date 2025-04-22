@@ -1,12 +1,9 @@
-import pkg from 'pg';
-const { Pool } = pkg;
-
 const pool = new Pool({
-  user: "danielkallberg",
-  host: "localhost",
-  database: "macspot",
-  password: "HittaFitta69", // Lägg till om du har ett lösenord
-  port: 5433
+  user: process.env.PGUSER || "danielkallberg",
+  host: process.env.PGHOST || "localhost",
+  database: process.env.PGDATABASE || "macspot",
+  password: process.env.PGPASSWORD || "HittaFitta69",
+  port: parseInt(process.env.PGPORT || "5433", 10),
+  ssl: process.env.PGHOST ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 5000
 });
-
-export default pool;
