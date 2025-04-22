@@ -1,6 +1,6 @@
 // File: routes/getAvailableSlots.js
 // Removed app import as it's not needed for v4 isolated model.
-import db from '../lib/utils/db.js';
+import db from '../lib/db/db.js';
 import { getBookingSettings } from '../lib/bookingService.js';
 import { hasAppleCalendarConflict } from '../lib/calendar/appleCalendar.js';
 import { getTravelTime } from '../lib/maps/appleMaps.js';
