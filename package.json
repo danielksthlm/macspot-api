@@ -2,12 +2,22 @@
   "name": "macspot-api",
   "version": "1.0.0",
   "type": "module",
+  "description": "Azure Functions backend för MacSpot CRM/ERP",
   "main": "index.js",
   "scripts": {
-    "start": "func start"
+    "start": "func start",
+    "dev": "func start --verbose",
+    "deploy": "func azure functionapp publish macspotbackend"
   },
   "dependencies": {
-    "@azure/functions": "^4.7.0",
-    "uuid": "^11.1.0"
+    "@azure/functions": "^4.0.0",
+    "@microsoft/microsoft-graph-client": "^3.0.0",
+    "ical": "^0.8.0",
+    "isomorphic-fetch": "^3.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "luxon": "^3.4.4",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.11.3",
+    "uuid": "^9.0.0"
   }
 }
