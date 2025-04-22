@@ -1,0 +1,25 @@
+# node
+node_modules/
+npm-debug.log
+.env
+*.env
+
+# Azure Functions artifacts
+bin/
+obj/
+.local/
+
+# macOS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Deployment
+*.publishSettings
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
