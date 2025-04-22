@@ -13,6 +13,11 @@ jobs:
       - name: 📥 Check out code
         uses: actions/checkout@v3
 
+      - name: 🔐 Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: 🧱 Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -21,9 +26,8 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install
 
-      - name: 🚀 Deploy to Azure with Service Principal
+      - name: 🚀 Deploy to Azure Function App
         uses: Azure/functions-action@v1
         with:
           app-name: macspotbackend
           package: '.'
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
