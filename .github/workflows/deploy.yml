@@ -21,9 +21,9 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install
 
-      - name: 🚀 Deploy to Azure
+      - name: 🚀 Deploy to Azure with Service Principal
         uses: Azure/functions-action@v1
         with:
           app-name: macspotbackend
           package: '.'
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
