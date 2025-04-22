@@ -3,7 +3,7 @@ from datetime import datetime
 
 def samla_valda_filer_dynamiskt(projektrot="macspot-api"):
     filnamn_att_hitta = {
-        "main_macspot-backend.yml",
+        "deploy.yml",
         "local.settings.json",
         "host.json",
         "index.js",
