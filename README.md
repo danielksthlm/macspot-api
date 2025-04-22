@@ -27,64 +27,34 @@ func start
 ```
 
 ## 📁 Mappstruktur
-
-danielkallberg@MacBookPro macspot-api % tree -I 'node_modules' -L 4
-.
-├── all-in-one.js
+macspot-api/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+├── lib/
+│   ├── calendar/
+│   │   ├── appleCalendar.js
+│   │   ├── caldav.js
+│   │   ├── roomBooking.js
+│   ├── maps/
+│   │   └── appleMaps.js
+│   ├── notification/
+│   │   ├── emailSender.js
+│   │   └── sendMail.js
+│   ├── log/
+│   │   └── eventLogger.js
+│   ├── utils/
+│   │   └── debug.js
+│   └── db/
+│       └── db.js
+├── routes/
+│   ├── bookings.js
+│   └── getAvailableSlots.js
+├── index.js            # Importerar routes
 ├── host.json
-├── keys
-│   └── AuthKey_QKXA7S6PCK.p8
 ├── local.settings.json
-├── logs
-│   └── debug.log
-├── package-lock.json
 ├── package.json
-├── pgERD_booking_settings.pgerd
-├── pgERD_bookings.pgerd
-├── pgERD_macspot.pgerd
-├── pgERD_table_eventlog.pgerd
-├── README.md
-├── src
-│   ├── azure-functions.json
-│   ├── host.json
-│   ├── index.js
-│   ├── lib
-│   │   ├── bookingService.js
-│   │   ├── calendar
-│   │   │   ├── appleCalendar.js
-│   │   │   ├── caldav.js
-│   │   │   ├── ms365Calendar.js
-│   │   │   └── roomBooking.js
-│   │   ├── log
-│   │   │   └── eventLogger.js
-│   │   ├── maps
-│   │   │   └── appleMaps.js
-│   │   ├── msgraph
-│   │   │   └── msGraph.js
-│   │   ├── notification
-│   │   │   ├── emailSender.js
-│   │   │   └── sendMail.js
-│   │   ├── utils
-│   │   │   ├── db.js
-│   │   │   ├── debug.js
-│   │   │   └── health.js
-│   │   └── validation
-│   ├── redeploy-trigger.js
-│   ├── routes
-│   │   ├── api
-│   │   │   └── translation.js
-│   │   ├── bookings.js
-│   │   └── getAvailableSlots.js
-│   └── types
-└── webflow
-    ├── block_1.js
-    ├── block_1b.js
-    ├── block_2.js
-    └── block_3.js
-
-16 directories, 36 files
-danielkallberg@MacBookPro macspot-api % 
-
+└── README.md
 
 ## 🔗 Kommandoalias (förslag)
 
