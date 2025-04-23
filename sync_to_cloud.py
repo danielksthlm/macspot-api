@@ -36,7 +36,7 @@ def mark_as_processed(conn, change_id):
         cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
         conn.commit()
 
-def apply_change(conn, change):
+def apply_change(conn, change, local_conn):
     table_name, record_id, operation, payload = change[1], change[2], change[3], change[4]
     with conn.cursor() as cur:
         data = json.loads(payload) if isinstance(payload, str) else payload
@@ -58,6 +58,7 @@ def apply_change(conn, change):
         elif operation == 'DELETE':
             cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
         conn.commit()
+        mark_as_processed(local_conn, change[0])
 
 def sync():
     local_conn = connect_db(LOCAL_DB_CONFIG)
@@ -66,8 +67,7 @@ def sync():
     changes = fetch_pending_changes(local_conn)
     for change in changes:
         try:
-            apply_change(remote_conn, change)
-            mark_as_processed(local_conn, change[0])
+            apply_change(remote_conn, change, local_conn)
         except Exception as e:
             print(f"❌ Misslyckades att applicera ändring: {e}")
     
