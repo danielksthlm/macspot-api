@@ -17,71 +17,23 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: citext; Type: EXTENSION; Schema: -; Owner: -
---
 
-CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION citext; Type: COMMENT; Schema: -; Owner: 
---
-
-COMMENT ON EXTENSION citext IS 'data type for case-insensitive character strings';
 
 
---
--- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
-
-
---
--- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: 
---
-
-COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
-
-
---
--- Name: booking_status; Type: TYPE; Schema: public; Owner: postgres
---
-
-CREATE TYPE public.booking_status AS ENUM (
-    'pending',
-    'confirmed',
-    'cancelled'
-);
-
-
-ALTER TYPE public.booking_status OWNER TO postgres;
-
---
--- Name: get_booking_setting(text); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.get_booking_setting(key text) RETURNS text
-    LANGUAGE sql STABLE
-    AS $$
-  SELECT value ->> ''
-  FROM booking_settings
-  WHERE booking_settings.key = get_booking_setting.key;
-$$;
-
-
-ALTER FUNCTION public.get_booking_setting(key text) OWNER TO postgres;
 
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- Name: booking_settings; Type: TABLE; Schema: public; Owner: postgres
+-- Name: booking_settings; Type: TABLE; Schema: public;
 --
 
 CREATE TABLE public.booking_settings (
-    key public.citext NOT NULL,
+    key text NOT NULL,
     value jsonb,
     value_type text,
     description text,
@@ -90,10 +42,8 @@ CREATE TABLE public.booking_settings (
 );
 
 
-ALTER TABLE public.booking_settings OWNER TO postgres;
-
 --
--- Name: booking_settings_view; Type: VIEW; Schema: public; Owner: postgres
+-- Name: booking_settings_view; Type: VIEW; Schema: public;
 --
 
 CREATE VIEW public.booking_settings_view AS
@@ -111,14 +61,12 @@ CREATE VIEW public.booking_settings_view AS
    FROM public.booking_settings;
 
 
-ALTER TABLE public.booking_settings_view OWNER TO postgres;
-
 --
--- Name: bookings; Type: TABLE; Schema: public; Owner: postgres
+-- Name: bookings; Type: TABLE; Schema: public;
 --
 
 CREATE TABLE public.bookings (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid NOT NULL,
     start_time timestamp with time zone NOT NULL,
     end_time timestamp with time zone NOT NULL,
     meeting_type text NOT NULL,
@@ -144,14 +92,12 @@ CREATE TABLE public.bookings (
 );
 
 
-ALTER TABLE public.bookings OWNER TO postgres;
-
 --
--- Name: ccrelation; Type: TABLE; Schema: public; Owner: postgres
+-- Name: ccrelation; Type: TABLE; Schema: public;
 --
 
 CREATE TABLE public.ccrelation (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid NOT NULL,
     contact_id uuid NOT NULL,
     company_id uuid NOT NULL,
     role text NOT NULL,
@@ -163,31 +109,27 @@ CREATE TABLE public.ccrelation (
 );
 
 
-ALTER TABLE public.ccrelation OWNER TO postgres;
-
 --
--- Name: company; Type: TABLE; Schema: public; Owner: postgres
+-- Name: company; Type: TABLE; Schema: public;
 --
 
 CREATE TABLE public.company (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid NOT NULL,
     name text NOT NULL,
     org_number text,
-    email public.citext,
+    email text,
     metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT now()
 );
 
 
-ALTER TABLE public.company OWNER TO postgres;
-
 --
--- Name: contact; Type: TABLE; Schema: public; Owner: postgres
+-- Name: contact; Type: TABLE; Schema: public;
 --
 
 CREATE TABLE public.contact (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
-    email public.citext NOT NULL,
+    id uuid NOT NULL,
+    email text NOT NULL,
     first_name text,
     last_name text,
     phone text,
@@ -197,14 +139,12 @@ CREATE TABLE public.contact (
 );
 
 
-ALTER TABLE public.contact OWNER TO postgres;
-
 --
--- Name: event_log; Type: TABLE; Schema: public; Owner: postgres
+-- Name: event_log; Type: TABLE; Schema: public;
 --
 
 CREATE TABLE public.event_log (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid NOT NULL,
     source text,
     event_type text,
     payload jsonb,
@@ -212,23 +152,12 @@ CREATE TABLE public.event_log (
 );
 
 
-ALTER TABLE public.event_log OWNER TO postgres;
-
---
--- Name: translation; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.translation (
-    key character varying(255) NOT NULL,
-    sv text,
-    en text
-);
 
-
-ALTER TABLE public.translation OWNER TO postgres;
 
 --
--- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.bookings
@@ -236,7 +165,7 @@ ALTER TABLE ONLY public.bookings
 
 
 --
--- Name: ccrelation ccrelation_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: ccrelation ccrelation_pkey; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.ccrelation
@@ -244,7 +173,7 @@ ALTER TABLE ONLY public.ccrelation
 
 
 --
--- Name: company company_email_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: company company_email_key; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.company
@@ -252,7 +181,7 @@ ALTER TABLE ONLY public.company
 
 
 --
--- Name: company company_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: company company_pkey; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.company
@@ -260,7 +189,7 @@ ALTER TABLE ONLY public.company
 
 
 --
--- Name: contact contact_email_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: contact contact_email_key; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.contact
@@ -268,7 +197,7 @@ ALTER TABLE ONLY public.contact
 
 
 --
--- Name: contact contact_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: contact contact_pkey; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.contact
@@ -276,7 +205,7 @@ ALTER TABLE ONLY public.contact
 
 
 --
--- Name: event_log event_log_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: event_log event_log_pkey; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.event_log
@@ -284,7 +213,7 @@ ALTER TABLE ONLY public.event_log
 
 
 --
--- Name: booking_settings system_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: booking_settings system_settings_pkey; Type: CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.booking_settings
@@ -292,22 +221,18 @@ ALTER TABLE ONLY public.booking_settings
 
 
 --
--- Name: translation translation_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
 
-ALTER TABLE ONLY public.translation
-    ADD CONSTRAINT translation_pkey PRIMARY KEY (key);
 
 
 --
--- Name: idx_bookings_start_time; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_bookings_start_time; Type: INDEX; Schema: public;
 --
 
 CREATE INDEX idx_bookings_start_time ON public.bookings USING btree (start_time);
 
 
 --
--- Name: bookings bookings_contact_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: bookings bookings_contact_id_fkey; Type: FK CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.bookings
@@ -315,7 +240,7 @@ ALTER TABLE ONLY public.bookings
 
 
 --
--- Name: ccrelation ccrelation_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: ccrelation ccrelation_company_id_fkey; Type: FK CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.ccrelation
@@ -323,7 +248,7 @@ ALTER TABLE ONLY public.ccrelation
 
 
 --
--- Name: ccrelation ccrelation_contact_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: ccrelation ccrelation_contact_id_fkey; Type: FK CONSTRAINT; Schema: public;
 --
 
 ALTER TABLE ONLY public.ccrelation
@@ -333,4 +258,3 @@ ALTER TABLE ONLY public.ccrelation
 --
 -- PostgreSQL database dump complete
 --
-
