@@ -10,7 +10,7 @@
     "deploy": "func azure functionapp publish macspotbackend"
   },
   "dependencies": {
-    "@azure/functions": "^4.0.0",
+    "@azure/functions": "^4.7.0",
     "@azure/msal-node": "^3.5.1",
     "@microsoft/microsoft-graph-client": "^3.0.0",
     "isomorphic-fetch": "^3.0.0",

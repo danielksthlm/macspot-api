@@ -7,3 +7,5 @@ const pool = new Pool({
   ssl: process.env.PGHOST ? { rejectUnauthorized: false } : false,
   connectionTimeoutMillis: 5000
 });
+
+export default pool;
