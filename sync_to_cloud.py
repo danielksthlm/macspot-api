@@ -28,7 +28,7 @@ def fetch_pending_changes(conn):
             FROM pending_changes
             WHERE direction = 'out' AND processed = false
               AND table_name = ANY(%s)
-        """, (['contact', 'bookings', 'booking_settings', 'translation', 'event_log', 'contact_email'],))
+        """, (['contact', 'bookings', 'event_log'],))
         return cur.fetchall()
 
 def mark_as_processed(conn, change_id):
