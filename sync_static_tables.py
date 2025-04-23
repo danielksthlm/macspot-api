@@ -44,7 +44,15 @@ def insert_to_remote(conn, table, columns, rows):
         placeholders = ', '.join(['%s'] * len(columns))
         colnames = ', '.join(columns)
         for row in rows:
-            cur.execute(f"INSERT INTO {table} ({colnames}) VALUES ({placeholders})", row)
+            # Hantera jsonb-värden som json-strängar
+            formatted_row = []
+            for i, col in enumerate(columns):
+                value = row[i]
+                if table == 'booking_settings' and col == 'value':
+                    formatted_row.append(json.dumps(value))
+                else:
+                    formatted_row.append(value)
+            cur.execute(f"INSERT INTO {table} ({colnames}) VALUES ({placeholders})", formatted_row)
         conn.commit()
 
 
