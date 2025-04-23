@@ -64,7 +64,7 @@ app.http('bookings', {
 
       // 4. Skapa möte i Microsoft 365 om relevant
       if (data.meeting_type === "Teams") {
-        const result = await createMicrosoft365Booking(booking, { ...data, email: data.email || process.env.MS_SENDER_EMAIL });
+        const result = await createMicrosoft365Booking(booking, { ...data, email: data.email || settings.ms_sender_email });
         if (result.success) {
           booking.meeting_link = result.meetingLink;
           booking.event_id = result.eventId;
