@@ -1,0 +1,30 @@
+[
+  {
+    "change_id": "72d9f8d0-abad-4452-b6c8-615298158ca9",
+    "table": "contact",
+    "operation": "INSERT",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "phone": null,
+      "language": "sv",
+      "metadata": {},
+      "last_name": "Sync",
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "first_name": "Test"
+    }
+  },
+  {
+    "change_id": "cb72142c-4075-4ac1-a3f0-a9731b65bffe",
+    "table": "contact",
+    "operation": "INSERT",
+    "data": {
+      "id": "6b27c936-484a-41e3-9eec-0c9a16d87628",
+      "phone": null,
+      "language": "sv",
+      "metadata": {},
+      "last_name": "Azurecheck",
+      "created_at": "2025-04-23T17:30:27.356773+02:00",
+      "first_name": "Testsync"
+    }
+  }
+]

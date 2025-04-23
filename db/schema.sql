@@ -17,7 +17,7 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: booking_status; Type: TYPE; Schema: public; Owner: danielkallberg
+-- Name: booking_status; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.booking_status AS ENUM (
@@ -27,10 +27,8 @@ CREATE TYPE public.booking_status AS ENUM (
 );
 
 
-ALTER TYPE public.booking_status OWNER TO danielkallberg;
-
 --
--- Name: get_booking_setting(text); Type: FUNCTION; Schema: public; Owner: danielkallberg
+-- Name: get_booking_setting(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.get_booking_setting(key text) RETURNS text
@@ -42,14 +40,48 @@ CREATE FUNCTION public.get_booking_setting(key text) RETURNS text
 $$;
 
 
-ALTER FUNCTION public.get_booking_setting(key text) OWNER TO danielkallberg;
+--
+-- Name: log_contact_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.log_contact_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    INSERT INTO pending_changes (table_name, record_id, operation, payload, created_at, change_type, direction)
+    VALUES (
+      'contact',
+      OLD.id,
+      'DELETE',
+      row_to_json(OLD),
+      now(),
+      'local',
+      'out'
+    );
+  ELSE
+    INSERT INTO pending_changes (table_name, record_id, operation, payload, created_at, change_type, direction)
+    VALUES (
+      'contact',
+      NEW.id,
+      TG_OP,
+      row_to_json(NEW),
+      now(),
+      'local',
+      'out'
+    );
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
 
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- Name: booking_settings; Type: TABLE; Schema: public; Owner: danielkallberg
+-- Name: booking_settings; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.booking_settings (
@@ -60,10 +92,8 @@ CREATE TABLE public.booking_settings (
 );
 
 
-ALTER TABLE public.booking_settings OWNER TO danielkallberg;
-
 --
--- Name: bookings; Type: TABLE; Schema: public; Owner: danielkallberg
+-- Name: bookings; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.bookings (
@@ -93,10 +123,8 @@ CREATE TABLE public.bookings (
 );
 
 
-ALTER TABLE public.bookings OWNER TO danielkallberg;
-
 --
--- Name: ccrelation; Type: TABLE; Schema: public; Owner: danielkallberg
+-- Name: ccrelation; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.ccrelation (
@@ -112,10 +140,8 @@ CREATE TABLE public.ccrelation (
 );
 
 
-ALTER TABLE public.ccrelation OWNER TO danielkallberg;
-
 --
--- Name: company; Type: TABLE; Schema: public; Owner: danielkallberg
+-- Name: company; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.company (
@@ -127,10 +153,8 @@ CREATE TABLE public.company (
 );
 
 
-ALTER TABLE public.company OWNER TO danielkallberg;
-
 --
--- Name: contact; Type: TABLE; Schema: public; Owner: danielkallberg
+-- Name: contact; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.contact (
@@ -140,14 +164,13 @@ CREATE TABLE public.contact (
     language text DEFAULT 'sv'::text,
     metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT now(),
-    id uuid DEFAULT gen_random_uuid() NOT NULL
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    company_name text
 );
 
 
-ALTER TABLE public.contact OWNER TO danielkallberg;
-
 --
--- Name: contact_email; Type: TABLE; Schema: public; Owner: postgres
+-- Name: contact_email; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.contact_email (
@@ -160,10 +183,8 @@ CREATE TABLE public.contact_email (
 );
 
 
-ALTER TABLE public.contact_email OWNER TO postgres;
-
 --
--- Name: event_log; Type: TABLE; Schema: public; Owner: danielkallberg
+-- Name: event_log; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.event_log (
@@ -175,10 +196,25 @@ CREATE TABLE public.event_log (
 );
 
 
-ALTER TABLE public.event_log OWNER TO danielkallberg;
+--
+-- Name: pending_changes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pending_changes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    table_name text NOT NULL,
+    record_id uuid NOT NULL,
+    change_type text NOT NULL,
+    direction text NOT NULL,
+    processed boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    operation text,
+    payload jsonb
+);
+
 
 --
--- Name: translation; Type: TABLE; Schema: public; Owner: danielkallberg
+-- Name: translation; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.translation (
@@ -188,10 +224,8 @@ CREATE TABLE public.translation (
 );
 
 
-ALTER TABLE public.translation OWNER TO danielkallberg;
-
 --
--- Name: booking_settings booking_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: booking_settings booking_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.booking_settings
@@ -199,7 +233,7 @@ ALTER TABLE ONLY public.booking_settings
 
 
 --
--- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.bookings
@@ -207,7 +241,7 @@ ALTER TABLE ONLY public.bookings
 
 
 --
--- Name: ccrelation ccrelation_pkey; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: ccrelation ccrelation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ccrelation
@@ -215,7 +249,7 @@ ALTER TABLE ONLY public.ccrelation
 
 
 --
--- Name: company company_pkey; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: company company_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.company
@@ -223,7 +257,7 @@ ALTER TABLE ONLY public.company
 
 
 --
--- Name: contact_email contact_email_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: contact_email contact_email_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.contact_email
@@ -231,7 +265,7 @@ ALTER TABLE ONLY public.contact_email
 
 
 --
--- Name: contact contact_pkey; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: contact contact_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.contact
@@ -239,7 +273,7 @@ ALTER TABLE ONLY public.contact
 
 
 --
--- Name: event_log event_log_pkey; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: event_log event_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.event_log
@@ -247,7 +281,15 @@ ALTER TABLE ONLY public.event_log
 
 
 --
--- Name: translation translation_pkey; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: pending_changes pending_changes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pending_changes
+    ADD CONSTRAINT pending_changes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: translation translation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.translation
@@ -255,7 +297,7 @@ ALTER TABLE ONLY public.translation
 
 
 --
--- Name: translation unique_translation_key; Type: CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: translation unique_translation_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.translation
@@ -263,70 +305,77 @@ ALTER TABLE ONLY public.translation
 
 
 --
--- Name: idx_bookings_start_time; Type: INDEX; Schema: public; Owner: danielkallberg
+-- Name: idx_bookings_start_time; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_bookings_start_time ON public.bookings USING btree (start_time);
 
 
 --
--- Name: idx_ccrelation_role; Type: INDEX; Schema: public; Owner: danielkallberg
+-- Name: idx_ccrelation_role; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccrelation_role ON public.ccrelation USING btree (role);
 
 
 --
--- Name: idx_company_org_number; Type: INDEX; Schema: public; Owner: danielkallberg
+-- Name: idx_company_org_number; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_company_org_number ON public.company USING btree (org_number);
 
 
 --
--- Name: idx_contact_email_contact_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_contact_email_contact_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_contact_email_contact_id ON public.contact_email USING btree (contact_id);
 
 
 --
--- Name: idx_contact_email_email; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_contact_email_email; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_contact_email_email ON public.contact_email USING btree (email);
 
 
 --
--- Name: idx_contact_first_name; Type: INDEX; Schema: public; Owner: danielkallberg
+-- Name: idx_contact_first_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_contact_first_name ON public.contact USING btree (first_name);
 
 
 --
--- Name: idx_contact_phone; Type: INDEX; Schema: public; Owner: danielkallberg
+-- Name: idx_contact_phone; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_contact_phone ON public.contact USING btree (phone);
 
 
 --
--- Name: idx_event_log_received_at; Type: INDEX; Schema: public; Owner: danielkallberg
+-- Name: idx_event_log_received_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_event_log_received_at ON public.event_log USING btree (received_at);
 
 
 --
--- Name: idx_translation_key; Type: INDEX; Schema: public; Owner: danielkallberg
+-- Name: idx_translation_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_translation_key ON public.translation USING btree (key);
 
 
 --
--- Name: contact_email contact_email_contact_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: contact trigger_log_contact_change; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trigger_log_contact_change AFTER INSERT OR DELETE OR UPDATE ON public.contact FOR EACH ROW EXECUTE FUNCTION public.log_contact_change();
+
+
+--
+-- Name: contact_email contact_email_contact_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.contact_email
@@ -334,7 +383,7 @@ ALTER TABLE ONLY public.contact_email
 
 
 --
--- Name: bookings fk_bookings_contact_id; Type: FK CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: bookings fk_bookings_contact_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.bookings
@@ -342,7 +391,7 @@ ALTER TABLE ONLY public.bookings
 
 
 --
--- Name: bookings fk_bookings_event_id; Type: FK CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: bookings fk_bookings_event_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.bookings
@@ -350,7 +399,7 @@ ALTER TABLE ONLY public.bookings
 
 
 --
--- Name: ccrelation fk_ccrelation_company_id; Type: FK CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: ccrelation fk_ccrelation_company_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ccrelation
@@ -358,7 +407,7 @@ ALTER TABLE ONLY public.ccrelation
 
 
 --
--- Name: ccrelation fk_ccrelation_contact_id; Type: FK CONSTRAINT; Schema: public; Owner: danielkallberg
+-- Name: ccrelation fk_ccrelation_contact_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ccrelation
@@ -366,7 +415,7 @@ ALTER TABLE ONLY public.ccrelation
 
 
 --
--- Name: SCHEMA public; Type: ACL; Schema: -; Owner: danielkallberg
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: -
 --
 
 GRANT ALL ON SCHEMA public TO PUBLIC;
