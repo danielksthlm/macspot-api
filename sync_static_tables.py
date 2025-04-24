@@ -1,22 +1,8 @@
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
 import psycopg2
 import json
 from datetime import datetime
 
-LOCAL_DB_CONFIG = {
-    "dbname": "macspot",
-    "user": "danielkallberg",
-    "password": "HittaFitta69",  # fyll i om det behövs
-    "host": "localhost",
-    "port": 5433
-}
-
-REMOTE_DB_CONFIG = {
-    "dbname": "postgres",
-    "user": "daniel",
-    "password": "wijmeg-zihMa7-gomcuq",
-    "host": "macspotpg.postgres.database.azure.com",
-    "port": 5432
-}
 
 TABLES = ["translation", "booking_settings"]
 
