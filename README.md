@@ -200,6 +200,7 @@ find src -type f -name "*.js" | sort | while read file; do
 done
 
 code ~/.zshrc
+source ~/.zshrc
 psqlmacspot
 
 

@@ -1,22 +1,7 @@
 import psycopg2
 import json
 from datetime import datetime
-
-LOCAL_DB_CONFIG = {
-    "dbname": "macspot",
-    "user": "danielkallberg",
-    "password": "HittaFitta69",  # fyll i om det behövs
-    "host": "localhost",
-    "port": 5433
-}
-
-REMOTE_DB_CONFIG = {
-    "dbname": "postgres",
-    "user": "daniel",
-    "password": "wijmeg-zihMa7-gomcuq",
-    "host": "macspotpg.postgres.database.azure.com",
-    "port": 5432
-}
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
 
 def connect_db(config):
     return psycopg2.connect(**config)
@@ -50,7 +35,15 @@ def apply_change(conn, change, local_conn):
             columns = ', '.join(data.keys())
             placeholders = ', '.join(['%s'] * len(data))
             values = list(data.values())
-            cur.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", values)
+            if table_name in ['contact', 'bookings', 'event_log']:
+                update_clause = ', '.join([f"{k} = EXCLUDED.{k}" for k in data.keys() if k != 'id'])
+                cur.execute(
+                    f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) "
+                    f"ON CONFLICT (id) DO UPDATE SET {update_clause}",
+                    values
+                )
+            else:
+                cur.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", values)
         elif operation == 'UPDATE':
             set_clause = ', '.join([f"{k} = %s" for k in data.keys()])
             values = list(data.values()) + [record_id]
