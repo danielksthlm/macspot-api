@@ -205,3 +205,6 @@ psqlmacspot
 
 
 tree -I 'node_modules' -L 4
+tree -a -I 'node_modules' -L 4
+tree -a -I 'node_modules|objects' -L 4
+tree src -L 5
