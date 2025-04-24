@@ -5,7 +5,8 @@ import { getBookingSettings } from '../lib/bookingService.js';
 import { hasAppleCalendarConflict } from '../lib/calendar/appleCalendar.js';
 import { getTravelTime } from '../lib/maps/appleMaps.js';
 import { getWeeklyBookingMinutes } from '../lib/bookingService.js';
-import { getAvailableRoomFromGraph } from '../lib/calendar/roomBooking.js';
+import msGraph from '../lib/calendar/msGraph.js';
+const { getAvailableRoomFromGraph } = msGraph;
 import { getMicrosoftSchedule } from '../lib/calendar/ms365Calendar.js';
 import { DateTime, Interval } from 'luxon';
 

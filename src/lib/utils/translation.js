@@ -1,4 +1,4 @@
-import db from "../../lib/utils/db.js";
+import db from "../../lib/db/db.js";
 
 export async function get(req) {
   const lang = req.query?.lang || "sv";
@@ -26,4 +26,9 @@ export async function get(req) {
       jsonBody: { error: "Failed to fetch translations" }
     };
   }
+}
+
+export function getSetting(settings, key, fallback = null) {
+  if (!settings) return fallback;
+  return settings[key] !== undefined ? settings[key] : fallback;
 }

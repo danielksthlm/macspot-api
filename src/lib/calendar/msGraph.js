@@ -1,8 +1,27 @@
-// File: lib/msgraph/msGraph.js
-const { getAccessToken } = require("../msgraph/msGraph");
-const { debug } = require("../utils/debug");
-const fetch = require("node-fetch");
-const logEvent = require("../log/eventLogger");
+import jwt from "jsonwebtoken";
+import fetch from "node-fetch";
+
+function getAccessToken() {
+  const teamId = process.env.APPLE_TEAM_ID;
+  const keyId = process.env.APPLE_KEY_ID;
+  const privateKey = process.env.APPLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+
+  const token = jwt.sign({}, privateKey, {
+    algorithm: "ES256",
+    issuer: teamId,
+    header: {
+      alg: "ES256",
+      kid: keyId
+    },
+    expiresIn: "5m",
+    audience: "https://graph.microsoft.com/"
+  });
+
+  return Promise.resolve(token);
+}
+
+import { debug } from "../utils/debug.js";
+import { logEvent } from "../log/eventLogger.js";
 
 /**
  * Hämtar första tillgängliga rum från Graph med getSchedule().
@@ -71,7 +90,8 @@ async function bookMeetingRoom(settings, data) {
   }
 }
 
-module.exports = {
+
+export default {
   bookMeetingRoom,
   getAvailableRoomFromGraph
 };

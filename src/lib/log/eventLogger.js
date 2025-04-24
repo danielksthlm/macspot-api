@@ -1,4 +1,3 @@
-// File: lib/log/eventLogger.js
 async function logEvent(db, source, event_type, payload = {}) {
   try {
     await db.query(

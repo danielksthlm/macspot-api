@@ -29,5 +29,14 @@ function getPreferredRoom(meetingType, settings) {
   return selectedRoom;
 }
 
-export { resolveLocationType };
+async function bookMeetingRoom(meetingType, settings, startTime, endTime) {
+  if (meetingType !== "Fysiskt hos kund") {
+    const { getAvailableRoomFromGraph } = await import('./msGraph.js');
+    return await getAvailableRoomFromGraph(settings, startTime, endTime);
+  }
+  // Annars returnera null eller annan logik för fysiska möten
+  return null;
+}
+
+export { resolveLocationType, bookMeetingRoom };
 export default getPreferredRoom;

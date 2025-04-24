@@ -33,4 +33,9 @@ function debug(scope = "general", message = "", data = null, level = "INFO") {
   }
 }
 
-export { debug };
+
+function getEnv(key, fallback = null) {
+  return process.env[key] || fallback;
+}
+
+export { debug, getEnv };

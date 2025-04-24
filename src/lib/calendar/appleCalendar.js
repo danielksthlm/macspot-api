@@ -1,7 +1,7 @@
 // File: lib/calendar/appleCalendar.js
 import { getCalDAVEvents } from './caldav.js';
 import { getTravelTime } from '../maps/appleMaps.js';
-import eventLogger from '../log/eventLogger.js';
+import { logEvent, logError, logWarning } from '../log/eventLogger.js';
 import { getSetting } from '../utils/translation.js';
 
 async function hasAppleCalendarConflict(startTime, endTime, email, settings = {}) {
@@ -17,7 +17,7 @@ async function hasAppleCalendarConflict(startTime, endTime, email, settings = {}
       events = await getCalDAVEvents(caldavUrl, startTime, endTime);
     }
   } catch (err) {
-    eventLogger('apple_calendar_fetch_error', {
+    logEvent(null, 'apple_calendar_fetch_error', {
       error: err.message,
       stack: err.stack
     });
@@ -41,7 +41,7 @@ async function hasAppleCalendarConflict(startTime, endTime, email, settings = {}
     const overlaps = newStart < eventEnd && newEnd > eventStart;
 
     if (overlaps || tooCloseBefore || tooCloseAfter) {
-      eventLogger('apple_calendar_conflict', {
+      logEvent(null, 'apple_calendar_conflict', {
         conflictWith: event,
         attemptedTime: { start: startTime, end: endTime }
       });

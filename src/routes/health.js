@@ -1,5 +1,5 @@
 import { app } from '@azure/functions';
-import getDb from '../lib/db/db.js';
+import { getDb } from '../lib/db/db.js';
 const db = getDb();
 
 app.http('healthcheck', {

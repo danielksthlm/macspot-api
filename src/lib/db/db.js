@@ -20,3 +20,5 @@ pool.on('error', (err) => {
 });
 
 export default pool;
+
+export const getDb = () => pool;
