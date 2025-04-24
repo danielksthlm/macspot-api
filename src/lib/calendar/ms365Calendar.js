@@ -67,15 +67,20 @@ async function createMicrosoft365Booking(booking, contact) {
     onlineMeetingProvider: "teamsForBusiness",
   };
 
-  const created = await client
-    .api(`/users/${organizerEmail}/events`)
-    .post(event);
+  try {
+    const created = await client
+      .api(`/users/${organizerEmail}/events`)
+      .post(event);
 
-  return {
-    success: true,
-    eventId: created.id,
-    meetingLink: created.onlineMeeting?.joinUrl || null,
-  };
+    return {
+      success: true,
+      eventId: created.id,
+      meetingLink: created.onlineMeeting?.joinUrl || null,
+    };
+  } catch (err) {
+    console.error("❌ Fel vid skapande av Microsoft-bokning:", err);
+    return { success: false, error: err.message };
+  }
 }
 
 export { createMicrosoft365Booking };
@@ -86,14 +91,19 @@ export async function getMicrosoftSchedule(start, end, email, settings) {
 
   console.log("🔍 Kollar MS-kalender för:", userEmail);
 
-  const res = await client
-    .api(`/users/${userEmail}/calendarView`)
-    .query({
-      startDateTime: new Date(start).toISOString(),
-      endDateTime: new Date(end).toISOString(),
-    })
-    .header("Prefer", 'outlook.timezone="Europe/Stockholm"')
-    .get();
+  try {
+    const res = await client
+      .api(`/users/${userEmail}/calendarView`)
+      .query({
+        startDateTime: new Date(start).toISOString(),
+        endDateTime: new Date(end).toISOString(),
+      })
+      .header("Prefer", 'outlook.timezone="Europe/Stockholm"')
+      .get();
 
-  return res.value || [];
+    return res.value || [];
+  } catch (err) {
+    console.error("❌ Fel vid hämtning av Microsoft-schema:", err);
+    return [];
+  }
 }

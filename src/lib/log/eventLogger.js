@@ -11,4 +11,12 @@ async function logEvent(db, source, event_type, payload = {}) {
   }
 }
 
-export { logEvent };
+function logError(context, error) {
+  console.error(`❌ [${context}]`, error);
+}
+
+function logWarning(context, key, error) {
+  console.warn(`⚠️  [${context}] ${key}:`, error.message || error);
+}
+
+export { logEvent, logError, logWarning };

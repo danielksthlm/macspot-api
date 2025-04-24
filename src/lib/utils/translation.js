@@ -11,10 +11,9 @@ export async function get(req) {
 
   try {
     const result = await db.query(`SELECT key, ${lang} FROM translation`);
-    const translations = {};
-    for (const row of result.rows) {
-      translations[row.key] = row[lang];
-    }
+    const translations = Object.fromEntries(
+      result.rows.map(row => [row.key, row[lang]])
+    );
 
     return {
       status: 200,

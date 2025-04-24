@@ -13,21 +13,21 @@ function resolveLocationType(type) {
   };
   return map[type] || "online";
 }
-function bookMeetingRoom(meetingType, settings, startTime, endTime) {
+
+function getPreferredRoom(meetingType, settings) {
   const preferred = settings.room_priority?.[meetingType] ?? [];
-  const selectedRoom = preferred.length > 0 ? preferred[0] : null;
-  console.log(`🏢 Vald mötesrum (${meetingType}):`, selectedRoom);
+  const selectedRoom = preferred[0] ?? null;
+
+  if (selectedRoom) {
+    console.log(`🏢 Tilldelat mötesrum för ${meetingType}:`, selectedRoom);
+  } else {
+    const message = `⚠️ Inget rum hittades för mötestypen: ${meetingType}`;
+    console.warn(message);
+    logEvent("room_selection", "no_room_found", { meetingType, timestamp: new Date().toISOString() });
+  }
+
   return selectedRoom;
 }
-export { resolveLocationType, bookMeetingRoom };
 
-// Temporary fallback to avoid crash if another file expects this export
-export function getAvailableRoomFromGraph(meetingType, settings) {
-  const fallback = settings.room_priority?.[meetingType]?.[0] ?? null;
-  if (fallback) {
-    console.log(`🏢 Tilldelat mötesrum för ${meetingType}:`, fallback);
-  } else {
-    console.warn("⚠️ Inget fallback-rum hittades i room_priority för:", meetingType);
-  }
-  return fallback;
-}
+export { resolveLocationType };
+export default getPreferredRoom;

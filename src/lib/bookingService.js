@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { resolveLocationType } from './calendar/roomBooking.js';
+import * as eventLogger from './log/eventLogger.js';
 
 function mapMeetingTypeToLocationType(type) {
   const map = {
@@ -102,31 +103,36 @@ async function createBookingInDB(db, data, contactId) {
       data.meeting_link = `facetime://${data.email}`;
     }
   }
-  const result = await db.query(
-    `INSERT INTO bookings (
-      id, contact_id, start_time, end_time, meeting_type, location_type,
-      room_email, language, created_at,
-      event_id, meeting_link
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6,
-      $7, $8, now(),
-      $9, $10
-    ) RETURNING *`,
-    [
-      uuidv4(),
-      contactId,
-      data.start_time,
-      data.end_time,
-      data.meeting_type || "unspecified",
-      locationType,
-      data.room_email || null,
-      data.language || "sv",
-      data.event_id || null,
-      data.meeting_link || null
-    ]
-  );
+  try {
+    const result = await db.query(
+      `INSERT INTO bookings (
+        id, contact_id, start_time, end_time, meeting_type, location_type,
+        room_email, language, created_at,
+        event_id, meeting_link
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, now(),
+        $9, $10
+      ) RETURNING *`,
+      [
+        uuidv4(),
+        contactId,
+        data.start_time,
+        data.end_time,
+        data.meeting_type || "unspecified",
+        locationType,
+        data.room_email || null,
+        data.language || "sv",
+        data.event_id || null,
+        data.meeting_link || null
+      ]
+    );
 
-  return result.rows[0];
+    return result.rows[0];
+  } catch (error) {
+    eventLogger.logError('createBookingInDB', error);
+    throw error;
+  }
 }
 
 /**
@@ -148,7 +154,7 @@ async function getBookingSettings(db) {
           const normalized = typeof val === 'string' && val.startsWith('"') ? JSON.parse(val) : val;
           settings[row.key] = typeof normalized === 'string' ? JSON.parse(normalized) : normalized;
         } catch (e) {
-          console.warn("❌ Dubbel JSON.parse misslyckades:", row.key, e);
+          eventLogger.logWarning('getBookingSettings', row.key, e);
         }
       } else if (row.value_type === "bool") {
         settings[row.key] = row.value === "true";
@@ -158,7 +164,7 @@ async function getBookingSettings(db) {
         settings[row.key] = row.value;
       }
     } catch (e) {
-      console.warn("❌ Misslyckades att parsa inställning:", row.key, e);
+      eventLogger.logWarning('getBookingSettings', row.key, e);
     }
   }
 
@@ -188,12 +194,26 @@ async function getBookingById(db, bookingId) {
   return result.rows[0];
 }
 
+
+const bookingService = {
+  validateBookingInput,
+  checkBookingConditions,
+  getBookingSettings,
+  isWeekend,
+  createBookingInDB,
+  createBooking: createBookingInDB,
+  insertBooking: createBookingInDB,
+  getWeeklyBookingMinutes,
+  getBookingById
+};
+
 export {
   validateBookingInput,
   checkBookingConditions,
   getBookingSettings,
   isWeekend,
   createBookingInDB,
+  createBookingInDB as createBooking,
   createBookingInDB as insertBooking,
   getWeeklyBookingMinutes,
   getBookingById

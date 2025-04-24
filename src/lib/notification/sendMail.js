@@ -1,4 +1,3 @@
-// File: lib/notification/sendMail.js
 import { Client } from "@microsoft/microsoft-graph-client";
 import { ConfidentialClientApplication } from "@azure/msal-node";
 
@@ -61,7 +60,14 @@ async function sendMail(to, subject, html) {
   if (!senderEmail) {
     throw new Error("❌ Saknar MS_SENDER_EMAIL – kontrollera local.settings.json");
   }
-  await client.api(`/users/${senderEmail}/sendMail`).post(mail);
+
+  try {
+    console.log(`📧 Försöker skicka mail till ${to} med ämne "${subject}"...`);
+    await client.api(`/users/${senderEmail}/sendMail`).post(mail);
+    console.log("✅ E-post skickat!");
+  } catch (err) {
+    console.error("❌ Misslyckades att skicka e-post via Microsoft Graph:", err.message);
+  }
 }
 
 export { sendMail };

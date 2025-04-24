@@ -1,5 +1,6 @@
 import { app } from '@azure/functions';
-import db from '../lib/db/db.js';
+import getDb from '../lib/db/db.js';
+const db = getDb();
 
 app.http('healthcheck', {
   route: 'health',

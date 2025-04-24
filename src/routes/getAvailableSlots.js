@@ -1,6 +1,6 @@
 // File: routes/getAvailableSlots.js
 // Removed app import as it's not needed for v4 isolated model.
-import db from '../lib/db/db.js';
+import { getDb } from '../lib/db/db.js';
 import { getBookingSettings } from '../lib/bookingService.js';
 import { hasAppleCalendarConflict } from '../lib/calendar/appleCalendar.js';
 import { getTravelTime } from '../lib/maps/appleMaps.js';
@@ -16,6 +16,7 @@ async function hasMicrosoftCalendarConflict(start, end, email, settings) {
 
 export async function handler(req, context) {
     try {
+      const db = getDb();
       const settings = await getBookingSettings(db);
       console.log("🧪 Alla inställningar:", settings);
       console.log("🧪 Mötestidstyper:", settings["default_meeting_lengths"]);
@@ -92,7 +93,7 @@ export async function handler(req, context) {
             continue;
           }
 
-          const totalMinutes = await getWeeklyBookingMinutes(db, meeting_type, date);
+          const totalMinutes = await getWeeklyBookingMinutes(getDb(), meeting_type, date);
           if (totalMinutes >= settings.max_weekly_booking_minutes) {
             console.log("⛔ Veckokvot överskriden:", totalMinutes, ">= max", settings.max_weekly_booking_minutes);
             continue;

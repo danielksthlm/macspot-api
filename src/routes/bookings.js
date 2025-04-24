@@ -1,13 +1,15 @@
 // File: routes/bookings.js
 import { app } from '@azure/functions';
-import db from '../lib/db/db.js';
+import { v4 as uuidv4 } from 'uuid';
+import { getDb } from '../lib/db/db.js';
 import { insertBooking, getBookingSettings, getBookingById } from '../lib/bookingService.js';
 import { resolveLocationType, bookMeetingRoom } from '../lib/calendar/roomBooking.js';
 import { sendConfirmationEmail } from '../lib/notification/emailSender.js';
 import { logEvent } from '../lib/log/eventLogger.js';
 import { createMicrosoft365Booking } from '../lib/calendar/ms365Calendar.js';
 import { hasAppleCalendarConflict } from '../lib/calendar/appleCalendar.js';
-import { v4 as uuidv4 } from 'uuid';
+
+const db = getDb();
 
 app.http('bookings', {
   methods: ['POST'],

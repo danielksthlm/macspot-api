@@ -2,11 +2,11 @@
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
-import { debug } from "../utils/debug.js";
+import { debug, getEnv } from "../utils/debug.js";
 
-const teamId = process.env.APPLE_MAPS_TEAM_ID;
-const keyId = process.env.APPLE_MAPS_KEY_ID;
-const keyPath = process.env.APPLE_MAPS_KEY_PATH;
+const teamId = getEnv("APPLE_MAPS_TEAM_ID");
+const keyId = getEnv("APPLE_MAPS_KEY_ID");
+const keyPath = getEnv("APPLE_MAPS_KEY_PATH");
 
 /**
  * Skapar ett Apple JWT för serverbaserade Maps-anrop.
@@ -85,6 +85,7 @@ async function getTravelTime(fromAddress, toAddress, atTime) {
     throw new Error("No travel time returned");
   }
 
+  debug("maps", "Restid i sekunder", { travelTimeSec });
   const travelTimeMinutes = Math.round(travelTimeSec / 60); // i minuter
   debug("maps", "Restid i minuter", { travelTimeMinutes });
 

@@ -1,23 +1,35 @@
 // File: lib/calendar/appleCalendar.js
 import { getCalDAVEvents } from './caldav.js';
 import { getTravelTime } from '../maps/appleMaps.js';
+import eventLogger from '../log/eventLogger.js';
+import { getSetting } from '../utils/translation.js';
 
-/**
- * Kontroll: Krockar bokningen med CalDAV-händelser eller restider till/från dem?
- */
 async function hasAppleCalendarConflict(startTime, endTime, email, settings = {}) {
-  const caldavUrl = settings.caldav_url || "https://example.com/caldav"; // TODO: dynamisk
-  const fallbackMinutes = settings.fallback_travel_time_minutes || 90;
-  const homeAddress = settings.default_home_address || "Taxgatan 4, Stockholm";
+  const caldavUrl = getSetting('caldav_url');
+  const homeAddress = getSetting('default_home_address');
+  const fallbackMinutes = parseInt(getSetting('fallback_travel_time_minutes') || '90', 10);
 
-  const events = await getCalDAVEvents(caldavUrl, startTime, endTime);
+  let events = [];
+  try {
+    if (settings.mockEvents) {
+      events = settings.mockEvents;
+    } else {
+      events = await getCalDAVEvents(caldavUrl, startTime, endTime);
+    }
+  } catch (err) {
+    eventLogger('apple_calendar_fetch_error', {
+      error: err.message,
+      stack: err.stack
+    });
+    return false;
+  }
 
-  const newStart = new Date(startTime);
-  const newEnd = new Date(endTime);
+  const newStart = new Date(startTime).getTime();
+  const newEnd = new Date(endTime).getTime();
 
   for (const event of events) {
-    const eventStart = new Date(event.start);
-    const eventEnd = new Date(event.end);
+    const eventStart = new Date(event.start).getTime();
+    const eventEnd = new Date(event.end).getTime();
     const eventLocation = event.location || homeAddress;
 
     const travelBefore = await getTravelTime(eventLocation, homeAddress, eventEnd);
@@ -29,7 +41,10 @@ async function hasAppleCalendarConflict(startTime, endTime, email, settings = {}
     const overlaps = newStart < eventEnd && newEnd > eventStart;
 
     if (overlaps || tooCloseBefore || tooCloseAfter) {
-      console.warn("❌ Krock med CalDAV-händelse:", event);
+      eventLogger('apple_calendar_conflict', {
+        conflictWith: event,
+        attemptedTime: { start: startTime, end: endTime }
+      });
       return true;
     }
   }
