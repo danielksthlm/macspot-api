@@ -1,4 +1,5 @@
-/ **
+<script type="text/javascript">
+/**
  * Embed Block 2 – Initierar kundflöde
  * Lyssnar på befintliga fält: #email + meeting_type-radio
  */
@@ -8,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const handleInput = () => {
     const email = emailField?.value.trim();
-    const selected = Array.from(radios).find(r => r.checked)?.value;
+    const selected = document.querySelector('input[name="meeting_type"]:checked')?.value;
     if (!email || !selected) return;
 
     console.log("📩 E-post:", email);
@@ -23,3 +24,4 @@ document.addEventListener("DOMContentLoaded", () => {
   emailField?.addEventListener("input", handleInput);
   radios.forEach(r => r.addEventListener("change", handleInput));
 });
+</script>

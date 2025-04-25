@@ -1,3 +1,4 @@
+<script type="text/javascript">
 /**
  * Embed Block 4 – Presenterar fm/em-tider
  * Kräver: JSON-data från /getAvailableSlots med { fm: [], em: [] }
@@ -33,3 +34,4 @@ function selectSlot(time) {
   console.log("⏱️ Vald tid:", time);
   document.getElementById("selected_time").value = time;
 }
+</script>

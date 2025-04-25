@@ -1,3 +1,4 @@
+<script type="text/javascript">
 /**
  * Embed Block 3 – Initiering av tillgängliga tider
  * Kräver: färdigifylld kontakt + mötestyp + möteslängd (minuter)
@@ -34,3 +35,4 @@ window.MacSpotCalendar = {
     }
   }
 };
+</script>

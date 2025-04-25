@@ -1,35 +1,41 @@
-<div id="meeting-step-1">
-  <label for="email">E-postadress</label>
-  <input id="email" name="email" type="email" class="field email w-input" placeholder="E-post" required>
+<script type="text/javascript">
+/**
+ * Embed Block 1 – Dynamiskt ladda mötestyper till meeting_type_group
+ */
 
-  <label for="meeting_type">Mötestyp</label>
-  <div id="meeting_type_group">
-    <label><input type="radio" name="meeting_type" value="teams" class="w-radio-input"> Teams</label>
-    <label><input type="radio" name="meeting_type" value="zoom" class="w-radio-input"> Zoom</label>
-    <label><input type="radio" name="meeting_type" value="facetime" class="w-radio-input"> FaceTime</label>
-    <label><input type="radio" name="meeting_type" value="at_my_office" class="w-radio-input"> Hos oss</label>
-    <label><input type="radio" name="meeting_type" value="at_y
-<div id="meeting-step-1">
-  <label for="email">E-postadress</label>
-  <input id="email" name="booking_email" type="email" class="field email w-input" placeholder="E-post" required>
+async function loadMeetingTypes() {
+  const container = document.getElementById("meeting_type_group");
+  if (!container) return;
 
-  <label for="meeting_type">Mötestyp</label>
-  <div id="meeting_type_group">
-    <label><input type="radio" name="meeting_type" value="teams" class="w-form-formradioinput w-radio-input"> Teams</label>
-    <label><input type="radio" name="meeting_type" value="zoom" class="w-form-formradioinput w-radio-input"> Zoom</label>
-    <label><input type="radio" name="meeting_type" value="facetime" class="w-form-formradioinput w-radio-input"> FaceTime</label>
-    <label><input type="radio" name="meeting_type" value="at_my_office" class="w-form-formradioinput w-radio-input"> Hos oss</label>
-    <label><input type="radio" name="meeting_type" value="at_your_office" class="w-form-formradioinput w-radio-input"> Hos kund</label>
-  </div>
+  try {
+    const res = await fetch("https://macspotbackend.azurewebsites.net/api/meetingTypes");
+    if (!res.ok) throw new Error(`Status: ${res.status}`);
+    const types = await res.json();
 
-  <label for="meeting_minutes">Mötestid (minuter)</label>
-  <select id="meeting_minutes" name="meeting_minutes" class="field w-select">
-    <option value="15">15 min</option>
-    <option value="30">30 min</option>
-    <option value="45">45 min</option>
-    <option value="60">60 min</option>
-    <option value="90">90 min</option>
-  </select>
+    container.innerHTML = "";
+    types.forEach(({ value, label }) => {
+      const wrapper = document.createElement("label");
+      wrapper.className = "radio-button-field w-radio";
 
-  <button id="proceed-customer-check" type="button" class="button w-button" style="margin-top: 10px;">Nästa</button>
-</div>
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "meeting_type";
+      input.value = value;
+      input.className = "w-form-formradioinput w-radio-input";
+
+      const labelDiv = document.createElement("div");
+      labelDiv.className = "paragraph radio-button-field";
+      labelDiv.textContent = label;
+
+      wrapper.appendChild(input);
+      wrapper.appendChild(labelDiv);
+      container.appendChild(wrapper);
+    });
+
+  } catch (err) {
+    console.error("🛑 Misslyckades att ladda mötestyper:", err);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadMeetingTypes);
+</script>
