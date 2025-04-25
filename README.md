@@ -59,6 +59,7 @@ alias macspotdev="cd ~/Documents/KLR_AI/Projekt_MacSpot/macspot-api && func star
 - [ ] Lägg till fler routes: `customers`, `invoices`, `availability`
 - [ ] Sätt upp e-postbekräftelser (mail.js)
 - [ ] Koppla till databas (PostgreSQL eller Azurite Table Storage)
+- [ ] Lägg till nytt GitHub Actions-flöde för att testa databasanslutning via `macapp`-användaren (SELECT 1)
 
 ## 🗄️ Databasmodell
 
@@ -210,6 +211,37 @@ tree -a -I 'node_modules|objects' -L 4
 tree src -L 5
 
 ---
+
+## 🔄 CI/CD – GitHub Actions
+
+För att säkerställa att molndatabasen är tillgänglig från GitHub Actions och att användaren `macapp` fungerar som förväntat, kan ett nytt test-flöde läggas till i `.github/workflows/test-db.yml`:
+
+```yaml
+name: Test PostgreSQL Connection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-db:
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: ${{ secrets.PGHOST }}
+      PGPORT: ${{ secrets.PGPORT }}
+      PGUSER: ${{ secrets.PGUSER }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD }}
+      PGDATABASE: ${{ secrets.PGDATABASE }}
+
+    steps:
+      - name: Check database connectivity
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql -c "SELECT 1;"
+```
+
+Lägg till dessa secrets i GitHub → Settings → Secrets → Actions:
+
+- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`
 
 ## 📦 Synkplattform – Version 1.0
 
