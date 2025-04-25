@@ -12,6 +12,7 @@ jobs:
       PGUSER: ${{ secrets.PGUSER }}
       PGPASSWORD: ${{ secrets.PGPASSWORD }}
       PGDATABASE: ${{ secrets.PGDATABASE }}
+      PGSSLMODE: require
 
     steps:
       - name: Install PostgreSQL client
