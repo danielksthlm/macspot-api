@@ -1,21 +1,22 @@
 <script type="text/javascript">
-/**
- * Embed Block 1 – Dynamiskt ladda mötestyper till meeting_type_group
- */
-
 async function loadMeetingTypes() {
   const container = document.getElementById("meeting_type_group");
-  if (!container) return;
+  if (!container) {
+    console.error("🛑 Container meeting_type_group hittades inte!");
+    return;
+  }
 
   try {
     const res = await fetch("https://macspotbackend.azurewebsites.net/api/meetingTypes");
     if (!res.ok) throw new Error(`Status: ${res.status}`);
     const types = await res.json();
+    console.log("✅ Mötestyper hämtade:", types);
 
     container.innerHTML = "";
     types.forEach(({ value, label }) => {
+      console.log(`➕ Lägger till meeting_type: ${value}`);
       const wrapper = document.createElement("label");
-      wrapper.className = "radio-button-field w-radio";
+      wrapper.className = "w-radio";
 
       const input = document.createElement("input");
       input.type = "radio";
@@ -23,12 +24,12 @@ async function loadMeetingTypes() {
       input.value = value;
       input.className = "w-form-formradioinput w-radio-input";
 
-      const labelDiv = document.createElement("div");
-      labelDiv.className = "paragraph radio-button-field";
-      labelDiv.textContent = label;
+      const span = document.createElement("span");
+      span.className = "w-form-label";
+      span.textContent = label;
 
       wrapper.appendChild(input);
-      wrapper.appendChild(labelDiv);
+      wrapper.appendChild(span);
       container.appendChild(wrapper);
     });
 

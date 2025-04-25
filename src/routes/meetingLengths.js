@@ -9,13 +9,22 @@ app.http('getMeetingLengths', {
       const res = await db.query(`
         SELECT key, value
         FROM booking_settings
-        WHERE key LIKE 'default_meeting_lengths.%'
+        WHERE key LIKE 'default_meeting_length_%'
       `);
 
-      const lengths = res.rows.map(({ key, value }) => ({
-        type: key.replace('default_meeting_lengths.', ''),
-        minutes: Number(value)
-      }));
+      const lengths = res.rows.map(({ key, value }) => {
+        let parsedValue;
+        try {
+          parsedValue = JSON.parse(value);
+        } catch (e) {
+          parsedValue = { default: Number(value) };
+        }
+
+        return {
+          type: key.replace('default_meeting_length_', ''),
+          durations: parsedValue
+        };
+      });
 
       return new Response(JSON.stringify(lengths), {
         status: 200,

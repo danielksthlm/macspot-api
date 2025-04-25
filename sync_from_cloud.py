@@ -59,6 +59,7 @@ def sync():
 
     rows = remote_cur.fetchall()
     print(f"📊 Totalt {len(rows)} ändringar att synka.")
+    count = 0
     for row in rows:
         change_id, table, operation, payload_json = row
         try:
@@ -78,6 +79,7 @@ def sync():
             """, ('sync', f"{operation.lower()}_{table}", json.dumps(payload)))
             remote_cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", [change_id])
             print(f"✅ Synkade: {operation} på {table}")
+            count += 1
         except Exception as e:
             print(f"❌ Fel vid synk för {table}: {e}")
             continue
@@ -93,6 +95,7 @@ def sync():
     local_conn.close()
     remote_conn.close()
     print("🚀 Sync klar.")
+    print(f"✅ Totalt {count} ändring(ar) importerades från molnet.")
 
 if __name__ == "__main__":
     sync()

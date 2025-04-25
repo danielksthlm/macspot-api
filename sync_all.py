@@ -19,6 +19,7 @@ if not is_database_online("macspotpg.postgres.database.azure.com", 5432):
 
 import subprocess
 from datetime import datetime
+import os
 print(f"\n🔄 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
 
 # Exportera lokala ändringar till JSON
@@ -35,4 +36,9 @@ subprocess.run(["python", f"{BASE}/sync_to_cloud.py"], check=True)
 print("\n🔵 Kör sync_from_cloud.py...")
 subprocess.run(["python", f"{BASE}/sync_from_cloud.py"], check=True)
 
-print(f"\n✅ [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk färdig!")
+# Räkna antal exporterade ändringar idag
+today_prefix = datetime.now().strftime('%Y%m%d')
+outbox_dir = os.path.join(BASE, 'sync_outbox')
+num_changes = len([f for f in os.listdir(outbox_dir) if f.startswith(today_prefix)])
+
+print(f"\n✅ [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk färdig! {num_changes} ändring(ar) skickades.")
