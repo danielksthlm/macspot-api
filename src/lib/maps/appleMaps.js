@@ -13,7 +13,9 @@ const keyPath = getEnv("APPLE_MAPS_KEY_PATH");
  */
 function createAppleMapsJWT() {
   try {
-    const privateKey = fs.readFileSync(keyPath, "utf8");
+    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY
+      ? process.env.APPLE_MAPS_PRIVATE_KEY.replace(/\\n/g, "\n")
+      : fs.readFileSync(keyPath, "utf8");
 
     const token = jwt.sign({}, privateKey, {
       algorithm: "ES256",
@@ -27,7 +29,7 @@ function createAppleMapsJWT() {
       }
     });
 
-    debug("maps", "Skapat Apple Maps JWT", { token }); // DEBUG: logga JWT
+    debug("maps", "Skapat Apple Maps JWT", { using: process.env.APPLE_MAPS_PRIVATE_KEY ? "env" : "file" });
     return token;
   } catch (error) {
     debug("maps", "Fel vid skapande av JWT", { error });

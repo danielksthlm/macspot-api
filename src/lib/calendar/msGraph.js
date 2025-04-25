@@ -1,23 +1,32 @@
-import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
 
-function getAccessToken() {
-  const teamId = process.env.APPLE_TEAM_ID;
-  const keyId = process.env.APPLE_KEY_ID;
-  const privateKey = process.env.APPLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+const clientId = process.env.MS365_CLIENT_ID;
+const clientSecret = process.env.MS365_CLIENT_SECRET;
+const tenantId = process.env.MS365_TENANT_ID;
 
-  const token = jwt.sign({}, privateKey, {
-    algorithm: "ES256",
-    issuer: teamId,
-    header: {
-      alg: "ES256",
-      kid: keyId
-    },
-    expiresIn: "5m",
-    audience: "https://graph.microsoft.com/"
+async function getAccessToken() {
+  const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const params = new URLSearchParams();
+  params.append("client_id", clientId);
+  params.append("client_secret", clientSecret);
+  params.append("scope", "https://graph.microsoft.com/.default");
+  params.append("grant_type", "client_credentials");
+
+  const res = await fetch(url, {
+    method: "POST",
+    body: params,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    }
   });
 
-  return Promise.resolve(token);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`❌ OAuth error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.access_token;
 }
 
 import { debug } from "../utils/debug.js";

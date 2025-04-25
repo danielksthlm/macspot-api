@@ -27,26 +27,36 @@ func start
 ```
 
 ## 📁 Mappstruktur
-macspot-api/
-├── .github/workflows/       # GitHub Actions workflows (CI/CD)
-├── src/                     # All applikationslogik
-│   ├── lib/                 # Återanvändbara moduler
-│   │   ├── calendar/        # Kalender- och bokningslogik (MS365, CalDAV)
-│   │   ├── db/              # Databaskoppling (PostgreSQL)
-│   │   ├── log/             # Händelseloggning
-│   │   ├── maps/            # Apple Maps-integration
-│   │   ├── notification/    # E-postutskick
-│   │   └── utils/           # Hjälpfunktioner
-│   ├── routes/              # Azure Functions (HTTP triggers)
-│   │   ├── bookings.js
-│   │   ├── getAvailableSlots.js
-│   │   ├── health.js
-│   │   └── status.js
-├── index.js                 # Importerar alla routes
-├── host.json                # Azure Functions host-konfiguration
-├── local.settings.json      # Lokala miljövariabler
-├── package.json             # NPM-paket och skript
-└── README.md                # Dokumentation
+src
+├── lib
+│   ├── bookingService.js
+│   ├── calendar
+│   │   ├── appleCalendar.js
+│   │   ├── caldav.js
+│   │   ├── ms365Calendar.js
+│   │   ├── msGraph.js
+│   │   └── roomBooking.js
+│   ├── db
+│   │   └── db.js
+│   ├── log
+│   │   └── eventLogger.js
+│   ├── maps
+│   │   └── appleMaps.js
+│   ├── notification
+│   │   ├── emailSender.js
+│   │   └── sendMail.js
+│   ├── test
+│   │   └── testBookingService.js
+│   └── utils
+│       ├── debug.js
+│       └── translation.js
+└── routes
+    ├── bookings.js
+    ├── getAvailableSlots.js
+    ├── health.js
+    └── status.js
+
+10 directories, 18 files
 
 ## 🔗 Kommandoalias (förslag)
 
@@ -283,7 +293,59 @@ INSERT INTO pending_changes (...) VALUES (...);
 - `REVOKE ALL ON SCHEMA public FROM PUBLIC;`
 - Endast `SELECT`, `INSERT`, `UPDATE` för användaren `macapp`
 
+### ✉️ E-post (Microsoft Graph)
+
+E-post skickas endast via Microsoft Graph API. Tidigare SMTP- eller SendGrid-baserad logik har tagits bort eller inaktiverats. Följande variabler används:
+
+- `MS365_CLIENT_ID`
+- `MS365_CLIENT_SECRET`
+- `MS365_TENANT_ID`
+- `MS365_USER_EMAIL`
+
+Dessa används i `emailSender.js` och `sendMail.js` via Graph-anrop med autentisering via MSAL.
+
+## 🔑 Obligatoriska miljövariabler (Secrets)
+
+För att aktivera full funktionalitet i systemet krävs följande secrets:
+
+### Microsoft Graph API (kalenderhantering)
+
+- `MS365_CLIENT_ID`
+- `MS365_CLIENT_SECRET`
+- `MS365_TENANT_ID`
+- `MS365_USER_EMAIL`
+
+### Apple Maps REST API (restidsberäkning)
+
+- `APPLE_TEAM_ID`
+- `APPLE_KEY_ID`
+- `APPLE_PRIVATE_KEY`
+- `APPLE_MAPS_PRIVATE_KEY` *(alternativ till KEY_PATH för molndrift)*
+
+> Om du använder `APPLE_MAPS_PRIVATE_KEY` från secrets, ersätts behovet av `APPLE_MAPS_KEY_PATH`. Strängen måste innehålla `\\n` för radbrytningar.
+
+Läggs in i Azure App Settings (produktion) och/eller GitHub Secrets (CI).
+
+### Apple Kalender (CalDAV)
+
+- `CALDAV_USER`
+- `CALDAV_PASSWORD`
+- `CALDAV_CALENDAR_URL` *(ex: https://caldav.icloud.com/xyz/)*
+
+Används för att autentisera mot din privata Apple-kalender och hämta händelser via CalDAV. Detta krävs för att systemet ska kunna upptäcka krockar med personliga kalenderhändelser.
+
 ### 🏁 Release
 
 - Version: `v1.0`
 - Datum: 2025-04-25
+
+### ✅ Bekräftad funktionalitet (2025-04-25)
+
+- Triggerfunktioner skapade om från grunden
+- Alla `pending_changes` loggas korrekt från lokal databas
+- `sync_all.py` fungerar utan fel i båda riktningar
+- Struktur i molnet har full `PRIMARY KEY`-täckning (`id`)
+- GitHub Actions-anslutning testad via `psql SELECT 1;`
+- Secrets (`PGUSER=macapp` etc.) inlagda i både Azure och GitHub
+
+Denna release är testad och bekräftad för produktionsdrift.
