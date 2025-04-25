@@ -348,4 +348,14 @@ Används för att autentisera mot din privata Apple-kalender och hämta händels
 - GitHub Actions-anslutning testad via `psql SELECT 1;`
 - Secrets (`PGUSER=macapp` etc.) inlagda i både Azure och GitHub
 
+### 🔄 Senaste förbättringar (2025-04-25)
+
+- `health.js` uppdaterad med globalt try/catch och loggning till Application Insights
+- `status.js` visar nu antal saknade miljövariabler (env status)
+- `msGraph.js` uppdaterad med korrekt OAuth2-flöde (utan APPLE-variabler)
+- `appleMaps.js` stödjer nu både `KEY_PATH` och `PRIVATE_KEY` från secrets
+- GitHub Actions-flöde för att synka secrets till Azure (`sync-secrets-to-azure.yml`)
+- `health.js` och `status.js` svarar korrekt även vid saknade värden
+- README och kodstruktur uppdaterade för att reflektera faktisk funktion
+
 Denna release är testad och bekräftad för produktionsdrift.
