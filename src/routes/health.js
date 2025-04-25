@@ -45,16 +45,18 @@ app.http('healthcheck', {
       }
 
       context.log('📊 Healthcheck-resultat:', result);
-      context.telemetry.trackEvent({
-        name: "HealthCheckRun",
-        properties: {
-          timestamp: result.timestamp,
-          db: result.db,
-          ...Object.fromEntries(
-            Object.entries(result.env).map(([key, value]) => [`env_${key}`, value])
-          )
-        }
-      });
+      if (context.telemetry && typeof context.telemetry.trackEvent === 'function') {
+        context.telemetry.trackEvent({
+          name: "HealthCheckRun",
+          properties: {
+            timestamp: result.timestamp,
+            db: result.db,
+            ...Object.fromEntries(
+              Object.entries(result.env).map(([key, value]) => [`env_${key}`, value])
+            )
+          }
+        });
+      }
 
       result.appVersion = process.env.VERSION || 'dev';
       result.environment = process.env.NODE_ENV || 'development';
