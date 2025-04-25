@@ -208,3 +208,50 @@ tree -I 'node_modules' -L 4
 tree -a -I 'node_modules' -L 4
 tree -a -I 'node_modules|objects' -L 4
 tree src -L 5
+
+---
+
+## 📦 Synkplattform – Version 1.0
+
+🎉 Detta är en fryst och stabil version av den tvåvägssynkade plattformen mellan lokal och molndatabas.
+
+### ✅ Funktionalitet
+
+- Full tvåvägssynk mellan lokal och moln via `pending_changes`
+- Moderna triggerfunktioner för `contact` och `bookings`
+- Minimal molnstruktur, full lokal struktur
+- Säkerhet via separat app-användare i Azure (`macapp`)
+- Automatisk loggning till `event_log`
+
+### 🧪 Testflöde
+
+```sql
+-- Lokalt
+UPDATE contact
+SET metadata = jsonb_set(metadata, '{first_name}', '"TestLokalt"')
+WHERE booking_email = 'lokaltest@example.com';
+
+-- Moln
+UPDATE contact
+SET metadata = jsonb_set(metadata, '{first_name}', '"TestMoln"')
+WHERE booking_email = 'lokaltest@example.com';
+
+-- Lägg till pending_changes i molnet
+INSERT INTO pending_changes (...) VALUES (...);
+```
+
+### 🔁 Verifiering
+
+- `SELECT * FROM pending_changes WHERE direction = 'out';`
+- `python sync_all.py`
+- `SELECT * FROM contact WHERE booking_email = 'lokaltest@example.com';`
+
+### 🔐 Säkerhet
+
+- `REVOKE ALL ON SCHEMA public FROM PUBLIC;`
+- Endast `SELECT`, `INSERT`, `UPDATE` för användaren `macapp`
+
+### 🏁 Release
+
+- Version: `v1.0`
+- Datum: 2025-04-25
