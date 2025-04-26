@@ -1,7 +1,7 @@
 {
-  "apiDir": "./src/routes",
+  "apiDir": "./api",
   "entryFile": "index.js",
   "functions": {
-    "getMeetingTypes": "./src/routes/meetingTypes.js"
+    "getMeetingTypes": "./api/meetingTypes.js"
   }
 }
