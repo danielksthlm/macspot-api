@@ -26,3 +26,4 @@ jobs:
           app_location: "/"  # Root since you don't have separate frontend
           api_location: "src/routes" # Serverless API routes
           output_location: ""  # No frontend build output
+          skip_app_build: true
