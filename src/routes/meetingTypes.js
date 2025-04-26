@@ -1,7 +1,6 @@
-import app from 'apprun';
 import db from '../lib/db/db.js';
 
-app.http('getMeetingTypes', {
+export const getMeetingTypes = {
   route: 'meetingTypes',
   methods: ['GET'],
   handler: async (_req, context) => {
@@ -26,4 +25,4 @@ app.http('getMeetingTypes', {
       return new Response(JSON.stringify({ error: err.message }), { status: 500 });
     }
   }
-});
+};
