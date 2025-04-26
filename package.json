@@ -7,7 +7,8 @@
   "scripts": {
     "start": "func start",
     "dev": "func start --verbose",
-    "deploy": "func azure functionapp publish macspotbackend"
+    "deploy": "func azure functionapp publish macspotbackend",
+    "build": "echo 'Nothing to build'"
   },
   "dependencies": {
     "@azure/functions": "^4.7.0",
