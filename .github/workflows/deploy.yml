@@ -10,11 +10,15 @@ on:
       - main
 
 jobs:
-  build_and_deploy:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: true
+          lfs: false
 
       - name: Build And Deploy
         id: builddeploy
@@ -24,6 +28,18 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
           app_location: ""
-          api_location: "src/routes" # Serverless API routes
-          output_location: ""  # No frontend build output
+          api_location: "src/routes"
+          output_location: ""
           skip_app_build: true
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: "close"
