@@ -4,30 +4,21 @@ dotenv.config();
 import pkg from 'pg';
 const { Pool } = pkg;
 
-function createDbPool() {
-  try {
-    const user = "macapp";
-    const host = "macspotpg.postgres.database.azure.com";
-    const database = "postgres";
-    const password = "0DsgJwXbVkJ6TnZ";
-    const port = 5432;
+let pool;
 
-    console.log("✅ (Test) Creating PostgreSQL connection pool with hardcoded credentials...");
-    return new Pool({
-      user,
-      host,
-      database,
-      password,
-      port,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000
-    });
-  } catch (err) {
-    console.error("❌ (Test) Error while creating PostgreSQL pool:", err.message);
-    return {
-      query: async () => { throw new Error("Database connection failed: " + err.message); }
-    };
-  }
+try {
+  pool = new Pool({
+    user: process.env.PGUSER || "danielkallberg",
+    host: process.env.PGHOST || "localhost",
+    database: process.env.PGDATABASE || "macspot",
+    password: process.env.PGPASSWORD ?? (() => { throw new Error("PGPASSWORD is not set"); })(),
+    port: parseInt(process.env.PGPORT || "5432", 10),
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 5000
+  });
+  console.log("✅ PostgreSQL pool created successfully.");
+} catch (err) {
+  console.error("❌ Error while creating PostgreSQL pool:", err);
 }
 
 const pool = createDbPool();
