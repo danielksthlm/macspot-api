@@ -6,18 +6,13 @@ const { Pool } = pkg;
 
 function createDbPool() {
   try {
-    const user = process.env.PGUSER;
-    const host = process.env.PGHOST;
-    const database = process.env.PGDATABASE;
-    const password = process.env.PGPASSWORD;
-    const port = parseInt(process.env.PGPORT, 10);
+    const user = "macapp";
+    const host = "macspotpg.postgres.database.azure.com";
+    const database = "postgres";
+    const password = "0DsgJwXbVkJ6TnZ";
+    const port = 5432;
 
-    if (!user || !host || !database || !password || !port) {
-      console.error('❌ Missing required PG connection environment variables.');
-      throw new Error('Database configuration incomplete');
-    }
-
-    console.log("✅ Creating PostgreSQL connection pool...");
+    console.log("✅ (Test) Creating PostgreSQL connection pool with hardcoded credentials...");
     return new Pool({
       user,
       host,
@@ -28,7 +23,7 @@ function createDbPool() {
       connectionTimeoutMillis: 5000
     });
   } catch (err) {
-    console.error("❌ Error while creating PostgreSQL pool:", err.message);
+    console.error("❌ (Test) Error while creating PostgreSQL pool:", err.message);
     return {
       query: async () => { throw new Error("Database connection failed: " + err.message); }
     };
