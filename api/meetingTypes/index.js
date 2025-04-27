@@ -6,6 +6,10 @@ export const getMeetingTypes = {
   handler: async (_req, context) => {
     try {
       context.log("🚀 Handler started. Preparing to query database...");
+      context.log(`🧩 PGUSER: ${process.env.PGUSER}`);
+      context.log(`🧩 PGHOST: ${process.env.PGHOST}`);
+      context.log(`🧩 PGPORT: ${process.env.PGPORT}`);
+      context.log(`🧩 PGDATABASE: ${process.env.PGDATABASE}`);
 
       const res = await db.query(`
         SELECT key, value
