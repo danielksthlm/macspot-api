@@ -3,15 +3,22 @@ dotenv.config();
 
 import pkg from 'pg';
 const { Pool } = pkg;
-const pool = new Pool({
-  user: process.env.PGUSER || "danielkallberg",
-  host: process.env.PGHOST || "localhost",
-  database: process.env.PGDATABASE || "macspot",
-  password: process.env.PGPASSWORD ?? (() => { throw new Error("PGPASSWORD is not set"); })(),
-  port: parseInt(process.env.PGPORT || "5433", 10),
-  ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 5000
-});
+let pool;
+
+try {
+  pool = new Pool({
+    user: process.env.PGUSER || "danielkallberg",
+    host: process.env.PGHOST || "localhost",
+    database: process.env.PGDATABASE || "macspot",
+    password: process.env.PGPASSWORD ?? (() => { throw new Error("PGPASSWORD is not set"); })(),
+    port: parseInt(process.env.PGPORT || "5433", 10),
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 5000
+  });
+  console.log('✅ PostgreSQL pool created successfully.');
+} catch (err) {
+  console.error('❌ Error while creating PostgreSQL pool:', err);
+}
 
 console.log('✅ PostgreSQL pool created. Attempting to connect...');
 pool.connect()
