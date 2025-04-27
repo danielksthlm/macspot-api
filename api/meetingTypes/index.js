@@ -22,7 +22,10 @@ export const getMeetingTypes = {
       });
     } catch (err) {
       context.error("❌ Fel vid hämtning av mötestyper:", err);
-      return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+      return new Response(JSON.stringify({
+        error: err.message,
+        stack: err.stack
+      }), { status: 500 });
     }
   }
 };
