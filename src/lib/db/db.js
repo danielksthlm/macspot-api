@@ -9,11 +9,14 @@ const pool = new Pool({
   database: process.env.PGDATABASE || "macspot",
   password: process.env.PGPASSWORD ?? (() => { throw new Error("PGPASSWORD is not set"); })(),
   port: parseInt(process.env.PGPORT || "5433", 10),
-  ssl: process.env.PGHOST?.includes('azure.com')
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 5000
 });
+
+console.log('✅ PostgreSQL pool created. Attempting to connect...');
+pool.connect()
+  .then(() => console.log('✅ PostgreSQL connection successful!'))
+  .catch(err => console.error('❌ PostgreSQL connection error:', err));
 
 pool.on('error', (err) => {
   console.error('❌ PG Pool error:', err);
