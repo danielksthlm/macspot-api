@@ -3,29 +3,45 @@ dotenv.config();
 
 import pkg from 'pg';
 const { Pool } = pkg;
-let pool;
 
-try {
-  pool = new Pool({
-    user: process.env.PGUSER || "danielkallberg",
-    host: process.env.PGHOST || "localhost",
-    database: process.env.PGDATABASE || "macspot",
-    password: process.env.PGPASSWORD ?? (() => { throw new Error("PGPASSWORD is not set"); })(),
-    port: parseInt(process.env.PGPORT || "5433", 10),
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 5000
-  });
-  console.log('✅ PostgreSQL pool created successfully.');
-} catch (err) {
-  console.error('❌ Error while creating PostgreSQL pool:', err);
+function createDbPool() {
+  try {
+    const user = process.env.PGUSER;
+    const host = process.env.PGHOST;
+    const database = process.env.PGDATABASE;
+    const password = process.env.PGPASSWORD;
+    const port = parseInt(process.env.PGPORT, 10);
+
+    if (!user || !host || !database || !password || !port) {
+      console.error('❌ Missing required PG connection environment variables.');
+      throw new Error('Database configuration incomplete');
+    }
+
+    console.log("✅ Creating PostgreSQL connection pool...");
+    return new Pool({
+      user,
+      host,
+      database,
+      password,
+      port,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000
+    });
+  } catch (err) {
+    console.error("❌ Error while creating PostgreSQL pool:", err.message);
+    return {
+      query: async () => { throw new Error("Database connection failed: " + err.message); }
+    };
+  }
 }
 
-console.log('✅ PostgreSQL pool created. Attempting to connect...');
+const pool = createDbPool();
+
 pool.connect()
   .then(() => console.log('✅ PostgreSQL connection successful!'))
   .catch(err => console.error('❌ PostgreSQL connection error:', err));
 
-pool.on('error', (err) => {
+pool.on && pool.on('error', (err) => {
   console.error('❌ PG Pool error:', err);
 });
 
