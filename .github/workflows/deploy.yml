@@ -18,10 +18,8 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Setup Azure Functions Core Tools
-        uses: Azure/setup-azure-functions@v1
-        with:
-          version: 4.x
+      - name: Install Azure Functions Core Tools
+        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
 
       - name: Azure Login
         uses: azure/login@v1
