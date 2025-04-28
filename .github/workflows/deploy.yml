@@ -75,4 +75,4 @@ jobs:
         with:
           app-name: 'macspotbackend'
           slot-name: 'Production'
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          package: release.zip

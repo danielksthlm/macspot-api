@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Azure Functions backend för MacSpot CRM/ERP",
-  "main": "index.js",
   "scripts": {
     "start": "func start",
     "dev": "func start --verbose",
@@ -20,7 +19,7 @@
     "luxon": "^3.4.4",
     "node-fetch": "^3.3.2",
     "node-ical": "^0.20.1",
-    "pg": "^8.11.3",
+    "pg": "^8.15.6",
     "uuid": "^9.0.0"
   }
 }

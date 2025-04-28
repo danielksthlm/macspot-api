@@ -6,4 +6,3 @@
 !package.json
 !package-lock.json
 !meeting_types/**
-!src/lib/db/db.js
