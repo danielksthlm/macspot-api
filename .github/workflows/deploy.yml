@@ -8,21 +8,26 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Install dependencies
-        run: |
-          npm install
-
-      - name: Deploy using Publish Profile
-        uses: Azure/webapps-deploy@v2
+      - name: Setup Azure Functions Core Tools
+        uses: Azure/setup-azure-functions@v1
         with:
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
-          package: .
+          version: 4.x
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Publish to Azure Function App
+        run: |
+          func azure functionapp publish macspotbackend
