@@ -1,7 +1,0 @@
-{
-  "apiDir": "./api",
-  "entryFile": "index.js",
-  "functions": {
-    "getMeetingTypes": "./api/meetingTypes.js"
-  }
-}
