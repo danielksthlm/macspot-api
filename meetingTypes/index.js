@@ -26,7 +26,11 @@ export default async function (context, req) {
     });
     context.res = {
       status: 500,
-      body: { error: error.message }
+      body: {
+        error: error.message,
+        code: error.code,
+        stack: error.stack
+      }
     };
   }
 }
