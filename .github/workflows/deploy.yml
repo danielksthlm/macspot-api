@@ -28,4 +28,4 @@ jobs:
 
       - name: Publish to Azure Function App
         run: |
-          func azure functionapp publish macspotbackend
+          func azure functionapp publish macspotbackend --no-build
