@@ -22,9 +22,9 @@ jobs:
           cd ./api
           npm install
 
-      - name: Deploy to Azure Function App
-        uses: Azure/functions-action@v1
+      - name: Deploy using Publish Profile
+        uses: Azure/webapps-deploy@v2
         with:
           app-name: macspotbackend
-          package: ./api
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          package: ./api
