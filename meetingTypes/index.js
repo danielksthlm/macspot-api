@@ -1,4 +1,15 @@
-import db from './db.js';
+
+import pkg from 'pg';
+const { Pool } = pkg;
+
+const db = new Pool({
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: parseInt(process.env.PGPORT || '5432', 10),
+  ssl: { rejectUnauthorized: false }
+});
 
 export default async function (context, req) {
   try {
