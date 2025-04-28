@@ -1,0 +1,10 @@
+
+
+# Exclude everything first
+**
+
+# Include only necessary deployment files
+!host.json
+!package.json
+!api/**
+!src/lib/db/db.js
