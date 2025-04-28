@@ -3,7 +3,7 @@ name: Deploy to Azure Functions (macspotbackend)
 on:
   push:
     branches:
-      - main
+      - main_1
 
 jobs:
   build-and-deploy:
