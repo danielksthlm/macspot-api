@@ -27,6 +27,5 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Publish to Azure Function App
-        working-directory: .
         run: |
           func azure functionapp publish macspotbackend --no-build
