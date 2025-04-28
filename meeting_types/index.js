@@ -1,4 +1,4 @@
-import db from '../../src/lib/db/db.js';
+import db from './db.js';
 
 export default async function (context, req) {
   try {
