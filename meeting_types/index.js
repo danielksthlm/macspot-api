@@ -2,6 +2,10 @@ import db from '../../src/lib/db/db.js';
 
 export default async function (context, req) {
   try {
+    // Testa databasanslutning först
+    await db.query('SELECT 1');
+    context.log.info('✅ Database connection test succeeded');
+
     const result = await db.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
