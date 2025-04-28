@@ -29,6 +29,10 @@ export default async function (context, req) {
 
   } catch (err) {
     context.log.error("❌ Error inside meetingTypes handler:", err);
+    context.log.error(`🧩 PGUSER: ${process.env.PGUSER}`);
+    context.log.error(`🧩 PGHOST: ${process.env.PGHOST}`);
+    context.log.error(`🧩 PGPORT: ${process.env.PGPORT}`);
+    context.log.error(`🧩 PGDATABASE: ${process.env.PGDATABASE}`);
     context.res = {
       status: 500,
       body: {
