@@ -8,3 +8,4 @@
 !package.json
 !api/**
 !src/lib/db/db.js
+!package-lock.json
