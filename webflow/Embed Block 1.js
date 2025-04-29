@@ -7,31 +7,26 @@ async function loadMeetingTypes() {
   }
 
   try {
-    const res = await fetch("https://macspotbackend.azurewebsites.net/api/meetingTypes");
+    const res = await fetch("https://macspotbackend.azurewebsites.net/api/meeting_types");
     if (!res.ok) throw new Error(`Status: ${res.status}`);
     const types = await res.json();
     console.log("✅ Mötestyper hämtade:", types);
 
-    container.innerHTML = "";
-    types.forEach(({ value, label }) => {
-      console.log(`➕ Lägger till meeting_type: ${value}`);
-      const wrapper = document.createElement("label");
-      wrapper.className = "w-radio";
+    // Skapa <select>-element
+    const select = document.createElement("select");
+    select.name = "meeting_type";
+    select.className = "w-select";
 
-      const input = document.createElement("input");
-      input.type = "radio";
-      input.name = "meeting_type";
-      input.value = value;
-      input.className = "w-form-formradioinput w-radio-input";
-
-      const span = document.createElement("span");
-      span.className = "w-form-label";
-      span.textContent = label;
-
-      wrapper.appendChild(input);
-      wrapper.appendChild(span);
-      container.appendChild(wrapper);
+    types.forEach((type) => {
+      console.log(`➕ Lägger till meeting_type: ${type}`);
+      const option = document.createElement("option");
+      option.value = type;
+      option.textContent = type;
+      select.appendChild(option);
     });
+
+    container.innerHTML = "";
+    container.appendChild(select);
 
   } catch (err) {
     console.error("🛑 Misslyckades att ladda mötestyper:", err);
