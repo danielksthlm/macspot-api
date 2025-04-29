@@ -2,21 +2,43 @@
   async function submitContactUpdate() {
     const email = document.querySelector('#booking_email')?.value.trim();
     const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
-    const firstName = document.querySelector('#first_name')?.value.trim();
-    const lastName = document.querySelector('#last_name')?.value.trim();
-    const phone = document.querySelector('#phone')?.value.trim();
-    const company = document.querySelector('#company')?.value.trim();
-    const address = document.querySelector('#address')?.value.trim();
-    const postalCode = document.querySelector('#postal_code')?.value.trim();
-    const city = document.querySelector('#city')?.value.trim();
-    const country = document.querySelector('#country')?.value.trim();
 
     if (!email || !meetingType) {
-      console.error('🛑 Email och mötestyp krävs!');
+      console.error('🛑 Kan inte skicka utan email och mötestyp.');
       return;
     }
 
-    const body = { email, meeting_type: meetingType, first_name: firstName, last_name: lastName, phone, company, address, postal_code: postalCode, city, country };
+    // Kontrollera att alla needs-filling fält är ifyllda
+    const needsFilling = document.querySelectorAll('.needs-filling');
+    let allFilled = true;
+
+    needsFilling.forEach(field => {
+      if (!field.value.trim()) {
+        allFilled = false;
+        field.style.borderColor = 'red'; // Visa att fält är tomt
+      } else {
+        field.style.borderColor = ''; // Nollställ om korrekt
+      }
+    });
+
+    if (!allFilled) {
+      console.error('🛑 Alla obligatoriska fält måste fyllas i.');
+      alert('Vänligen fyll i alla obligatoriska fält.');
+      return;
+    }
+
+    const body = {
+      email,
+      meeting_type: meetingType
+    };
+
+    needsFilling.forEach(field => {
+      const key = field.id;
+      const value = field.value.trim();
+      if (value) {
+        body[key] = value;
+      }
+    });
 
     try {
       const response = await fetch('https://macspotbackend.azurewebsites.net/api/update_contact', {
@@ -31,10 +53,11 @@
       if (result.status === "updated" || result.status === "created") {
         location.reload();
       } else {
-        console.error('❌ Kunde inte spara kontakt:', result);
+        alert('❌ Kunde inte spara, försök igen.');
       }
     } catch (error) {
       console.error('❌ Tekniskt fel vid sparande:', error);
+      alert('❌ Tekniskt fel.');
     }
   }
 

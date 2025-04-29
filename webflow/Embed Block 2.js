@@ -19,37 +19,65 @@
     const addressWrapper = document.querySelector('#autofilled-fields-at-client');
     const fields = ['first_name', 'last_name', 'phone', 'company'];
 
-    // Dölja allt först
+    // Dölj allt först och ta bort ev. needs-filling klasser
     fields.forEach(field => {
       const input = document.querySelector(`#${field}`);
-      if (input) input.style.display = 'none';
+      if (input) {
+        input.style.display = 'none';
+        input.classList.remove('needs-filling');
+      }
     });
     if (addressWrapper) addressWrapper.style.display = 'none';
-    if (submitButton) submitButton.style.display = 'none';
+
+    if (submitButton) {
+      submitButton.style.display = 'none';
+    }
 
     if (result.status === "ok") {
-      submitButton.style.display = 'none';
+      // Inget att fylla
     } else if (result.status === "incomplete") {
       fields.forEach(field => {
         const input = document.querySelector(`#${field}`);
         if (input && result.missing_fields.includes(field)) {
           input.style.display = 'block';
+          input.classList.add('needs-filling');
         }
       });
+
       const addressFields = ['address', 'postal_code', 'city', 'country'];
       if (result.missing_fields.some(f => addressFields.includes(f))) {
         addressWrapper.style.display = 'block';
+        addressFields.forEach(field => {
+          const input = document.querySelector(`#${field}`);
+          if (input) input.classList.add('needs-filling');
+        });
       }
-      submitButton.style.display = 'block';
-      submitButton.value = 'Uppdatera uppgifter';
+
+      if (submitButton) {
+        submitButton.style.display = 'block';
+        submitButton.value = 'Uppdatera uppgifter';
+      }
     } else if (result.status === "new_customer") {
       fields.forEach(field => {
         const input = document.querySelector(`#${field}`);
-        if (input) input.style.display = 'block';
+        if (input) {
+          input.style.display = 'block';
+          input.classList.add('needs-filling');
+        }
       });
-      addressWrapper.style.display = 'block';
-      submitButton.style.display = 'block';
-      submitButton.value = 'Skapa kontakt';
+      if (addressWrapper) {
+        addressWrapper.style.display = 'block';
+        const addressFields = ['address', 'postal_code', 'city', 'country'];
+        addressFields.forEach(field => {
+          const input = document.querySelector(`#${field}`);
+          if (input) input.classList.add('needs-filling');
+        });
+      }
+
+      if (submitButton) {
+        submitButton.style.display = 'block';
+        submitButton.value = 'Skapa kontakt';
+      }
     }
   }
 
@@ -57,21 +85,21 @@
     const meetingTypeGroup = document.querySelector('#meeting_type_group');
     const emailField = document.querySelector('#booking_email');
 
-    if (meetingTypeGroup) meetingTypeGroup.style.display = 'none';
+    if (meetingTypeGroup) {
+      meetingTypeGroup.style.display = 'none'; // Dölj från början
+    }
 
     if (emailField) {
       emailField.addEventListener('blur', () => {
         const email = emailField.value.trim();
         if (email && email.includes('@')) {
-          meetingTypeGroup.style.display = 'block';
+          if (meetingTypeGroup) meetingTypeGroup.style.display = 'block';
         }
       });
     }
 
-    document.addEventListener('change', (e) => {
-      if (e.target.name === 'meeting_type') {
-        validateContact();
-      }
+    document.querySelectorAll('input[name="meeting_type"]').forEach(radio => {
+      radio.addEventListener('change', validateContact);
     });
   });
 </script>

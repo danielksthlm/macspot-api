@@ -37,7 +37,12 @@ export default async function (context, req) {
     if (res.rows.length > 0) {
       // Uppdatera befintlig kontakt
       const existingMetadata = res.rows[0].metadata || {};
-      const updatedMetadata = { ...existingMetadata, ...metadata };
+      const updatedMetadata = { ...existingMetadata };
+      for (const key in metadata) {
+        if (metadata[key] && metadata[key].trim() !== '') {
+          updatedMetadata[key] = metadata[key];
+        }
+      }
 
       await pool.query('UPDATE contact SET metadata = $1 WHERE id = $2', [updatedMetadata, res.rows[0].id]);
       context.res = {
