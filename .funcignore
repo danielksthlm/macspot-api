@@ -6,3 +6,4 @@
 !package.json
 !package-lock.json
 !meeting_types/**
+!validate_contact/**
