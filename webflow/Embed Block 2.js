@@ -1,9 +1,11 @@
 <script>
   async function validateContact() {
     const email = document.querySelector('#booking_email').value.trim();
-    if (!email || !email.includes('@')) return;
-
     const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+
+    if (!email || !email.includes('@')) return;
+    if (!meetingType) return;
+
     const response = await fetch("https://macspotbackend.azurewebsites.net/api/validate_contact", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -36,8 +38,8 @@
     } else if (result.status === "incomplete") {
       fields.forEach(field => {
         const inputField = document.querySelector(`#${field}`);
-        if (inputField && result.missing_fields.includes(field)) {
-          inputField.style.display = 'block';
+        if (inputField) {
+          inputField.style.display = result.missing_fields.includes(field) ? 'block' : 'none';
         }
       });
 
@@ -68,34 +70,27 @@
     const meetingTypeGroup = document.querySelector('#meeting_type_group');
     const bookingDetailsStep = document.querySelector('#booking-details-step');
     const addressWrapper = document.querySelector('#autofilled-fields-at-client');
-
-    if (meetingTypeGroup) {
-      meetingTypeGroup.style.display = 'none';
-    }
-    if (addressWrapper) {
-      addressWrapper.style.display = 'none';
-    }
-    if (bookingDetailsStep) {
-      bookingDetailsStep.style.display = 'none';
-    }
-
-    const validateButton = document.querySelector('#contact-update-button');
-    if (validateButton) {
-      validateButton.addEventListener('click', validateContact);
-    } else {
-      console.error('🛑 contact-update-button hittades inte på sidan!');
-    }
-
     const emailField = document.querySelector('#booking_email');
+    const validateButton = document.querySelector('#contact-update-button');
+
+    if (meetingTypeGroup) meetingTypeGroup.style.display = 'none';
+    if (addressWrapper) addressWrapper.style.display = 'none';
+    if (bookingDetailsStep) bookingDetailsStep.style.display = 'none';
+
     if (emailField) {
       emailField.addEventListener('blur', () => {
         const email = emailField.value.trim();
         if (email && email.includes('@')) {
           if (meetingTypeGroup) meetingTypeGroup.style.display = 'block';
+          // Väntar på att mötestyp väljs innan validateContact anropas
         }
       });
+    }
+
+    if (validateButton) {
+      validateButton.addEventListener('click', validateContact);
     } else {
-      console.error('🛑 booking_email fält hittades inte på sidan!');
+      console.error('🛑 contact-update-button hittades inte på sidan!');
     }
 
     document.querySelectorAll('input[name="meeting_type"]').forEach(radio => {
