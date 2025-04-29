@@ -20,7 +20,7 @@ export default async function (context, req) {
 
     context.res = {
       status: 200,
-      body: result.rows
+      body: result.rows[0].value
     };
   } catch (error) {
     context.log.error('❌ Error during function execution:', {
