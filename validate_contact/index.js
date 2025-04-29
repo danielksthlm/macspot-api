@@ -21,7 +21,7 @@ export default async function (context, req) {
       ssl: { rejectUnauthorized: false }
     });
 
-    const res = await pool.query('SELECT * FROM contact WHERE email = $1', [email]);
+    const res = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
 
     if (res.rows.length === 0) {
       context.res = {
