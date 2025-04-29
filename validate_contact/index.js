@@ -40,7 +40,10 @@ export default async function (context, req) {
     if (!metadata.phone) missingFields.push('phone');
     if (!metadata.company) missingFields.push('company');
 
-    if (meeting_type === 'atClient') {
+    const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
+    const meetingDigital = settingsRes.rows[0]?.value || [];
+
+    if (!meetingDigital.includes(meeting_type)) {
       if (!metadata.address) missingFields.push('address');
       if (!metadata.postal_code) missingFields.push('postal_code');
       if (!metadata.city) missingFields.push('city');
