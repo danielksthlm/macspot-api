@@ -1,6 +1,3 @@
 {
-  "version": "2.0",
-  "functions": [
-    "meeting_types"
-  ]
+  "version": "2.0"
 }
