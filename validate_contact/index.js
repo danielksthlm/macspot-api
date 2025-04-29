@@ -32,17 +32,19 @@ export default async function (context, req) {
     }
 
     const contact = res.rows[0];
+    const metadata = contact.metadata || {};
     const missingFields = [];
 
-    if (!contact.firstname) missingFields.push('firstname');
-    if (!contact.lastname) missingFields.push('lastname');
-    if (!contact.telephone) missingFields.push('telephone');
-    if (!contact.email) missingFields.push('email');
+    if (!metadata.first_name) missingFields.push('first_name');
+    if (!metadata.last_name) missingFields.push('last_name');
+    if (!metadata.phone) missingFields.push('phone');
+    if (!metadata.company) missingFields.push('company');
 
     if (meeting_type === 'atClient') {
-      if (!contact.street) missingFields.push('street');
-      if (!contact.city) missingFields.push('city');
-      if (!contact.zipcode) missingFields.push('zipcode');
+      if (!metadata.address) missingFields.push('address');
+      if (!metadata.postal_code) missingFields.push('postal_code');
+      if (!metadata.city) missingFields.push('city');
+      if (!metadata.country) missingFields.push('country');
     }
 
     if (missingFields.length > 0) {
