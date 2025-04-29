@@ -1,38 +1,50 @@
-<script type="text/javascript">
-/**
- * Embed Block 3 – Initiering av tillgängliga tider
- * Kräver: färdigifylld kontakt + mötestyp + möteslängd (minuter)
- * Anropar: /api/getAvailableSlots
- */
-
-window.MacSpotCalendar = {
-  async startCalendarFlow() {
-    const email = document.getElementById("email")?.value.trim();
+<script>
+  async function submitContactUpdate() {
+    const email = document.querySelector('#booking_email')?.value.trim();
     const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
-    const duration = document.getElementById("meeting_minutes")?.value;
+    const firstName = document.querySelector('#first_name')?.value.trim();
+    const lastName = document.querySelector('#last_name')?.value.trim();
+    const phone = document.querySelector('#phone')?.value.trim();
+    const company = document.querySelector('#company')?.value.trim();
+    const address = document.querySelector('#address')?.value.trim();
+    const postalCode = document.querySelector('#postal_code')?.value.trim();
+    const city = document.querySelector('#city')?.value.trim();
+    const country = document.querySelector('#country')?.value.trim();
 
-    if (!email || !meetingType || !duration) {
-      console.warn("🛑 Saknar e-post, mötestyp eller mötestid.");
+    if (!email || !meetingType) {
+      console.error('🛑 Email och mötestyp krävs!');
       return;
     }
 
+    const body = { email, meeting_type: meetingType, first_name: firstName, last_name: lastName, phone, company, address, postal_code: postalCode, city, country };
+
     try {
-      const res = await fetch("https://macspotbackend.azurewebsites.net/api/getAvailableSlots", {
+      const response = await fetch('https://macspotbackend.azurewebsites.net/api/update_contact', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, meeting_type: meetingType, minutes: Number(duration) })
+        body: JSON.stringify(body)
       });
 
-      if (!res.ok) throw new Error(`Fel: ${res.status}`);
-      const data = await res.json();
+      const result = await response.json();
+      console.log("✅ Svar från update_contact:", result);
 
-      console.log("🕒 Tillgängliga tider (API-svar):", data);
-
-      // TODO: Sätt in data i fm/em-slotgrupper här
-
-    } catch (err) {
-      console.error("🛑 Misslyckades att hämta tider:", err);
+      if (result.status === "updated" || result.status === "created") {
+        location.reload();
+      } else {
+        console.error('❌ Kunde inte spara kontakt:', result);
+      }
+    } catch (error) {
+      console.error('❌ Tekniskt fel vid sparande:', error);
     }
   }
-};
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const submitButton = document.querySelector('#contact-update-button');
+    if (submitButton) {
+      submitButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        submitContactUpdate();
+      });
+    }
+  });
 </script>

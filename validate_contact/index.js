@@ -35,19 +35,25 @@ export default async function (context, req) {
     const metadata = contact.metadata || {};
     const missingFields = [];
 
-    if (!metadata.first_name) missingFields.push('first_name');
-    if (!metadata.last_name) missingFields.push('last_name');
-    if (!metadata.phone) missingFields.push('phone');
-    if (!metadata.company) missingFields.push('company');
-
     const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
     const meetingDigital = settingsRes.rows[0]?.value || [];
 
+    const alwaysRequired = ['first_name', 'last_name', 'phone', 'company'];
+    const addressRequired = ['address', 'postal_code', 'city', 'country'];
+
+    alwaysRequired.forEach(field => {
+      if (!metadata[field] || metadata[field].trim() === '') {
+        missingFields.push(field);
+      }
+    });
+
+    // Om mötestyp inte är digital, krävs även adressfält
     if (!meetingDigital.includes(meeting_type)) {
-      if (!metadata.address) missingFields.push('address');
-      if (!metadata.postal_code) missingFields.push('postal_code');
-      if (!metadata.city) missingFields.push('city');
-      if (!metadata.country) missingFields.push('country');
+      addressRequired.forEach(field => {
+        if (!metadata[field] || metadata[field].trim() === '') {
+          missingFields.push(field);
+        }
+      });
     }
 
     if (missingFields.length > 0) {
