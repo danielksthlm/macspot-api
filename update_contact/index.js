@@ -28,16 +28,11 @@ export default async function (context, req) {
     // Kontrollera om kontakt finns
     const res = await pool.query('SELECT id, metadata FROM contact WHERE booking_email = $1', [email]);
 
-    let metadata = {
-      first_name,
-      last_name,
-      phone,
-      company,
-      address,
-      postal_code,
-      city,
-      country
-    };
+    const metadataFields = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    let metadata = {};
+    metadataFields.forEach(field => {
+      metadata[field] = req.body[field] || "";
+    });
 
     if (res.rows.length > 0) {
       // Uppdatera befintlig kontakt

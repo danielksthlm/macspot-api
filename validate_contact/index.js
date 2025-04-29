@@ -32,7 +32,11 @@ export default async function (context, req) {
     }
 
     const contact = res.rows[0];
-    const metadata = contact.metadata || {};
+    let metadata = contact.metadata || {};
+    // Om metadata är null, sätt en tomt objekt
+    if (typeof metadata !== 'object' || metadata === null) {
+      metadata = {};
+    }
     const missingFields = [];
 
     const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
