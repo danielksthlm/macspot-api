@@ -11,3 +11,4 @@
 !update_contact/**
 !getAvailableSlots/**
 !check_contact/**
+!test_db_path/**
