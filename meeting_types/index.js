@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getDb } from '../src/lib/db/db.js';
+import { getDb } from '../../src/lib/db/db.js';
 
 context.log("📂 Nuvarande katalog:", __dirname);
 
