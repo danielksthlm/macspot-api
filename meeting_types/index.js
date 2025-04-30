@@ -18,14 +18,16 @@ export default async function (context, req) {
   } catch (error) {
     context.log.error('❌ Error during function execution:', {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      rawResult: result
     });
     context.res = {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
       body: {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        rawResult: result
       }
     };
   }
