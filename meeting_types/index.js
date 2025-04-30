@@ -28,7 +28,6 @@ export default async function (context, req) {
     );
 
     const values = result?.rows?.[0]?.value;
-    context.log.error('💥 Full error dump:', error);
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
