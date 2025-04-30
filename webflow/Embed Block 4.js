@@ -198,28 +198,36 @@
 
   window.triggerSlotSearch = async function() {
     const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
-    const date = new Date().toISOString().split('T')[0];
 
-    if (!meetingType || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      console.warn("⛔ Ogiltiga parametrar till triggerSlotSearch:", { meetingType, date });
+    if (!meetingType) {
+      console.warn("⛔ Ogiltig mötestyp till triggerSlotSearch:", meetingType);
       return;
     }
 
-    console.log("📤 Skickar förfrågan till getAvailableSlots med:", { meetingType, date });
+    console.log("📤 Skickar förfrågan till getAvailableSlots med:", { meeting_type: meetingType });
 
     try {
-      const response = await fetch(`https://macspotbackend.azurewebsites.net/api/getAvailableSlots?meeting_type=${encodeURIComponent(meetingType)}&date=${date}`);
+      const response = await fetch('https://macspotbackend.azurewebsites.net/api/getavailableslots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting_type: meetingType })
+      });
       const result = await response.json();
       console.log("📆 Tillgängliga tider:", result);
 
       const container = document.querySelector('#available-slots');
       if (container) {
         container.innerHTML = '';
-        if (result.success && result.slots?.length) {
-          result.slots.forEach(slot => {
-            const div = document.createElement('div');
-            div.textContent = `🕒 ${new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-            container.appendChild(div);
+        if (result.success && result.slots && Object.keys(result.slots).length > 0) {
+          Object.entries(result.slots).forEach(([date, slots]) => {
+            const dateHeader = document.createElement('h4');
+            dateHeader.textContent = `📅 ${date}`;
+            container.appendChild(dateHeader);
+            slots.forEach(slot => {
+              const div = document.createElement('div');
+              div.textContent = `🕒 ${new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+              container.appendChild(div);
+            });
           });
         } else {
           container.textContent = '❌ Inga tider tillgängliga.';
