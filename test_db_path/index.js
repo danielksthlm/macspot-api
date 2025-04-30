@@ -1,9 +1,11 @@
 import { readFile } from 'fs/promises';
+import path from 'path';
 
 export default async function (req, context) {
   try {
-    context.log('🔍 Försöker läsa ./src/lib/db/db.js...');
-    const content = await readFile('src/lib/db/db.js', 'utf-8');
+    const fullPath = path.resolve('src/lib/db/db.js');
+    context.log('🔍 Försöker läsa:', fullPath);
+    const content = await readFile(fullPath, 'utf-8');
     context.log('✅ db.js hittades och kunde läsas!');
     return new Response(JSON.stringify({ exists: true }), {
       status: 200,
