@@ -57,7 +57,9 @@ export async function handler(req, context) {
         ]);
         if (appleConflict || msConflict) continue;
 
-        const travelTime = await getTravelTime(settings.default_home_address, settings.default_office_address, start);
+        const travelTime = meeting_type === 'atClient'
+          ? await getTravelTime(settings.default_home_address, settings.default_office_address, start)
+          : 0;
         if (travelTime > settings.fallback_travel_time_minutes) continue;
 
         const withinTravelWindow = dt.hour >= DateTime.fromISO(settings.travel_time_window.start).hour &&
