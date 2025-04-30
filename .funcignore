@@ -12,3 +12,4 @@
 !getAvailableSlots/**
 !check_contact/**
 !test_db_path/**
+!list_files/**
