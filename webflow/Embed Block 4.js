@@ -195,4 +195,38 @@
       radio.addEventListener('change', validateContact);
     });
   });
+
+  window.triggerSlotSearch = async function() {
+    const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+    const date = new Date().toISOString().split('T')[0];
+
+    if (!meetingType || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      console.warn("⛔ Ogiltiga parametrar till triggerSlotSearch:", { meetingType, date });
+      return;
+    }
+
+    console.log("📤 Skickar förfrågan till getAvailableSlots med:", { meetingType, date });
+
+    try {
+      const response = await fetch(`https://macspotbackend.azurewebsites.net/api/getAvailableSlots?meeting_type=${encodeURIComponent(meetingType)}&date=${date}`);
+      const result = await response.json();
+      console.log("📆 Tillgängliga tider:", result);
+
+      const container = document.querySelector('#available-slots');
+      if (container) {
+        container.innerHTML = '';
+        if (result.success && result.slots?.length) {
+          result.slots.forEach(slot => {
+            const div = document.createElement('div');
+            div.textContent = `🕒 ${new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            container.appendChild(div);
+          });
+        } else {
+          container.textContent = '❌ Inga tider tillgängliga.';
+        }
+      }
+    } catch (error) {
+      console.error("❌ Kunde inte hämta tillgängliga tider:", error);
+    }
+  };
 </script>

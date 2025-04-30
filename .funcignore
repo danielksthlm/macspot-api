@@ -5,6 +5,7 @@
 !host.json
 !package.json
 !package-lock.json
+!src/
 !src/**
 !meeting_types/**
 !validate_contact/**
