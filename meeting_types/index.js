@@ -2,14 +2,21 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from '../src/lib/db/db.js';
 
+console.log("🔁 DB-konfig:", {
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE
+});
+
 context.log("📂 Nuvarande katalog:", __dirname);
 
 export default async function (context, req) {
   let result;
   try {
     const db = getDb();
-    const fileExists = fs.existsSync(path.resolve('src/lib/db/db.js'));
-    context.log('🔍 Finns db.js i molnet?', fileExists);
+    const fullPath = path.resolve('src/lib/db/db.js');
+    const fileExists = fs.existsSync(fullPath);
+    context.log(`🔍 Kontroll av db.js på ${fullPath} → ${fileExists}`);
     context.log.info('✅ DB client ready');
 
     result = await db.query(
@@ -17,6 +24,7 @@ export default async function (context, req) {
     );
 
     const values = result?.rows?.[0]?.value;
+    context.log.error('💥 Full error dump:', error);
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
