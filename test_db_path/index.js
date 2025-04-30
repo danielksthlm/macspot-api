@@ -1,11 +1,18 @@
-import fs from 'fs';
+import { readFile } from 'fs/promises';
 
 export default async function (req, context) {
-  const path = './src/lib/db/db.js';
-  const exists = fs.existsSync(path);
-  context.log("🔍 db.js finns?", exists);
-  return new Response(JSON.stringify({ exists }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
+  try {
+    const content = await readFile('./src/lib/db/db.js', 'utf-8');
+    context.log('✅ db.js hittades och kunde läsas!');
+    return new Response(JSON.stringify({ exists: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    context.log('❌ Kunde inte läsa db.js:', err.message);
+    return new Response(JSON.stringify({ exists: false, error: err.message }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
