@@ -1,11 +1,12 @@
 import { getDb } from '../../src/lib/db/db.js';
 
 export default async function (context, req) {
+  let result;
   try {
     const db = getDb();
     context.log.info('✅ DB client ready');
 
-    const result = await db.query(
+    result = await db.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
 
