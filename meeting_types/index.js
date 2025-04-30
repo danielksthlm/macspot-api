@@ -1,17 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 // import { getDb } from '../src/lib/db/db.js';
-import pkg from 'pg';
-const { Pool } = pkg;
-
-const db = new Pool({
-  user: process.env.PGUSER,
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE,
-  password: process.env.PGPASSWORD,
-  port: process.env.PGPORT,
-  ssl: { rejectUnauthorized: false }
-});
+import { getDb } from '../../src/lib/db/db.js';
 
 export default async function (context, req) {
   let result;
@@ -24,7 +14,7 @@ export default async function (context, req) {
     });
 
     context.log("🔗 Försöker ansluta till databasen...");
-    const client = await db.connect();
+    const client = await getDb().connect();
     context.log("✅ Ansluten till databasen");
 
     result = await client.query(
