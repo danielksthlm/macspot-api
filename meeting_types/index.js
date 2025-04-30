@@ -1,9 +1,13 @@
+import fs from 'fs';
+import path from 'path';
 import { getDb } from '../../src/lib/db/db.js';
 
 export default async function (context, req) {
   let result;
   try {
     const db = getDb();
+    const fileExists = fs.existsSync(path.resolve('src/lib/db/db.js'));
+    context.log('🔍 Finns db.js i molnet?', fileExists);
     context.log.info('✅ DB client ready');
 
     result = await db.query(
