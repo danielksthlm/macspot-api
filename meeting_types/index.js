@@ -2,6 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from '../src/lib/db/db.js';
 
+console.log("🛠️ index.js laddad!");
+console.log("✅ getDb importerad!");
+
 console.log("🔁 DB-konfig:", {
   user: process.env.PGUSER,
   host: process.env.PGHOST,
@@ -14,6 +17,7 @@ export default async function (context, req) {
   let result;
   try {
     const db = getDb();
+    console.log("✅ getDb anropad, db =", db);
     const fullPath = path.resolve('src/lib/db/db.js');
     const fileExists = fs.existsSync(fullPath);
     context.log(`🔍 Kontroll av db.js på ${fullPath} → ${fileExists}`);
