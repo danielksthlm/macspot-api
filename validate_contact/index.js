@@ -51,8 +51,8 @@ export default async function (context, req) {
       }
     });
 
-    // Om mötestyp inte är digital, krävs även adressfält
-    if (!meetingDigital.includes(meeting_type)) {
+    const isDigital = meetingDigital.includes(meeting_type) || meeting_type === 'atOffice';
+    if (!isDigital) {
       addressRequired.forEach(field => {
         if (!metadata[field] || metadata[field].trim() === '') {
           missingFields.push(field);

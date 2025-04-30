@@ -2,6 +2,7 @@
   async function validateContact() {
     const email = document.querySelector('#booking_email')?.value.trim();
     const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+    console.log("📌 Vald mötestyp:", meetingType);
 
     if (!email || !email.includes('@')) return;
     if (!meetingType) return;
@@ -38,27 +39,26 @@
     if (result.status === "ok") {
       window.triggerSlotSearch?.();
     } else if (result.status === "incomplete") {
+      const addressFields = ['address', 'postal_code', 'city', 'country'];
+      const filteredMissing = result.missing_fields.filter(field => {
+        return !addressFields.includes(field) || meetingType === 'atClient';
+      });
+      if (filteredMissing.length === 0) {
+        window.triggerSlotSearch?.();
+        return;
+      }
+      console.log("🎯 Filtrerade fält:", filteredMissing);
+      result.missing_fields = filteredMissing;
       fields.forEach(field => {
         const input = document.querySelector(`#${field}`);
-        if (input && result.missing_fields.includes(field)) {
+        if (input && filteredMissing.includes(field)) {
           input.style.display = 'block';
           input.classList.add('needs-filling');
         }
       });
 
-      const addressFields = ['address', 'postal_code', 'city', 'country'];
-      if (meetingType === 'atClient' && result.missing_fields.some(f => addressFields.includes(f))) {
-        addressWrapper.style.display = 'block';
-        addressFields.forEach(field => {
-          const input = document.querySelector(`#${field}`);
-          if (input) input.classList.add('needs-filling');
-        });
-      } else {
-        if (addressWrapper) addressWrapper.style.display = 'none';
-        addressFields.forEach(field => {
-          const input = document.querySelector(`#${field}`);
-          if (input) input.classList.remove('needs-filling');
-        });
+      if (meetingType !== 'atClient' && addressWrapper) {
+        addressWrapper.style.display = 'none';
       }
 
       const needsFillingElements = document.querySelectorAll('.needs-filling');
@@ -180,7 +180,10 @@
     }
 
     document.querySelectorAll('input[name="meeting_type"]').forEach(radio => {
-      radio.addEventListener('change', validateContact);
+      radio.addEventListener('change', (e) => {
+        console.log("🎯 Radioknapp valdes:", e.target.value);
+        validateContact();
+      });
     });
   });
 </script>
