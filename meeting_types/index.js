@@ -1,5 +1,6 @@
+import { getDb } from '../../src/lib/db/db.js';
+
 export default async function (context, req) {
-  import { getDb } from '../../src/lib/db/db.js';
 
   try {
     const db = getDb();
