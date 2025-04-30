@@ -1,54 +1,4 @@
 <script>
-  async function checkContactStatus() {
-    const email = document.querySelector('#booking_email')?.value.trim();
-    if (!email) {
-      console.error('🛑 Email is required to check status.');
-      return;
-    }
-
-    try {
-      const response = await fetch(`https://macspotbackend.azurewebsites.net/api/check_contact?email=${encodeURIComponent(email)}`);
-      const result = await response.json();
-      console.log("✅ Svar från check_contact:", result);
-
-      const submitButton = document.querySelector('#contact-update-button');
-
-      if (result.status === "incomplete") {
-        // Show fields to fill and submit button if needed
-        const needsFillingElements = document.querySelectorAll('.needs-filling');
-        const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
-
-        if (submitButton) {
-          if (allVisibleAndEmpty) {
-            submitButton.style.display = 'block';
-            submitButton.value = 'Uppdatera uppgifter';
-          } else {
-            submitButton.style.display = 'none';
-          }
-        }
-      } else if (result.status === "new_customer") {
-        // Show fields to fill and submit button if needed
-        const needsFillingElements = document.querySelectorAll('.needs-filling');
-        const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
-
-        if (submitButton) {
-          if (allVisibleAndEmpty) {
-            submitButton.style.display = 'block';
-            submitButton.value = 'Skapa kontakt';
-          } else {
-            submitButton.style.display = 'none';
-          }
-        }
-      } else {
-        if (submitButton) {
-          submitButton.style.display = 'none';
-        }
-      }
-    } catch (error) {
-      console.error('❌ Fel vid kontroll av kontaktstatus:', error);
-    }
-  }
-
   // --- NEW FUNCTION: submitContactUpdate ---
   async function submitContactUpdate() {
     const email = document.querySelector('#booking_email')?.value.trim();
@@ -109,13 +59,6 @@
         event.preventDefault();
         submitContactUpdate();
       });
-    }
-  });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const emailInput = document.querySelector('#booking_email');
-    if (emailInput) {
-      emailInput.addEventListener('blur', checkContactStatus);
     }
   });
 </script>

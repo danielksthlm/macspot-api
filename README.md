@@ -157,7 +157,7 @@ Följande villkor måste vara uppfyllda för att en bokning ska godkännas eller
 
 Så här ska det vara:
 
-Kunden anger sin email och vilket typ av möte hen vill ha. Mötestyp finns i tabellen booking_settings och värdet i meeting_type.  När vi har dessa två parametrar så ska vi dels: se om vi har all data om kunden genom att matcha mot berörda tabeller som en funktion av meeting_type. OM det är atClient så måste komplett adress anges. Övriga mötesformer så räcker Bolagsnamn, förnamn, efternamn, tele och email. När detta är klart och uppdaterat alt att en ny kund läggs upp. Därefter anger man antal mötesminuter där reglerna finns i booking_settings och så ska koden visa tillgängliga tider (konfliktfritt) dvs följande villkor måste vara uppfyllda för att en bokning ska godkännas eller visas till kund:
+Kunden anger sin email och vilket typ av möte hen vill ha. Mötestyp finns i tabellen booking_settings och värdet i meeting_type.När vi har dessa två parametrar så ska vi dels:se om vi har all data om kunden genom att matcha mot berörda tabeller som en funktion av meeting_type. OM det är atClient så måste komplett adress anges. Övriga mötesformer så räcker Bolagsnamn, förnamn, efternamn, tele och email. När detta är klart och uppdaterat alt att en ny kund läggs upp. Därefter anger man antal mötesminuter där reglerna finns i booking_settings och så ska koden visa tillgängliga tider (konfliktfritt) dvs följande villkor måste vara uppfyllda för att en bokning ska godkännas eller visas till kund:
 
 1. **Ingen krock** i Microsoft Kalender (via Microsoft Graph) eller Apple Kalender (via CalDAV).
 2. **Tillräcklig restid** före och efter mötet (beräknad via Apple Maps eller `fallback_travel_minutes`).
@@ -166,7 +166,7 @@ Kunden anger sin email och vilket typ av möte hen vill ha. Mötestyp finns i ta
 5. **Mötesrum finns** (via Microsoft Graph `getSchedule` eller fallback-logik).
 6. **Uppfyller minimilängd** för den aktuella mötestypen (från `default_meeting_lengths`).
 
-Av de valbara tiden ska man välj en fm-tid och en em-tid som på minsta sätt fragmenterar min kalender.   Kalandern ska likna den som finns i Hubpsot (men bättre). Man väljer den en dag och sedan en eller två tider
+Av de valbara tiden ska man välj en fm-tid och en em-tid som på minsta sätt fragmenterar min kalender. Kalandern ska likna den som finns i Hubpsot (men bättre). Man väljer den en dag och sedan en eller två tider
 
 ### 📎 ER-diagram
 

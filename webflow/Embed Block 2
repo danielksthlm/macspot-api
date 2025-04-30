@@ -22,7 +22,6 @@
     }
     const fields = ['first_name', 'last_name', 'phone', 'company'];
 
-    // Dölj allt först och ta bort ev. needs-filling klasser
     fields.forEach(field => {
       const input = document.querySelector(`#${field}`);
       if (input) {
@@ -37,7 +36,7 @@
     }
 
     if (result.status === "ok") {
-      // Inget att fylla
+      window.triggerSlotSearch?.();
     } else if (result.status === "incomplete") {
       fields.forEach(field => {
         const input = document.querySelector(`#${field}`);
@@ -56,7 +55,6 @@
         });
       } else {
         if (addressWrapper) addressWrapper.style.display = 'none';
-        const addressFields = ['address', 'postal_code', 'city', 'country'];
         addressFields.forEach(field => {
           const input = document.querySelector(`#${field}`);
           if (input) input.classList.remove('needs-filling');
@@ -72,6 +70,7 @@
           submitButton.value = 'Uppdatera uppgifter';
         } else {
           submitButton.style.display = 'none';
+          window.triggerSlotSearch?.();
         }
       }
     } else if (result.status === "new_customer") {
@@ -109,8 +108,48 @@
           submitButton.value = 'Skapa kontakt';
         } else {
           submitButton.style.display = 'none';
+          window.triggerSlotSearch?.();
         }
       }
+    }
+  }
+
+  // --- NEW FUNCTION: submitContactUpdate ---
+  async function submitContactUpdate() {
+    const email = document.querySelector('#booking_email')?.value.trim();
+    const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+    const fields = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+
+    const payload = { email, meeting_type: meetingType };
+    fields.forEach(field => {
+      const input = document.querySelector(`#${field}`);
+      if (input && input.style.display !== 'none') {
+        payload[field] = input.value.trim();
+      }
+    });
+
+    try {
+      const response = await fetch('https://macspotbackend.azurewebsites.net/api/update_contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      console.log('✅ Kontaktuppdatering svar:', result);
+
+      if (result.status === 'success') {
+        window.triggerSlotSearch?.();
+        const submitButton = document.querySelector('#contact-update-button');
+        if (submitButton) {
+          submitButton.style.display = 'none';
+        }
+      } else {
+        alert('Det gick inte att uppdatera kontakten. Försök igen.');
+      }
+    } catch (error) {
+      console.error('❌ Fel vid kontaktuppdatering:', error);
+      alert('Ett fel uppstod vid kontaktuppdatering.');
     }
   }
 
@@ -120,7 +159,7 @@
     const submitButton = document.querySelector('#contact-update-button');
 
     if (meetingTypeGroup) {
-      meetingTypeGroup.style.display = 'none'; // Dölj från början
+      meetingTypeGroup.style.display = 'none';
     }
 
     if (emailField) {
@@ -133,7 +172,11 @@
     }
 
     if (submitButton) {
-      submitButton.style.display = 'none'; // Dölj från start
+      submitButton.style.display = 'none';
+      submitButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        submitContactUpdate();
+      });
     }
 
     document.querySelectorAll('input[name="meeting_type"]').forEach(radio => {
