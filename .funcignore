@@ -10,3 +10,4 @@
 !validate_contact/**
 !update_contact/**
 !getAvailableSlots/**
+!check_contact/**
