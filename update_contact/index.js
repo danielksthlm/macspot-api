@@ -1,6 +1,3 @@
-
-
-
 export default async function (context, req) {
   let pool;
   try {
@@ -33,12 +30,17 @@ export default async function (context, req) {
     metadataFields.forEach(field => {
       metadata[field] = req.body[field] || "";
     });
+    if (req.body.origin) metadata.origin = req.body.origin;
 
     if (res.rows.length > 0) {
       // Uppdatera befintlig kontakt
       const existingMetadata = res.rows[0].metadata || {};
       const updatedMetadata = { ...existingMetadata };
       for (const key in metadata) {
+        if (key === 'origin') {
+          updatedMetadata.origin = metadata.origin;
+          continue;
+        }
         if (metadata[key] && metadata[key].trim() !== '') {
           updatedMetadata[key] = metadata[key];
         }

@@ -17,6 +17,9 @@
 
     const submitButton = document.querySelector('#contact-update-button');
     const addressWrapper = document.querySelector('#autofilled-fields-at-client');
+    if (addressWrapper) {
+      addressWrapper.classList.add('atClientField');
+    }
     const fields = ['first_name', 'last_name', 'phone', 'company'];
 
     // Dölj allt först och ta bort ev. needs-filling klasser
@@ -45,17 +48,31 @@
       });
 
       const addressFields = ['address', 'postal_code', 'city', 'country'];
-      if (result.missing_fields.some(f => addressFields.includes(f))) {
+      if (meetingType === 'atClient' && result.missing_fields.some(f => addressFields.includes(f))) {
         addressWrapper.style.display = 'block';
         addressFields.forEach(field => {
           const input = document.querySelector(`#${field}`);
           if (input) input.classList.add('needs-filling');
         });
+      } else {
+        if (addressWrapper) addressWrapper.style.display = 'none';
+        const addressFields = ['address', 'postal_code', 'city', 'country'];
+        addressFields.forEach(field => {
+          const input = document.querySelector(`#${field}`);
+          if (input) input.classList.remove('needs-filling');
+        });
       }
 
+      const needsFillingElements = document.querySelectorAll('.needs-filling');
+      const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
+
       if (submitButton) {
-        submitButton.style.display = 'block';
-        submitButton.value = 'Uppdatera uppgifter';
+        if (allVisibleAndEmpty) {
+          submitButton.style.display = 'block';
+          submitButton.value = 'Uppdatera uppgifter';
+        } else {
+          submitButton.style.display = 'none';
+        }
       }
     } else if (result.status === "new_customer") {
       fields.forEach(field => {
@@ -65,18 +82,34 @@
           input.classList.add('needs-filling');
         }
       });
-      if (addressWrapper) {
-        addressWrapper.style.display = 'block';
+      if (meetingType === 'atClient') {
+        if (addressWrapper) {
+          addressWrapper.style.display = 'block';
+          const addressFields = ['address', 'postal_code', 'city', 'country'];
+          addressFields.forEach(field => {
+            const input = document.querySelector(`#${field}`);
+            if (input) input.classList.add('needs-filling');
+          });
+        }
+      } else {
+        if (addressWrapper) addressWrapper.style.display = 'none';
         const addressFields = ['address', 'postal_code', 'city', 'country'];
         addressFields.forEach(field => {
           const input = document.querySelector(`#${field}`);
-          if (input) input.classList.add('needs-filling');
+          if (input) input.classList.remove('needs-filling');
         });
       }
 
+      const needsFillingElements = document.querySelectorAll('.needs-filling');
+      const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
+
       if (submitButton) {
-        submitButton.style.display = 'block';
-        submitButton.value = 'Skapa kontakt';
+        if (allVisibleAndEmpty) {
+          submitButton.style.display = 'block';
+          submitButton.value = 'Skapa kontakt';
+        } else {
+          submitButton.style.display = 'none';
+        }
       }
     }
   }
@@ -84,6 +117,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const meetingTypeGroup = document.querySelector('#meeting_type_group');
     const emailField = document.querySelector('#booking_email');
+    const submitButton = document.querySelector('#contact-update-button');
 
     if (meetingTypeGroup) {
       meetingTypeGroup.style.display = 'none'; // Dölj från början
@@ -96,6 +130,10 @@
           if (meetingTypeGroup) meetingTypeGroup.style.display = 'block';
         }
       });
+    }
+
+    if (submitButton) {
+      submitButton.style.display = 'none'; // Dölj från start
     }
 
     document.querySelectorAll('input[name="meeting_type"]').forEach(radio => {

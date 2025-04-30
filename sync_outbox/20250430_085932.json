@@ -1,0 +1,210 @@
+[
+  {
+    "change_id": "fea25d81-82ff-4b5b-8557-9082cc44a448",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "0709561480",
+        "address": "",
+        "company": "AnyNode",
+        "country": "",
+        "last_name": "",
+        "first_name": "",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "76465817-d876-4c56-9473-d63c2911244c",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "",
+        "address": "",
+        "company": "",
+        "country": "",
+        "last_name": "Källberg",
+        "first_name": "Daniel",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "cf8622f5-23d1-406c-81bb-bea12a9d8bd1",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "0709561480",
+        "address": "",
+        "company": "AnyNode",
+        "country": "",
+        "last_name": "",
+        "first_name": "",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "6fc79aaf-5940-4b14-be48-ab2b9b4b76dc",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "",
+        "address": "",
+        "company": "",
+        "country": "",
+        "last_name": "Källberg",
+        "first_name": "Daniel",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "f190887a-831b-4854-9df7-22389648d710",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "0709561480",
+        "address": "",
+        "company": "AnyNode",
+        "country": "",
+        "last_name": "",
+        "first_name": "",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "1200afb6-9ee8-4cbe-b996-e0acf1aa146e",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "",
+        "address": "",
+        "company": "",
+        "country": "",
+        "last_name": "Källberg",
+        "first_name": "Daniel",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "ffe85f45-535b-4d03-8192-4e761eebce2a",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "0709561480",
+        "address": "",
+        "company": "anynode",
+        "country": "",
+        "last_name": "",
+        "first_name": "",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "f44bf289-146a-406f-b381-22663ab7252a",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "",
+        "address": "",
+        "company": "",
+        "country": "",
+        "last_name": "Källberg",
+        "first_name": "Daniel",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "8dde2a2f-412a-43ca-a205-41dae368c3d7",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "",
+        "phone": "0709561480",
+        "address": "",
+        "company": "AnyNode",
+        "country": "",
+        "last_name": "Källberg",
+        "first_name": "Daniel",
+        "postal_code": ""
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "1505c14b-0f05-4d0f-bcca-e38f1fac326d",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "last_name": "Tällberg",
+        "first_name": "Daniel"
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "cc3c78c1-b89b-45da-b508-cbb8f90d1c63",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "last_name": "Källberg",
+        "first_name": "Daniel"
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  }
+]

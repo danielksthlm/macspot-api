@@ -29,6 +29,14 @@ def apply_change(cur, table, operation, payload):
     elif operation == "UPDATE":
         sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
         values = [payload[col] for col in payload if col != "id"]
+        if table == "contact" and "metadata" in payload:
+            cur.execute(f"SELECT metadata FROM {table} WHERE id = %s", (payload["id"],))
+            row = cur.fetchone()
+            if row and row[0]:
+                existing_metadata = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+                incoming_metadata = payload["metadata"] if isinstance(payload["metadata"], dict) else json.loads(payload["metadata"])
+                existing_metadata.update(incoming_metadata)
+                payload["metadata"] = existing_metadata
         values.append(payload["id"])
         sql = f"UPDATE {table} SET {sets} WHERE id = %s"
         params = [json.dumps(v) if isinstance(v, dict) else v for v in values]

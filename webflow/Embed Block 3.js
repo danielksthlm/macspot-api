@@ -1,44 +1,85 @@
 <script>
-  async function submitContactUpdate() {
+  async function checkContactStatus() {
     const email = document.querySelector('#booking_email')?.value.trim();
-    const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
-
-    if (!email || !meetingType) {
-      console.error('🛑 Kan inte skicka utan email och mötestyp.');
+    if (!email) {
+      console.error('🛑 Email is required to check status.');
       return;
     }
 
-    // Kontrollera att alla needs-filling fält är ifyllda
-    const needsFilling = document.querySelectorAll('.needs-filling');
-    let allFilled = true;
+    try {
+      const response = await fetch(`https://macspotbackend.azurewebsites.net/api/check_contact?email=${encodeURIComponent(email)}`);
+      const result = await response.json();
+      console.log("✅ Svar från check_contact:", result);
 
-    needsFilling.forEach(field => {
-      if (!field.value.trim()) {
-        allFilled = false;
-        field.style.borderColor = 'red'; // Visa att fält är tomt
+      const submitButton = document.querySelector('#contact-update-button');
+
+      if (result.status === "incomplete") {
+        // Show fields to fill and submit button if needed
+        const needsFillingElements = document.querySelectorAll('.needs-filling');
+        const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
+
+        if (submitButton) {
+          if (allVisibleAndEmpty) {
+            submitButton.style.display = 'block';
+            submitButton.value = 'Uppdatera uppgifter';
+          } else {
+            submitButton.style.display = 'none';
+          }
+        }
+      } else if (result.status === "new_customer") {
+        // Show fields to fill and submit button if needed
+        const needsFillingElements = document.querySelectorAll('.needs-filling');
+        const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
+
+        if (submitButton) {
+          if (allVisibleAndEmpty) {
+            submitButton.style.display = 'block';
+            submitButton.value = 'Skapa kontakt';
+          } else {
+            submitButton.style.display = 'none';
+          }
+        }
       } else {
-        field.style.borderColor = ''; // Nollställ om korrekt
+        if (submitButton) {
+          submitButton.style.display = 'none';
+        }
       }
-    });
+    } catch (error) {
+      console.error('❌ Fel vid kontroll av kontaktstatus:', error);
+    }
+  }
 
-    if (!allFilled) {
-      console.error('🛑 Alla obligatoriska fält måste fyllas i.');
-      alert('Vänligen fyll i alla obligatoriska fält.');
+  // --- NEW FUNCTION: submitContactUpdate ---
+  async function submitContactUpdate() {
+    const email = document.querySelector('#booking_email')?.value.trim();
+    const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+    const firstName = document.querySelector('#first_name')?.value.trim();
+    const lastName = document.querySelector('#last_name')?.value.trim();
+    const phone = document.querySelector('#phone')?.value.trim();
+    const company = document.querySelector('#company')?.value.trim();
+    const address = document.querySelector('#address')?.value.trim();
+    const postalCode = document.querySelector('#postal_code')?.value.trim();
+    const city = document.querySelector('#city')?.value.trim();
+    const country = document.querySelector('#country')?.value.trim();
+
+    if (!email || !meetingType) {
+      console.error('🛑 Kan inte skicka utan email och meeting_type.');
       return;
     }
 
     const body = {
-      email,
-      meeting_type: meetingType
+      email: email,
+      meeting_type: meetingType,
+      origin: "klrab.se",
+      first_name: firstName,
+      last_name: lastName,
+      phone: phone,
+      company: company,
+      address: address,
+      postal_code: postalCode,
+      city: city,
+      country: country
     };
-
-    needsFilling.forEach(field => {
-      const key = field.id;
-      const value = field.value.trim();
-      if (value) {
-        body[key] = value;
-      }
-    });
 
     try {
       const response = await fetch('https://macspotbackend.azurewebsites.net/api/update_contact', {
@@ -51,23 +92,30 @@
       console.log("✅ Svar från update_contact:", result);
 
       if (result.status === "updated" || result.status === "created") {
-        location.reload();
+        location.reload(); // Alternativt gå vidare till nästa steg
       } else {
         alert('❌ Kunde inte spara, försök igen.');
       }
     } catch (error) {
-      console.error('❌ Tekniskt fel vid sparande:', error);
-      alert('❌ Tekniskt fel.');
+      console.error('❌ Fel vid update_contact:', error);
+      alert('❌ Tekniskt fel vid sparande.');
     }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener("DOMContentLoaded", () => {
     const submitButton = document.querySelector('#contact-update-button');
     if (submitButton) {
-      submitButton.addEventListener('click', (e) => {
-        e.preventDefault();
+      submitButton.addEventListener('click', (event) => {
+        event.preventDefault();
         submitContactUpdate();
       });
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const emailInput = document.querySelector('#booking_email');
+    if (emailInput) {
+      emailInput.addEventListener('blur', checkContactStatus);
     }
   });
 </script>
