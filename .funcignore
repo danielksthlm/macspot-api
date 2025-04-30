@@ -5,7 +5,7 @@
 !host.json
 !package.json
 !package-lock.json
-!src/**
+!shared/**
 !meeting_types/**
 !validate_contact/**
 !update_contact/**
