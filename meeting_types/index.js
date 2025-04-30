@@ -12,6 +12,7 @@ export default async function (context, req) {
 
     context.res = {
       status: 200,
+      headers: { 'Content-Type': 'application/json' },
       body: result.rows[0].value
     };
   } catch (error) {
@@ -21,6 +22,7 @@ export default async function (context, req) {
     });
     context.res = {
       status: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: {
         error: error.message,
         stack: error.stack
