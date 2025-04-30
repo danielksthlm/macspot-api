@@ -1,12 +1,10 @@
-// File: routes/getAvailableSlots.js
-import { getDb } from '../lib/db/db.js';
-import { getBookingSettings } from '../lib/bookingService.js';
-import { hasAppleCalendarConflict } from '../lib/calendar/appleCalendar.js';
-import { getTravelTime } from '../lib/maps/appleMaps.js';
-import { getWeeklyBookingMinutes } from '../lib/bookingService.js';
-import msGraph from '../lib/calendar/msGraph.js';
+import { getDb } from '../../src/lib/db/db.js';
+import { getBookingSettings, getWeeklyBookingMinutes } from '../../src/lib/bookingService.js';
+import { hasAppleCalendarConflict } from '../../src/lib/calendar/appleCalendar.js';
+import { getTravelTime } from '../../src/lib/maps/appleMaps.js';
+import msGraph from '../../src/lib/calendar/msGraph.js';
 const { getAvailableRoomFromGraph } = msGraph;
-import { getMicrosoftSchedule } from '../lib/calendar/ms365Calendar.js';
+import { getMicrosoftSchedule } from '../../src/lib/calendar/ms365Calendar.js';
 import { DateTime, Interval } from 'luxon';
 
 async function hasMicrosoftCalendarConflict(start, end, email, settings) {
