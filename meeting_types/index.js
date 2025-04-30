@@ -1,7 +1,6 @@
 import { getDb } from '../../src/lib/db/db.js';
 
 export default async function (context, req) {
-
   try {
     const db = getDb();
     context.log.info('✅ DB client ready');
@@ -10,10 +9,11 @@ export default async function (context, req) {
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
 
+    const values = result?.rows?.[0]?.value;
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: result.rows[0].value
+      body: Array.isArray(values) ? values : []
     };
   } catch (error) {
     context.log.error('❌ Error during function execution:', {
@@ -28,7 +28,5 @@ export default async function (context, req) {
         stack: error.stack
       }
     };
-  } finally {
-    // Ingen pool att stänga – hanteras i shared client
   }
 }
