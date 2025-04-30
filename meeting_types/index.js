@@ -1,4 +1,4 @@
-import { getDb } from '../../src/lib/db/db.js';
+import getDb from './db.js';
 
 export default async function (context, req) {
   let result;
@@ -11,7 +11,7 @@ export default async function (context, req) {
     });
 
     context.log("🔗 Försöker ansluta till databasen...");
-    const client = await getDb().connect();
+    const client = await getDb().connect(); // Använda rätt import
     context.log("✅ Ansluten till databasen");
 
     result = await client.query(

@@ -24,5 +24,4 @@ pool.on('error', (err) => {
   console.error('❌ PG Pool error:', err.message, err.stack);
 });
 
-const getDb = () => pool;
-export default getDb;
+export default () => pool;

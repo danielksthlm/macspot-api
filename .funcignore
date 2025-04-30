@@ -5,11 +5,7 @@
 !host.json
 !package.json
 !package-lock.json
-!shared/**
 !meeting_types/**
 !validate_contact/**
-!update_contact/**
 !getAvailableSlots/**
-!check_contact/**
 !test_db_path/**
-!list_files/**
