@@ -1,20 +1,11 @@
 export default async function (context, req) {
-  let pool;
+  import { getDb } from '../../src/lib/db/db.js';
+
   try {
-    const { Pool } = await import('pg');
+    const db = getDb();
+    context.log.info('✅ DB client ready');
 
-    pool = new Pool({
-      user: process.env.PGUSER,
-      host: process.env.PGHOST,
-      database: process.env.PGDATABASE,
-      password: process.env.PGPASSWORD,
-      port: parseInt(process.env.PGPORT || '5432', 10),
-      ssl: { rejectUnauthorized: false }
-    });
-
-    context.log.info('✅ Pool created');
-
-    const result = await pool.query(
+    const result = await db.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
 
@@ -35,9 +26,6 @@ export default async function (context, req) {
       }
     };
   } finally {
-    if (pool) {
-      await pool.end();
-      context.log.info('✅ Pool closed');
-    }
+    // Ingen pool att stänga – hanteras i shared client
   }
 }
