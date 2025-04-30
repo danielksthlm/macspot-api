@@ -3,7 +3,7 @@ import path from 'path';
 
 export default async function (req, context) {
   try {
-    const fullPath = path.resolve('shared/db.js');
+    const fullPath = path.resolve('./db.js');
     context.log('🔍 Försöker läsa:', fullPath);
     const content = await readFile(fullPath, 'utf-8');
     context.log('✅ db.js hittades och kunde läsas!');
