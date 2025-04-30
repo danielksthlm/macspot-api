@@ -13,30 +13,27 @@ const db = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-console.log("🛠️ index.js laddad!");
-console.log("✅ getDb importerad!");
-
-console.log("🔁 DB-konfig:", {
-  user: process.env.PGUSER,
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE
-});
-
-context.log("📂 Nuvarande katalog:", __dirname);
-
 export default async function (context, req) {
   let result;
   try {
-    // const db = getDb();
-    console.log("✅ getDb anropad, db =", db);
-    // const fullPath = path.resolve('src/lib/db/db.js');
-    // const fileExists = fs.existsSync(fullPath);
-    // context.log(`🔍 Kontroll av db.js på ${fullPath} → ${fileExists}`);
-    context.log.info('✅ DB client ready');
+    context.log("📍 Funktion 'meeting_types' startad");
+    context.log("🧪 DB-konfig:", {
+      user: process.env.PGUSER,
+      host: process.env.PGHOST,
+      database: process.env.PGDATABASE
+    });
 
-    result = await db.query(
+    context.log("🔗 Försöker ansluta till databasen...");
+    const client = await db.connect();
+    context.log("✅ Ansluten till databasen");
+
+    result = await client.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
+
+    context.log("📦 Query-resultat:", result?.rows);
+
+    client.release();
 
     const values = result?.rows?.[0]?.value;
     context.res = {
@@ -45,7 +42,7 @@ export default async function (context, req) {
       body: Array.isArray(values) ? values : []
     };
   } catch (error) {
-    context.log.error('❌ Error during function execution:', {
+    context.log.error('❌ Fel under körning:', {
       message: error.message,
       stack: error.stack,
       rawResult: result
