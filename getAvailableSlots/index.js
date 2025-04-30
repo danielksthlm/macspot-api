@@ -21,13 +21,12 @@ export async function handler(req, context) {
 
     const url = new URL(req.url);
     const meeting_type = url.searchParams.get("meeting_type");
-    const date = url.searchParams.get("date");
 
-    // 1. Efter att ha hämtat meeting_type och date
-    context.log("📥 Parametrar:", { meeting_type, date });
+    // 1. Efter att ha hämtat meeting_type
+    context.log("📥 Parametrar:", { meeting_type });
 
-    if (!meeting_type || !date) {
-      return new Response(JSON.stringify({ success: false, message: "Mötestyp och datum krävs" }), {
+    if (!meeting_type) {
+      return new Response(JSON.stringify({ success: false, message: "Mötestyp krävs" }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
@@ -36,92 +35,95 @@ export async function handler(req, context) {
     // 2. Efter att ha hämtat inställningar
     context.log("⚙️ Inställningar laddade:", settings);
 
-    const lunchStart = DateTime.fromISO(date + "T" + settings.lunch_start, { zone: settings.timezone });
-    const lunchEnd = DateTime.fromISO(date + "T" + settings.lunch_end, { zone: settings.timezone });
-    const openTime = DateTime.fromISO(date + "T" + settings.open_time, { zone: settings.timezone });
-    const closeTime = DateTime.fromISO(date + "T" + settings.close_time, { zone: settings.timezone });
-
-    const morningRange = Interval.fromDateTimes(openTime, lunchStart);
-    const afternoonRange = Interval.fromDateTimes(lunchEnd, closeTime);
-    const ranges = [morningRange, afternoonRange];
-
+    const slotsByDate = {};
+    const today = DateTime.now().setZone(settings.timezone).startOf('day');
     const intervalMinutes = 15;
-    const slots = [];
 
-    for (const range of ranges) {
-      // 3. Vid start av varje range
-      context.log("🕒 Bearbetar intervall:", { from: range.start.toISO(), to: range.end.toISO() });
-      let bestSlot = null;
+    for (let offset = 0; offset <= settings.max_days_in_advance; offset++) {
+      const date = today.plus({ days: offset });
+      const dateStr = date.toISODate();
+      context.log(`📅 Bearbetar datum: ${dateStr}`);
 
-      for (let dt = range.start; dt < range.end; dt = dt.plus({ minutes: intervalMinutes })) {
-        const start = dt.toISO();
-        const end = dt.plus({ minutes: lengths[meeting_type]?.[0] || 30 }).toISO();
+      const lunchStart = DateTime.fromISO(dateStr + "T" + settings.lunch_start, { zone: settings.timezone });
+      const lunchEnd = DateTime.fromISO(dateStr + "T" + settings.lunch_end, { zone: settings.timezone });
+      const openTime = DateTime.fromISO(dateStr + "T" + settings.open_time, { zone: settings.timezone });
+      const closeTime = DateTime.fromISO(dateStr + "T" + settings.close_time, { zone: settings.timezone });
 
-        // 4. Vid varje försök till slot
-        context.log("🔍 Testar slot:", { start, end });
+      const morningRange = Interval.fromDateTimes(openTime, lunchStart);
+      const afternoonRange = Interval.fromDateTimes(lunchEnd, closeTime);
+      const ranges = [morningRange, afternoonRange];
 
-        const room = getAvailableRoomFromGraph(meeting_type, settings);
-        if (meeting_type !== "atClient" && !room) {
-          // 5. Om inget rum
-          context.log("⛔️ Inget ledigt rum hittades – hoppar över slot.");
-          continue;
+      const slots = [];
+
+      for (const range of ranges) {
+        context.log("🕒 Bearbetar intervall:", { from: range.start.toISO(), to: range.end.toISO() });
+        let bestSlot = null;
+
+        for (let dt = range.start; dt < range.end; dt = dt.plus({ minutes: intervalMinutes })) {
+          const start = dt.toISO();
+          const end = dt.plus({ minutes: lengths[meeting_type]?.[0] || 30 }).toISO();
+
+          context.log("🔍 Testar slot:", { start, end });
+
+          const room = getAvailableRoomFromGraph(meeting_type, settings);
+          if (meeting_type !== "atClient" && !room) {
+            context.log("⛔️ Inget ledigt rum hittades – hoppar över slot.");
+            continue;
+          }
+
+          const [appleConflict, msConflict] = await Promise.all([
+            hasAppleCalendarConflict(start, end, settings.notification_email, settings),
+            hasMicrosoftCalendarConflict(start, end, settings.notification_email, settings)
+          ]);
+          if (appleConflict || msConflict) {
+            context.log("❌ Krock i kalender – hoppar över slot.");
+            continue;
+          }
+
+          const travelTime = meeting_type === 'atClient'
+            ? await getTravelTime(settings.default_home_address, settings.default_office_address, start)
+            : 0;
+          if (travelTime > settings.fallback_travel_time_minutes) {
+            context.log("🚗 Restid för lång – hoppar över slot.");
+            continue;
+          }
+
+          const withinTravelWindow = dt.hour >= DateTime.fromISO(settings.travel_time_window.start).hour &&
+                                     dt.hour <= DateTime.fromISO(settings.travel_time_window.end).hour;
+          if (!withinTravelWindow) {
+            context.log("🕳️ Utanför tillåtet restidsfönster – hoppar över slot.");
+            continue;
+          }
+
+          const totalMinutes = await getWeeklyBookingMinutes(db, meeting_type, dateStr);
+          if (totalMinutes >= settings.max_weekly_booking_minutes) {
+            context.log("📉 Veckokvot överskriden – hoppar över slot.");
+            continue;
+          }
+
+          const minLength = lengths[meeting_type]?.[0] || 0;
+          const slotLength = DateTime.fromISO(end).diff(DateTime.fromISO(start), 'minutes').minutes;
+          if (slotLength < minLength) {
+            context.log("⏱️ Sloten är för kort – hoppar över.");
+            continue;
+          }
+
+          bestSlot = { start, end, room };
+          context.log("✅ Slot funkar:", bestSlot);
+          break;
         }
 
-        const [appleConflict, msConflict] = await Promise.all([
-          hasAppleCalendarConflict(start, end, settings.notification_email, settings),
-          hasMicrosoftCalendarConflict(start, end, settings.notification_email, settings)
-        ]);
-        if (appleConflict || msConflict) {
-          // 5. Om kalenderkrock
-          context.log("❌ Krock i kalender – hoppar över slot.");
-          continue;
-        }
-
-        const travelTime = meeting_type === 'atClient'
-          ? await getTravelTime(settings.default_home_address, settings.default_office_address, start)
-          : 0;
-        if (travelTime > settings.fallback_travel_time_minutes) {
-          // 5. Om restid för lång
-          context.log("🚗 Restid för lång – hoppar över slot.");
-          continue;
-        }
-
-        const withinTravelWindow = dt.hour >= DateTime.fromISO(settings.travel_time_window.start).hour &&
-                                   dt.hour <= DateTime.fromISO(settings.travel_time_window.end).hour;
-        if (!withinTravelWindow) {
-          // 5. Om utanför tidsfönster
-          context.log("🕳️ Utanför tillåtet restidsfönster – hoppar över slot.");
-          continue;
-        }
-
-        const totalMinutes = await getWeeklyBookingMinutes(db, meeting_type, date);
-        if (totalMinutes >= settings.max_weekly_booking_minutes) {
-          // 5. Om veckokvot överskrids
-          context.log("📉 Veckokvot överskriden – hoppar över slot.");
-          continue;
-        }
-
-        const minLength = lengths[meeting_type]?.[0] || 0;
-        const slotLength = DateTime.fromISO(end).diff(DateTime.fromISO(start), 'minutes').minutes;
-        if (slotLength < minLength) {
-          // 5. Om sloten är för kort
-          context.log("⏱️ Sloten är för kort – hoppar över.");
-          continue;
-        }
-
-        bestSlot = { start, end, room };
-        // 6. När en slot godkänns
-        context.log("✅ Slot funkar:", bestSlot);
-        break;
+        if (bestSlot) slots.push(bestSlot);
       }
 
-      if (bestSlot) slots.push(bestSlot);
+      if (slots.length > 0) {
+        slotsByDate[dateStr] = slots;
+      }
     }
 
-    // 7. När alla slots är färdiga
-    context.log("📦 Samlade tillgängliga slots:", slots);
+    context.log("📦 Samlade tillgängliga slots:", slotsByDate);
 
-    return new Response(JSON.stringify({ success: true, slots }), {
+    return new Response(JSON.stringify({ success: true, slots: slotsByDate }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
