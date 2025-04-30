@@ -7,4 +7,6 @@
 !package-lock.json
 !meeting_types/**
 !validate_contact/**
-!vupdate_contact/**
+!update_contact/**
+!src/**
+!getAvailableSlots/**
