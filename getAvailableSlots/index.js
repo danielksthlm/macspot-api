@@ -1,3 +1,11 @@
+import { v4 as uuidv4 } from 'uuid';
+
+function generateMeetingLink(type, email) {
+  if (type === "Zoom") return `https://zoom.us/j/${uuidv4()}`;
+  if (type === "Teams") return `https://teams.microsoft.com/l/meetup-join/${uuidv4()}`;
+  if (type === "FaceTime") return `facetime://${email}`;
+  return null;
+}
 import getDb from './db.js';
 import { getBookingSettings, getWeeklyBookingMinutes } from './bookingService.js';
 import { hasAppleCalendarConflict } from './appleCalendar.js';
@@ -44,6 +52,10 @@ export async function handler(req, context) {
       const dateStr = date.toISODate();
       context.log(`📅 Bearbetar datum: ${dateStr}`);
 
+      if (settings.block_weekends && [6, 7].includes(date.weekday)) {
+        context.log("🛑 Helg – datumet blockerat:", dateStr);
+        continue;
+      }
       const lunchStart = DateTime.fromISO(dateStr + "T" + settings.lunch_start, { zone: settings.timezone });
       const lunchEnd = DateTime.fromISO(dateStr + "T" + settings.lunch_end, { zone: settings.timezone });
       const openTime = DateTime.fromISO(dateStr + "T" + settings.open_time, { zone: settings.timezone });
@@ -65,7 +77,7 @@ export async function handler(req, context) {
 
           context.log("🔍 Testar slot:", { start, end });
 
-          const room = getAvailableRoomFromGraph(meeting_type, settings);
+          const room = await getAvailableRoomFromGraph(settings, start, end);
           if (meeting_type !== "atClient" && !room) {
             context.log("⛔️ Inget ledigt rum hittades – hoppar över slot.");
             continue;
@@ -108,7 +120,7 @@ export async function handler(req, context) {
             continue;
           }
 
-          bestSlot = { start, end, room };
+          bestSlot = { start, end, room, meetingLink: generateMeetingLink(meeting_type, settings.notification_email) };
           context.log("✅ Slot funkar:", bestSlot);
           break;
         }
