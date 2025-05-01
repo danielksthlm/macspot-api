@@ -13,16 +13,20 @@ export default async function (context, req) {
     context.log("🔗 Försöker ansluta till databasen...");
     const client = await getDb().connect(); // Använda rätt import
     context.log("✅ Ansluten till databasen");
+    context.log("🧾 Kör SQL-fråga...");
 
     result = await client.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
+
+    context.log("📊 SQL-resultat:", result?.rows);
 
     context.log("📦 Query-resultat:", result?.rows);
 
     client.release();
 
     const values = result?.rows?.[0]?.value;
+    context.log("🔚 Returnerar följande mötestyper:", values);
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
