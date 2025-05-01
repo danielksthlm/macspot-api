@@ -1,4 +1,4 @@
-import getDb from './db.js';
+import getDb from '../shared/db.js';
 
 export default async function (context, req) {
   let result;
