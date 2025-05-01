@@ -11,7 +11,9 @@ export default async function (context, req) {
     });
 
     context.log("🔗 Försöker ansluta till databasen...");
-    const client = await getDb().connect(); // Använda rätt import
+    const db = getDb();
+    if (!db) throw new Error("Kunde inte initiera databaskoppling.");
+    const client = await db.connect();
     context.log("✅ Ansluten till databasen");
     context.log("🧾 Kör SQL-fråga...");
 
