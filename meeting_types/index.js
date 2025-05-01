@@ -27,7 +27,9 @@ export default async function (context, req) {
 
     client.release();
 
-    const values = result?.rows?.[0]?.value;
+    const raw = result?.rows?.[0]?.value;
+    context.log("🧪 Råvärde från databasen:", raw);
+    const values = typeof raw === 'string' ? JSON.parse(raw) : raw;
     context.log("🔚 Returnerar följande mötestyper:", values);
     context.res = {
       status: 200,
