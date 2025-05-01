@@ -1,43 +1,18 @@
-//import dotenv from 'dotenv';
-//dotenv.config();
-console.log("📦 .env-konfiguration laddad");
+import { Pool } from '@neondatabase/serverless';
 
-import pkg from 'pg';
-const { Pool } = pkg;
+let pool = null;
 
-const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
-const missing = requiredEnv.filter((key) => !process.env[key]);
-if (missing.length > 0) {
-  console.error("❌ Saknade miljövariabler:", missing);
-}
+export function getDb() {
+  if (pool) return pool;
 
-console.log("✅ Miljövariabler laddade:", {
-  user: process.env.PGUSER,
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE,
-  port: process.env.PGPORT
-});
-
-function getDb() {
-  if (missing.length > 0) {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error("❌ DATABASE_URL saknas");
     return null;
   }
-  const pool = new Pool({
-    user: process.env.PGUSER,
-    host: process.env.PGHOST,
-    database: process.env.PGDATABASE,
-    password: process.env.PGPASSWORD,
-    port: parseInt(process.env.PGPORT || '5432', 10),
-    ssl: { rejectUnauthorized: false }
-  });
 
-  console.log("✅ PG Pool initierad");
+  pool = new Pool({ connectionString });
 
-  pool.on('error', (err) => {
-    console.error('❌ PG Pool error:', err.message, err.stack);
-  });
-
+  console.log("✅ Neon Serverless Pool initierad");
   return pool;
 }
-
-export { getDb };
