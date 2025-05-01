@@ -1,6 +1,4 @@
-console.log("🧪 Försöker importera getDb från shared/db.js...");
 import getDb from '../shared/db.js';
-console.log("✅ Import av getDb lyckades.");
 
 export default async function (context, req) {
   let result;
