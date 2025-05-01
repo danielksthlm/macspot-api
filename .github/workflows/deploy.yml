@@ -37,11 +37,23 @@ jobs:
       - name: 'List files before zipping'
         run: ls -R
 
-      - name: Zip only necessary files for deployment
+      - name: 📦 Skapa zip baserat på .funcignore
         run: |
           mkdir deploy
-          cp host.json package.json package-lock.json deploy/
-          cp -r meeting_types validate_contact getAvailableSlots deploy/
+
+          while IFS= read -r line; do
+            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            if [[ $line == !* ]]; then
+              path="${line:1}"
+              if [[ -e "$path" ]]; then
+                echo "✔️  Lägger till: $path"
+                cp -r "$path" deploy/
+              else
+                echo "⚠️  Skippad (finns inte): $path"
+              fi
+            fi
+          done < .funcignore
+
           cd deploy
           zip -r ../release.zip .
           cd ..
