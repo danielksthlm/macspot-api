@@ -1,10 +1,9 @@
-import { hello } from '../shared/testmodule.js';
+export default async function (context, req) {
+  context.log("🧪 Funktion startar UTAN import");
 
-context.log("🧪 Funktion startad");
-context.log(hello());
-
-context.res = {
-  status: 200,
-  headers: { 'Content-Type': 'application/json' },
-  body: ["dummy"]
-};
+  context.res = {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: ["minimal"]
+  };
+}
