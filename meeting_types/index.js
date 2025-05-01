@@ -38,17 +38,17 @@ export default async function (context, req) {
     };
   } catch (error) {
     context.log.error('❌ Fel under körning:', {
-      message: error.message,
-      stack: error.stack,
+      message: error?.message,
+      stack: error?.stack,
       rawResult: result
     });
     context.res = {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
       body: {
-        error: error.message,
-        stack: error.stack,
-        rawResult: result
+        error: error?.message || 'Okänt fel',
+        stack: error?.stack || 'Ingen stack tillgänglig',
+        rawResult: result || null
       }
     };
   }
