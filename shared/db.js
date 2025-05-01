@@ -24,4 +24,4 @@ pool.on('error', (err) => {
   console.error('❌ PG Pool error:', err.message, err.stack);
 });
 
-export default () => pool;
+export default pool;
