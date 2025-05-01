@@ -9,7 +9,7 @@
 !meeting_types/**
 !validate_contact/
 !validate_contact/**
-!getAvailableSlots/
-!getAvailableSlots/**
+!getavailableslots/
+!getavailableslots/**
 !test_db_path/
 !test_db_path/**
