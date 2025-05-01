@@ -1,6 +1,3 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
 import pkg from 'pg';
 const { Pool } = pkg;
 
@@ -9,6 +6,7 @@ let pool = null;
 export function getDb() {
   if (pool) return pool;
 
+  // Azure tillhandahåller miljövariabler – dotenv ej nödvändigt i molnet
   const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
 
   const missing = requiredEnv.filter((key) => !process.env[key]);
