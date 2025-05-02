@@ -11,6 +11,8 @@ export function getDb() {
     return null;
   }
 
+  console.log("🌐 Använder DATABASE_URL:", connectionString); // 🔍 loggar aktiv URL
+
   pool = new Pool({ connectionString });
 
   console.log("✅ Neon Serverless Pool initierad");
