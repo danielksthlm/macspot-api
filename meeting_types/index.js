@@ -1,14 +1,33 @@
-import { getDb } from '../shared/db.js';
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 export default async function (context, req) {
-  const db = getDb();
-  if (!db) throw new Error("Kunde inte initiera DB");
+  context.log("🧪 Funktion startade");
 
-  const result = await db`SELECT NOW()`;
-  context.log("🕒 Tid från databasen:", result);
+  try {
+    const client = await pool.connect();
+    context.log("✅ Ansluten till databasen");
 
-  context.res = {
-    status: 200,
-    body: result
-  };
+    const result = await client.query("SELECT value FROM booking_settings WHERE key = 'meeting_types'");
+    client.release();
+
+    context.log("📦 Query-resultat:", result?.rows);
+
+    context.res = {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: result?.rows?.[0]?.value
+    };
+  } catch (err) {
+    context.log("❌ DB-fel:", err.message);
+    context.res = {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: { error: err.message }
+    };
+  }
 }
