@@ -1,10 +1,10 @@
-import fetch from 'node-fetch';
-import { Pool } from '@neondatabase/serverless';
-
 let pool = null;
 
-export function getDb() {
+export async function getDb() {
   if (pool) return pool;
+
+  const pg = await import('pg');
+  const { Pool } = pg;
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -12,10 +12,8 @@ export function getDb() {
     return null;
   }
 
-  console.log("🌐 Använder DATABASE_URL:", connectionString); // 🔍 loggar aktiv URL
+  console.log("🌐 Använder DATABASE_URL:", connectionString);
 
-  pool = new Pool({ connectionString, fetch });
-
-  console.log("✅ Neon Serverless Pool initierad");
+  pool = new Pool({ connectionString });
   return pool;
 }
