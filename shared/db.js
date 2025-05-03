@@ -1,10 +1,9 @@
-let pool = null;
+import postgres from 'postgres';
 
-export async function getDb() {
-  if (pool) return pool;
+let sql = null;
 
-  const pg = await import('pg');
-  const { Pool } = pg;
+export function getDb() {
+  if (sql) return sql;
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -12,8 +11,8 @@ export async function getDb() {
     return null;
   }
 
-  console.log("🌐 Använder DATABASE_URL:", connectionString);
+  console.log("🌐 postgres.js använder:", connectionString);
 
-  pool = new Pool({ connectionString });
-  return pool;
+  sql = postgres(connectionString, { ssl: 'require' }); // krävs för Azure
+  return sql;
 }
