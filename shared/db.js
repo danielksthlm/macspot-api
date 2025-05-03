@@ -1,3 +1,4 @@
+import fetch from 'node-fetch';
 import { Pool } from '@neondatabase/serverless';
 
 let pool = null;
@@ -13,7 +14,7 @@ export function getDb() {
 
   console.log("🌐 Använder DATABASE_URL:", connectionString); // 🔍 loggar aktiv URL
 
-  pool = new Pool({ connectionString });
+  pool = new Pool({ connectionString, fetch });
 
   console.log("✅ Neon Serverless Pool initierad");
   return pool;
