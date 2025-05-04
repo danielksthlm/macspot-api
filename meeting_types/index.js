@@ -4,6 +4,14 @@ let pool;
 
 export default async function (context, req) {
   if (!pool) {
+    context.log("🧪 Initierar pool med följande konfiguration:");
+    context.log({
+      PGUSER: process.env.PGUSER || '⛔ tom',
+      PGPASSWORD: process.env.PGPASSWORD ? '✓' : '⛔ tom',
+      PGHOST: process.env.PGHOST || '⛔ tom',
+      PGDATABASE: process.env.PGDATABASE || '⛔ tom',
+      PGPORT: process.env.PGPORT || '⛔ tom'
+    });
     pool = new Pool({
       user: process.env.PGUSER,
       host: process.env.PGHOST,
