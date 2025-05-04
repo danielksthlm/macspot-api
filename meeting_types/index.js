@@ -1,6 +1,18 @@
 export default async function (context, req) {
   let pool;
   try {
+    context.log.info('📥 Function triggered: meeting_types');
+
+    // Kontrollera att alla nödvändiga miljövariabler är satta
+    const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
+    for (const key of requiredEnv) {
+      if (!process.env[key]) {
+        throw new Error(`Missing environment variable: ${key}`);
+      }
+    }
+
+    context.log.info('🔐 Environment variables verified');
+
     const { Pool } = await import('pg');
 
     pool = new Pool({
@@ -12,16 +24,28 @@ export default async function (context, req) {
       ssl: { rejectUnauthorized: false }
     });
 
-    context.log.info('✅ Pool created');
+    context.log.info('✅ PostgreSQL pool created');
 
     const result = await pool.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
 
+    context.log.info('📊 Query executed');
+
+    if (!result.rows || result.rows.length === 0) {
+      context.log.warn('⚠️ No meeting_types found in booking_settings');
+      context.res = {
+        status: 404,
+        body: { error: "Inga mötestyper hittades." }
+      };
+      return;
+    }
+
     context.res = {
       status: 200,
       body: result.rows[0].value
     };
+    context.log.info('✅ meeting_types returned successfully');
   } catch (error) {
     context.log.error('❌ Error during function execution:', {
       message: error.message,
@@ -37,7 +61,7 @@ export default async function (context, req) {
   } finally {
     if (pool) {
       await pool.end();
-      context.log.info('✅ Pool closed');
+      context.log.info('🧹 PostgreSQL pool closed');
     }
   }
 }
