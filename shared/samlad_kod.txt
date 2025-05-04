@@ -1,0 +1,954 @@
+
+### Fil: roomBooking.js ###
+import { insertBooking } from "../bookingService.js";
+import { sendConfirmationEmail } from "../notification/emailSender.js";
+import { logEvent } from "../log/eventLogger.js";
+import { v4 as uuidv4 } from "uuid";
+
+function resolveLocationType(type) {
+  const map = {
+    Zoom: "online",
+    Teams: "online",
+    FaceTime: "facetime",
+    atClient: "onsite",
+    atOffice: "onsite"
+  };
+  return map[type] || "online";
+}
+
+function getPreferredRoom(meetingType, settings) {
+  const preferred = settings.room_priority?.[meetingType] ?? [];
+  const selectedRoom = preferred[0] ?? null;
+
+  if (selectedRoom) {
+    console.log(`🏢 Tilldelat mötesrum för ${meetingType}:`, selectedRoom);
+  } else {
+    const message = `⚠️ Inget rum hittades för mötestypen: ${meetingType}`;
+    console.warn(message);
+    logEvent("room_selection", "no_room_found", { meetingType, timestamp: new Date().toISOString() });
+  }
+
+  return selectedRoom;
+}
+
+async function bookMeetingRoom(meetingType, settings, startTime, endTime) {
+  if (meetingType !== "Fysiskt hos kund") {
+    const { getAvailableRoomFromGraph } = await import('./msGraph.js');
+    return await getAvailableRoomFromGraph(settings, startTime, endTime);
+  }
+  // Annars returnera null eller annan logik för fysiska möten
+  return null;
+}
+
+export { resolveLocationType, bookMeetingRoom };
+export default getPreferredRoom;
+
+### Fil: bookingService.js ###
+import { v4 as uuidv4 } from 'uuid';
+import { resolveLocationType } from './calendar/roomBooking.js';
+import * as eventLogger from './log/eventLogger.js';
+
+function mapMeetingTypeToLocationType(type) {
+  const map = {
+    Zoom: "online",
+    Teams: "online",
+    FaceTime: "facetime",
+    atClient: "onsite",
+    atOffice: "onsite"
+  };
+  return map[type] || "online";
+}
+
+/**
+ * Validerar att obligatoriska bokningsfält finns.
+ * Returnerar en lista med felmeddelanden (tom om inga fel).
+ */
+function validateBookingInput(data) {
+  const errors = [];
+  if (!data.email) errors.push('Missing email');
+  if (!data.start_time) errors.push('Missing start_time');
+  if (!data.end_time) errors.push('Missing end_time');
+  return errors;
+}
+
+/**
+ * Kontrollerar om bokningen uppfyller alla affärsvillkor.
+ * Returnerar en lista med felmeddelanden.
+ */
+async function checkBookingConditions(data, settings = {}) {
+  // 1. Helg/blockerade dagar
+  if (settings.block_weekends === true && isWeekend(data.start_time)) {
+    return ["Bokning blockerad på helg"];
+  }
+
+  // 2. Tidfönster
+  const { travel_time_window } = settings;
+  if (travel_time_window) {
+    const startHour = new Date(data.start_time).getHours();
+    const endHour = new Date(data.end_time).getHours();
+    const windowStart = parseInt(travel_time_window.start.split(":")[0], 10);
+    const windowEnd = parseInt(travel_time_window.end.split(":")[0], 10);
+
+    if (startHour < windowStart || endHour > windowEnd) {
+      return [`Mötet ligger utanför tillåtet restidsfönster (${travel_time_window.start}–${travel_time_window.end})`];
+    }
+  }
+
+  // 3. Mötesrum (mock)
+  if (settings.room_available === false) {
+    return ["Inget ledigt mötesrum tillgängligt"];
+  }
+
+  // 4. Restid
+  if (settings.travel_time_ok === false) {
+    return ["Otillräcklig restid till/från möte"];
+  }
+
+  // 5. Minimilängd
+  const duration = (new Date(data.end_time) - new Date(data.start_time)) / 60000;
+  const minLength = settings.min_length || 20;
+  if (duration < minLength) {
+    return [`Mötet är kortare än tillåtet minimum (${minLength} min)`];
+  }
+
+  // 6. Veckokvot
+  const remainingMinutes = settings.remaining_weekly_minutes ?? Infinity;
+  if (duration > remainingMinutes) {
+    return ["Överskrider veckogräns för bokningar"];
+  }
+
+  // 7. Krockkontroll
+  if (settings.require_calendar_check && settings.calendar_conflict) {
+    return ["Krock med annan kalenderhändelse"];
+  }
+
+  return []; // Allt godkänt
+}
+
+// Hjälpfunktion för att avgöra om datumet är en helg
+function isWeekend(dateString) {
+  const day = new Date(dateString).getDay();
+  return day === 0 || day === 6; // Söndag = 0, Lördag = 6
+}
+
+/**
+ * Sparar bokningen till PostgreSQL.
+ */
+async function createBookingInDB(db, data, contactId) {
+  if (!data || !data.meeting_type) {
+    throw new Error("Ogiltig data – meeting_type saknas");
+  }
+  const locationType = resolveLocationType(data.meeting_type);
+  // Generera möteslänk beroende på typ
+  if (!data.meeting_link) {
+    if (data.meeting_type === "Zoom") {
+      data.meeting_link = `https://zoom.us/j/${uuidv4()}`;
+    } else if (data.meeting_type === "Teams") {
+      data.meeting_link = `https://teams.microsoft.com/l/meetup-join/${uuidv4()}`;
+    } else if (data.meeting_type === "FaceTime") {
+      data.meeting_link = `facetime://${data.email}`;
+    }
+  }
+  try {
+    const result = await db.query(
+      `INSERT INTO bookings (
+        id, contact_id, start_time, end_time, meeting_type, location_type,
+        room_email, language, created_at,
+        event_id, meeting_link
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, now(),
+        $9, $10
+      ) RETURNING *`,
+      [
+        uuidv4(),
+        contactId,
+        data.start_time,
+        data.end_time,
+        data.meeting_type || "unspecified",
+        locationType,
+        data.room_email || null,
+        data.language || "sv",
+        data.event_id || null,
+        data.meeting_link || null
+      ]
+    );
+
+    return result.rows[0];
+  } catch (error) {
+    eventLogger.logError('createBookingInDB', error);
+    throw error;
+  }
+}
+
+/**
+ * Hämtar booking settings från databasen och transformerar till objekt.
+ */
+async function getBookingSettings(db) {
+  const result = await db.query(
+    `SELECT key, value, value_type FROM booking_settings`
+  );
+
+  const rows = result.rows;
+  const settings = {};
+
+  for (const row of rows) {
+    try {
+      if (["json", "array"].includes(row.value_type)) {
+        try {
+          const val = typeof row.value === 'string' ? row.value.trim() : row.value;
+          const normalized = typeof val === 'string' && val.startsWith('"') ? JSON.parse(val) : val;
+          settings[row.key] = typeof normalized === 'string' ? JSON.parse(normalized) : normalized;
+        } catch (e) {
+          eventLogger.logWarning('getBookingSettings', row.key, e);
+        }
+      } else if (row.value_type === "bool") {
+        settings[row.key] = row.value === "true";
+      } else if (row.value_type === "int") {
+        settings[row.key] = parseInt(row.value, 10);
+      } else {
+        settings[row.key] = row.value;
+      }
+    } catch (e) {
+      eventLogger.logWarning('getBookingSettings', row.key, e);
+    }
+  }
+
+  return settings;
+}
+
+async function getWeeklyBookingMinutes(db, meetingType, date) {
+  const res = await db.query(
+    `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
+     FROM bookings
+     WHERE meeting_type = $1
+       AND start_time >= $2::date
+       AND start_time < ($2::date + interval '7 days')`,
+    [meetingType, date]
+  );
+  return parseInt(res.rows[0].minutes) || 0;
+}
+
+/**
+ * Hämtar en bokning från databasen baserat på ID.
+ */
+async function getBookingById(db, bookingId) {
+  const result = await db.query(
+    `SELECT * FROM bookings WHERE id = $1`,
+    [bookingId]
+  );
+  return result.rows[0];
+}
+
+
+const bookingService = {
+  validateBookingInput,
+  checkBookingConditions,
+  getBookingSettings,
+  isWeekend,
+  createBookingInDB,
+  createBooking: createBookingInDB,
+  insertBooking: createBookingInDB,
+  getWeeklyBookingMinutes,
+  getBookingById
+};
+
+export {
+  validateBookingInput,
+  checkBookingConditions,
+  getBookingSettings,
+  isWeekend,
+  createBookingInDB,
+  createBookingInDB as createBooking,
+  createBookingInDB as insertBooking,
+  getWeeklyBookingMinutes,
+  getBookingById
+};
+
+
+### Fil: db.js ###
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+export default async function (context, req) {
+  context.log("🧪 Funktion startade");
+
+  try {
+    const client = await pool.connect();
+    context.log("✅ Ansluten till databasen");
+
+    const result = await client.query("SELECT value FROM booking_settings WHERE key = 'meeting_types'");
+    client.release();
+
+    context.log("📦 Query-resultat:", result?.rows);
+
+    context.res = {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: result?.rows?.[0]?.value
+    };
+  } catch (err) {
+    context.log("❌ DB-fel:", err.message);
+    context.res = {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: { error: err.message }
+    };
+  }
+}
+
+### Fil: msGraph.js ###
+import fetch from "node-fetch";
+
+const clientId = process.env.MS365_CLIENT_ID;
+const clientSecret = process.env.MS365_CLIENT_SECRET;
+const tenantId = process.env.MS365_TENANT_ID;
+
+async function getAccessToken() {
+  const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const params = new URLSearchParams();
+  params.append("client_id", clientId);
+  params.append("client_secret", clientSecret);
+  params.append("scope", "https://graph.microsoft.com/.default");
+  params.append("grant_type", "client_credentials");
+
+  const res = await fetch(url, {
+    method: "POST",
+    body: params,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    }
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`❌ OAuth error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.access_token;
+}
+
+import { debug } from "../utils/debug.js";
+import { logEvent } from "../log/eventLogger.js";
+
+/**
+ * Hämtar första tillgängliga rum från Graph med getSchedule().
+ */
+async function getAvailableRoomFromGraph(settings, start, end) {
+  try {
+    const rooms = settings.available_meeting_room || [];
+    if (rooms.length === 0) return null;
+
+    const token = await getAccessToken();
+    debug("graph", "Token hämtat för getSchedule");
+
+    const res = await fetch("https://graph.microsoft.com/v1.0/users/daniel@klrab.se/calendar/getSchedule", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        schedules: rooms,
+        startTime: {
+          dateTime: start,
+          timeZone: "Europe/Stockholm"
+        },
+        endTime: {
+          dateTime: end,
+          timeZone: "Europe/Stockholm"
+        },
+        availabilityViewInterval: 30
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      logEvent("error", "msGraph: getSchedule", err);
+      throw new Error("❌ getSchedule Graph error: " + err);
+    }
+
+    const data = await res.json();
+    debug("graph", "Svar från getSchedule", { schedules: data.value.map(s => s.scheduleId) });
+
+    for (const schedule of data.value) {
+      if (!schedule.availabilityView?.includes("1")) {
+        debug("graph", "Rum ledigt enligt Graph", { scheduleId: schedule.scheduleId });
+        return schedule.scheduleId;
+      }
+    }
+
+    debug("graph", "Inget rum ledigt enligt Graph");
+    return null;
+  } catch (error) {
+    logEvent("error", "msGraph: getAvailableRoomFromGraph", error.message);
+    throw error;
+  }
+}
+
+async function bookMeetingRoom(settings, data) {
+  try {
+    if (data.meetingType !== "Fysiskt hos kund") {
+      return await getAvailableRoomFromGraph(settings, data.start_time, data.end_time);
+    }
+    // ... (övrig kod för bookMeetingRoom)
+  } catch (error) {
+    logEvent("error", "msGraph: bookMeetingRoom", error.message);
+    throw error;
+  }
+}
+
+
+export default {
+  bookMeetingRoom,
+  getAvailableRoomFromGraph
+};
+
+### Fil: appleMaps.js ###
+// File: lib/maps/appleMaps.js
+import fs from "fs";
+import jwt from "jsonwebtoken";
+import fetch from "node-fetch";
+import { debug, getEnv } from "../utils/debug.js";
+
+const teamId = getEnv("APPLE_MAPS_TEAM_ID");
+const keyId = getEnv("APPLE_MAPS_KEY_ID");
+const keyPath = getEnv("APPLE_MAPS_KEY_PATH");
+
+/**
+ * Skapar ett Apple JWT för serverbaserade Maps-anrop.
+ */
+function createAppleMapsJWT() {
+  try {
+    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY
+      ? process.env.APPLE_MAPS_PRIVATE_KEY.replace(/\\n/g, "\n")
+      : fs.readFileSync(keyPath, "utf8");
+
+    const token = jwt.sign({}, privateKey, {
+      algorithm: "ES256",
+      issuer: teamId,
+      keyid: keyId,
+      expiresIn: "1h",
+      header: {
+        alg: "ES256",
+        kid: keyId,
+        typ: "JWT"
+      }
+    });
+
+    debug("maps", "Skapat Apple Maps JWT", { using: process.env.APPLE_MAPS_PRIVATE_KEY ? "env" : "file" });
+    return token;
+  } catch (error) {
+    debug("maps", "Fel vid skapande av JWT", { error });
+    throw error;
+  }
+}
+
+/**
+ * Använder Apple Maps Directions API för att hämta restid (i minuter).
+ */
+async function getTravelTime(fromAddress, toAddress, atTime) {
+  const jwtToken = createAppleMapsJWT();
+
+  debug("maps", "Hämtar restid", { fromAddress, toAddress, atTime });
+
+  // Steg 1: Hämta access token
+  const tokenResponse = await fetch("https://maps-api.apple.com/v1/token", {
+    headers: {
+      Authorization: `Bearer ${jwtToken}`
+    }
+  });
+
+  const tokenData = await tokenResponse.json();
+
+  if (!tokenResponse.ok || !tokenData.accessToken) {
+    debug("maps", "Fel vid hämtning av access token", { status: tokenResponse.status, body: tokenData });
+    throw new Error("Apple Maps API auth-token-misslyckande");
+  }
+
+  const accessToken = tokenData.accessToken;
+
+  // Steg 2: Anropa directions-endpoint med accessToken
+  const url = new URL("https://maps-api.apple.com/v1/directions");
+  url.searchParams.append("origin", fromAddress);
+  url.searchParams.append("destination", toAddress);
+  url.searchParams.append("transportType", "automobile");
+  url.searchParams.append("departureTime", new Date(atTime).toISOString());
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    debug("maps", "Apple Maps API error", { error: err });
+    throw new Error("Apple Maps API request failed");
+  }
+
+  const data = await res.json();
+  const travelTimeSec = data.routes?.[0]?.durationSeconds;
+  if (!travelTimeSec) {
+    debug("maps", "❌ Ingen restid returnerad", { rawResponse: data });
+    throw new Error("No travel time returned");
+  }
+
+  debug("maps", "Restid i sekunder", { travelTimeSec });
+  const travelTimeMinutes = Math.round(travelTimeSec / 60); // i minuter
+  debug("maps", "Restid i minuter", { travelTimeMinutes });
+
+  return travelTimeMinutes;
+}
+
+export { getTravelTime };
+
+### Fil: emailSender.js ###
+// File: lib/notification/emailSender.js
+import { sendMail } from "./sendMail.js";
+
+
+async function sendConfirmationEmail(contact, booking) {
+  console.log(`✉️ Skickar bekräftelse till ${contact.email}...`);
+  console.log("📌 Möte:", {
+    start: booking?.start_time,
+    end: booking?.end_time,
+    room: booking?.room_email,
+    link: booking?.meeting_link
+  });
+
+  const subject = "Din bokning är bekräftad";
+  const html = `
+    <p>Hej ${contact.name || "vän"},</p>
+    <p>Din bokning är bekräftad:</p>
+    <ul>
+      <li><strong>Tid:</strong> ${booking.start_time} – ${booking.end_time}</li>
+      <li><strong>Plats:</strong> ${booking.room_email || "Digitalt möte"}</li>
+      <li><strong>Länk:</strong> <a href="${booking.meeting_link}">${booking.meeting_link}</a></li>
+    </ul>
+    <p>Välkommen!</p>
+  `;
+
+  const fallbackEmail = process.env.MS_SENDER_EMAIL;
+  const emailToSend = (contact.email && contact.email !== "placeholder@example.com") ? contact.email : fallbackEmail;
+
+  if (!fallbackEmail) {
+    console.warn("⚠️ Ingen fallback-email (MS_SENDER_EMAIL) definierad.");
+  }
+
+  if (emailToSend && booking.meeting_link) {
+    try {
+      await sendMail(emailToSend, subject, html);
+      console.log("✅ Mejlet skickat.");
+      return true;
+    } catch (err) {
+      console.warn("⚠️ Kunde inte skicka mejlet:", err.message);
+      return false;
+    }
+  } else {
+    console.warn("⚠️ Inget mejl skickat – saknar mottagare eller länk.");
+    return false;
+  }
+}
+
+export { sendConfirmationEmail };
+
+### Fil: appleCalendar.js ###
+// File: lib/calendar/appleCalendar.js
+import { getCalDAVEvents } from './caldav.js';
+import { getTravelTime } from '../maps/appleMaps.js';
+import { logEvent, logError, logWarning } from '../log/eventLogger.js';
+import { getSetting } from '../utils/translation.js';
+
+async function hasAppleCalendarConflict(startTime, endTime, email, settings = {}) {
+  const caldavUrl = getSetting('caldav_url');
+  const homeAddress = getSetting('default_home_address');
+  const fallbackMinutes = parseInt(getSetting('fallback_travel_time_minutes') || '90', 10);
+
+  let events = [];
+  try {
+    if (settings.mockEvents) {
+      events = settings.mockEvents;
+    } else {
+      events = await getCalDAVEvents(caldavUrl, startTime, endTime);
+    }
+  } catch (err) {
+    logEvent(null, 'apple_calendar_fetch_error', {
+      error: err.message,
+      stack: err.stack
+    });
+    return false;
+  }
+
+  const newStart = new Date(startTime).getTime();
+  const newEnd = new Date(endTime).getTime();
+
+  for (const event of events) {
+    const eventStart = new Date(event.start).getTime();
+    const eventEnd = new Date(event.end).getTime();
+    const eventLocation = event.location || homeAddress;
+
+    const travelBefore = await getTravelTime(eventLocation, homeAddress, eventEnd);
+    const travelAfter = await getTravelTime(homeAddress, eventLocation, eventStart);
+
+    const tooCloseBefore = (newStart - eventEnd) / 60000 < travelBefore;
+    const tooCloseAfter = (eventStart - newEnd) / 60000 < travelAfter;
+
+    const overlaps = newStart < eventEnd && newEnd > eventStart;
+
+    if (overlaps || tooCloseBefore || tooCloseAfter) {
+      logEvent(null, 'apple_calendar_conflict', {
+        conflictWith: event,
+        attemptedTime: { start: startTime, end: endTime }
+      });
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export { hasAppleCalendarConflict };
+
+
+### Fil: eventLogger.js ###
+async function logEvent(db, source, event_type, payload = {}) {
+  try {
+    await db.query(
+      `INSERT INTO event_log (source, event_type, payload)
+       VALUES ($1, $2, $3)`,
+      [source, event_type, payload]
+    );
+  } catch (err) {
+    console.error("❌ Misslyckades att logga händelse:", err);
+  }
+}
+
+function logError(context, error) {
+  console.error(`❌ [${context}]`, error);
+}
+
+function logWarning(context, key, error) {
+  console.warn(`⚠️  [${context}] ${key}:`, error.message || error);
+}
+
+export { logEvent, logError, logWarning };
+
+### Fil: ms365Calendar.js ###
+import { Client } from "@microsoft/microsoft-graph-client";
+import "isomorphic-fetch";
+import { ConfidentialClientApplication } from "@azure/msal-node";
+
+const clientId = process.env.MS_CLIENT_ID;
+const tenantId = process.env.MS_TENANT_ID;
+const clientSecret = process.env.MS_CLIENT_SECRET;
+const organizerEmail = process.env.MS_SENDER_EMAIL;
+
+/**
+ * Autentiserar mot Microsoft Graph med klientuppgifter.
+ */
+async function getGraphClient() {
+  const config = {
+    auth: {
+      clientId,
+      authority: `https://login.microsoftonline.com/${tenantId}`,
+      clientSecret,
+    },
+  };
+
+  const cca = new ConfidentialClientApplication(config);
+
+  const tokenResponse = await cca.acquireTokenByClientCredential({
+    scopes: ["https://graph.microsoft.com/.default"],
+  });
+
+  const client = Client.init({
+    authProvider: (done) => {
+      done(null, tokenResponse.accessToken);
+    },
+  });
+
+  return client;
+}
+
+/**
+ * Skapar ett Teams-möte i användarens kalender via Microsoft Graph.
+ */
+async function createMicrosoft365Booking(booking, contact) {
+  const client = await getGraphClient();
+
+  const event = {
+    subject: "Bokning via MacSpot",
+    body: {
+      contentType: "HTML",
+      content: `Möte med ${contact.name}`,
+    },
+    start: {
+      dateTime: booking.start_time,
+      timeZone: "Europe/Stockholm",
+    },
+    end: {
+      dateTime: booking.end_time,
+      timeZone: "Europe/Stockholm",
+    },
+    attendees: [
+      {
+        emailAddress: {
+          address: contact.email || organizerEmail,
+          name: contact.name,
+        },
+        type: "required",
+      },
+    ],
+    isOnlineMeeting: true,
+    onlineMeetingProvider: "teamsForBusiness",
+  };
+
+  try {
+    const created = await client
+      .api(`/users/${organizerEmail}/events`)
+      .post(event);
+
+    return {
+      success: true,
+      eventId: created.id,
+      meetingLink: created.onlineMeeting?.joinUrl || null,
+    };
+  } catch (err) {
+    console.error("❌ Fel vid skapande av Microsoft-bokning:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+export { createMicrosoft365Booking };
+
+export async function getMicrosoftSchedule(start, end, email, settings) {
+  const client = await getGraphClient();
+  const userEmail = "daniel@klrab.se"; // Tillfällig fix
+
+  console.log("🔍 Kollar MS-kalender för:", userEmail);
+
+  try {
+    const res = await client
+      .api(`/users/${userEmail}/calendarView`)
+      .query({
+        startDateTime: new Date(start).toISOString(),
+        endDateTime: new Date(end).toISOString(),
+      })
+      .header("Prefer", 'outlook.timezone="Europe/Stockholm"')
+      .get();
+
+    return res.value || [];
+  } catch (err) {
+    console.error("❌ Fel vid hämtning av Microsoft-schema:", err);
+    return [];
+  }
+}
+
+
+### Fil: caldav.js ###
+// File: lib/calendar/caldav.js
+/**
+ * Mock: Returnerar kalenderhändelser mellan två tider.
+ * I framtiden: Hämta riktiga iCal-events via CalDAV (PROPFIND + REPORT).
+ */
+import { debug } from "../utils/debug.js";
+import fetch from "node-fetch";
+import ical from "node-ical";
+const { CALDAV_USER, CALDAV_PASSWORD, CALDAV_CALENDAR_URL } = process.env;
+
+export { getCalDAVEvents };
+async function getCalDAVEvents(_, startTime, endTime) {
+  try {
+    const auth = Buffer.from(`${CALDAV_USER}:${CALDAV_PASSWORD}`).toString("base64");
+
+    const headers = {
+      "Content-Type": "application/xml; charset=utf-8",
+      Authorization: `Basic ${auth}`,
+      Depth: "1"
+    };
+
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+    <c:calendar-query xmlns:c="urn:ietf:params:xml:ns:caldav"
+                      xmlns:d="DAV:"
+                      xmlns:cs="http://calendarserver.org/ns/">
+      <d:prop>
+        <d:getetag/>
+        <c:calendar-data/>
+      </d:prop>
+      <c:filter>
+        <c:comp-filter name="VCALENDAR">
+          <c:comp-filter name="VEVENT">
+            <c:time-range start="${startTime.replace(/[-:]/g, "").slice(0, 15)}Z"
+                          end="${endTime.replace(/[-:]/g, "").slice(0, 15)}Z"/>
+          </c:comp-filter>
+        </c:comp-filter>
+      </c:filter>
+    </c:calendar-query>`;
+
+    debug("caldav", "Skickar CalDAV REPORT", { url: CALDAV_CALENDAR_URL });
+
+    const res = await fetch(CALDAV_CALENDAR_URL, {
+      method: "REPORT",
+      headers,
+      body
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      debug("caldav", "Fel vid CalDAV-anrop", { status: res.status, body: err });
+      throw new Error("CalDAV-fel: " + res.status);
+    }
+
+    const text = await res.text();
+    const matches = [...text.matchAll(/<c:calendar-data[^>]*>([\s\S]*?)<\/c:calendar-data>/g)];
+
+    const events = [];
+    for (const match of matches) {
+      const icsData = match[1];
+      const parsed = ical.parseICS(icsData);
+      for (const key in parsed) {
+        const entry = parsed[key];
+        if (entry.type === "VEVENT") {
+          events.push({
+            start: entry.start.toISOString(),
+            end: entry.end.toISOString(),
+            location: entry.location
+          });
+        }
+      }
+    }
+
+    debug("caldav", "Antal händelser", { count: events.length });
+    return events;
+  } catch (error) {
+    debug("caldav", "Fel i getCalDAVEvents", { error });
+    throw error;
+  }
+}
+
+ 
+
+### Fil: debug.js ###
+// File: lib/utils/debug.js
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const LOG_TO_FILE = true;
+const LOG_FILE_PATH = path.join(__dirname, "../../../logs/debug.log");
+
+function debug(scope = "general", message = "", data = null, level = "INFO") {
+  const timestamp = new Date().toISOString();
+  const entry = {
+    timestamp,
+    level,
+    scope,
+    message,
+    ...(data && { data })
+  };
+
+  // Logga till terminal
+  console.log(JSON.stringify(entry, null, 2));
+
+  // Logga till fil om aktivt
+  if (LOG_TO_FILE) {
+    try {
+      fs.mkdirSync(path.dirname(LOG_FILE_PATH), { recursive: true });
+      fs.appendFileSync(LOG_FILE_PATH, JSON.stringify(entry) + "\n");
+    } catch (err) {
+      console.error("❌ Misslyckades skriva till loggfil:", err.message);
+    }
+  }
+}
+
+
+function getEnv(key, fallback = null) {
+  return process.env[key] || fallback;
+}
+
+export { debug, getEnv };
+
+
+### Fil: sendMail.js ###
+import { Client } from "@microsoft/microsoft-graph-client";
+import { ConfidentialClientApplication } from "@azure/msal-node";
+
+const clientId = process.env.MS_CLIENT_ID;
+const tenantId = process.env.MS_TENANT_ID;
+const clientSecret = process.env.MS_CLIENT_SECRET;
+const senderEmail = process.env.MS_SENDER_EMAIL;
+
+/**
+ * Autentiserar mot Microsoft Graph med klientuppgifter.
+ */
+async function getGraphClient() {
+  const config = {
+    auth: {
+      clientId,
+      authority: `https://login.microsoftonline.com/${tenantId}`,
+      clientSecret,
+    },
+  };
+
+  const cca = new ConfidentialClientApplication(config);
+
+  const tokenResponse = await cca.acquireTokenByClientCredential({
+    scopes: ["https://graph.microsoft.com/.default"],
+  });
+
+  const client = Client.init({
+    authProvider: (done) => {
+      done(null, tokenResponse.accessToken);
+    },
+  });
+
+  return client;
+}
+
+/**
+ * Skickar ett e-postmeddelande via Microsoft Graph.
+ */
+async function sendMail(to, subject, html) {
+  const client = await getGraphClient();
+
+  const mail = {
+    message: {
+      subject,
+      body: {
+        contentType: "HTML",
+        content: html,
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            address: to,
+          },
+        },
+      ],
+    },
+    saveToSentItems: "false",
+  };
+
+  if (!senderEmail) {
+    throw new Error("❌ Saknar MS_SENDER_EMAIL – kontrollera local.settings.json");
+  }
+
+  try {
+    console.log(`📧 Försöker skicka mail till ${to} med ämne "${subject}"...`);
+    await client.api(`/users/${senderEmail}/sendMail`).post(mail);
+    console.log("✅ E-post skickat!");
+  } catch (err) {
+    console.error("❌ Misslyckades att skicka e-post via Microsoft Graph:", err.message);
+  }
+}
+
+export { sendMail };

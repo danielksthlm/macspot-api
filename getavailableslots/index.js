@@ -1,151 +1,218 @@
-import { v4 as uuidv4 } from 'uuid';
+export default async function (context, req) {
+  const { Pool } = await import('pg');
+  const fetch = (await import('node-fetch')).default;
+  const { v4: uuidv4 } = await import('uuid');
 
-function generateMeetingLink(type, email) {
-  if (type === "Zoom") return `https://zoom.us/j/${uuidv4()}`;
-  if (type === "Teams") return `https://teams.microsoft.com/l/meetup-join/${uuidv4()}`;
-  if (type === "FaceTime") return `facetime://${email}`;
-  return null;
-}
-import getDb from './db.js';
-import { getBookingSettings, getWeeklyBookingMinutes } from './bookingService.js';
-import { hasAppleCalendarConflict } from './appleCalendar.js';
-import { getTravelTime } from './appleMaps.js';
-import msGraph from './msGraph.js';
-const { getAvailableRoomFromGraph } = msGraph;
-import { getMicrosoftSchedule } from './ms365Calendar.js';
-import { DateTime, Interval } from 'luxon';
+  context.log('📥 Funktion getavailableslots anropad');
 
-async function hasMicrosoftCalendarConflict(start, end, email, settings) {
-  const msEvents = await getMicrosoftSchedule(start, end, email, settings);
-  return msEvents?.length > 0;
-}
+  const { email, meeting_type } = req.body || {};
+  if (!email || !meeting_type) {
+    context.res = {
+      status: 400,
+      body: { error: 'Email och mötestyp krävs.' }
+    };
+    return;
+  }
 
-export async function handler(req, context) {
-  let db;
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+
   try {
-    db = await getDb().connect();
-    const settings = await getBookingSettings(db);
-    const lengths = settings["default_meeting_lengths"] || {};
+    const db = await pool.connect();
 
-    const url = new URL(req.url);
-    const meeting_type = url.searchParams.get("meeting_type");
+    // 🛠️ Hämta kontaktmetadata (om finns)
+    const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
+    const contact = contactRes.rows[0];
+    const metadata = contact?.metadata || {};
 
-    // 1. Efter att ha hämtat meeting_type
-    context.log("📥 Parametrar:", { meeting_type });
-
-    if (!meeting_type) {
-      return new Response(JSON.stringify({ success: false, message: "Mötestyp krävs" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
+    // 📦 Hämta alla inställningar
+    const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
+    const settings = {};
+    for (const row of settingsRes.rows) {
+      if (row.value_type === 'json' || row.value_type === 'array') {
+        try {
+          settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
+        } catch (_) {}
+      } else if (row.value_type === 'int') {
+        settings[row.key] = parseInt(row.value);
+      } else if (row.value_type === 'bool') {
+        settings[row.key] = row.value === 'true';
+      } else {
+        settings[row.key] = row.value;
+      }
     }
 
-    // 2. Efter att ha hämtat inställningar
-    context.log("⚙️ Inställningar laddade:", settings);
+    const meetingLengths = {
+      atClient: settings.default_meeting_length_atClient,
+      atOffice: settings.default_meeting_length_atOffice,
+      Zoom: settings.default_meeting_length_digital,
+      FaceTime: settings.default_meeting_length_digital,
+      Teams: settings.default_meeting_length_digital
+    };
 
-    const slotsByDate = {};
-    const today = DateTime.now().setZone(settings.timezone).startOf('day');
-    const intervalMinutes = 15;
+    const lengths = meetingLengths[meeting_type] || [30];
+    const now = new Date();
+    const slots = [];
 
-    for (let offset = 0; offset <= settings.max_days_in_advance; offset++) {
-      const date = today.plus({ days: offset });
-      const dateStr = date.toISODate();
-      context.log(`📅 Bearbetar datum: ${dateStr}`);
+    for (let i = 1; i <= 14; i++) {
+      const day = new Date();
+      day.setDate(now.getDate() + i);
+      const dayStr = day.toISOString().split('T')[0];
 
-      if (settings.block_weekends && [6, 7].includes(date.weekday)) {
-        context.log("🛑 Helg – datumet blockerat:", dateStr);
-        continue;
-      }
-      const lunchStart = DateTime.fromISO(dateStr + "T" + settings.lunch_start, { zone: settings.timezone });
-      const lunchEnd = DateTime.fromISO(dateStr + "T" + settings.lunch_end, { zone: settings.timezone });
-      const openTime = DateTime.fromISO(dateStr + "T" + settings.open_time, { zone: settings.timezone });
-      const closeTime = DateTime.fromISO(dateStr + "T" + settings.close_time, { zone: settings.timezone });
+      for (let hour = 8; hour <= 16; hour++) {
+        for (const len of lengths) {
+          const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
+          const end = new Date(start.getTime() + len * 60000);
 
-      const morningRange = Interval.fromDateTimes(openTime, lunchStart);
-      const afternoonRange = Interval.fromDateTimes(lunchEnd, closeTime);
-      const ranges = [morningRange, afternoonRange];
-
-      const slots = [];
-
-      for (const range of ranges) {
-        context.log("🕒 Bearbetar intervall:", { from: range.start.toISO(), to: range.end.toISO() });
-        let bestSlot = null;
-
-        for (let dt = range.start; dt < range.end; dt = dt.plus({ minutes: intervalMinutes })) {
-          const start = dt.toISO();
-          const end = dt.plus({ minutes: lengths[meeting_type]?.[0] || 30 }).toISO();
-
-          context.log("🔍 Testar slot:", { start, end });
-
-          const room = await getAvailableRoomFromGraph(settings, start, end);
-          if (meeting_type !== "atClient" && !room) {
-            context.log("⛔️ Inget ledigt rum hittades – hoppar över slot.");
-            continue;
+          // 🚫 Kolla helg
+          if (settings.block_weekends) {
+            const wd = start.getDay();
+            if (wd === 0 || wd === 6) continue;
           }
 
-          const [appleConflict, msConflict] = await Promise.all([
-            hasAppleCalendarConflict(start, end, settings.notification_email, settings),
-            hasMicrosoftCalendarConflict(start, end, settings.notification_email, settings)
-          ]);
-          if (appleConflict || msConflict) {
-            context.log("❌ Krock i kalender – hoppar över slot.");
-            continue;
+          // ⏱️ Kontrollera veckokvot
+          const weekRes = await db.query(
+            `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
+             FROM bookings WHERE meeting_type = $1
+             AND start_time >= $2::date
+             AND start_time < ($2::date + interval '7 days')`,
+            [meeting_type, start.toISOString()]
+          );
+          const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
+          if (bookedMinutes + len > (settings.max_weekly_booking_minutes || 99999)) continue;
+
+          // ⛔ Krockar (förenklad mock – riktig logik kan ersättas senare)
+          const conflictRes = await db.query(
+            `SELECT 1 FROM bookings
+             WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
+            [start.toISOString(), end.toISOString()]
+          );
+          if (conflictRes.rowCount > 0) continue;
+
+          // 🧭 Kontrollera restid med Apple Maps
+          try {
+            const jwt = require('jsonwebtoken');
+            const fs = require('fs');
+            const teamId = process.env.APPLE_MAPS_TEAM_ID;
+            const keyId = process.env.APPLE_MAPS_KEY_ID;
+            const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+
+            const token = jwt.sign({}, privateKey, {
+              algorithm: 'ES256',
+              issuer: teamId,
+              keyid: keyId,
+              expiresIn: '1h',
+              header: {
+                alg: 'ES256',
+                kid: keyId,
+                typ: 'JWT'
+              }
+            });
+
+            const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            });
+
+            const tokenData = await tokenRes.json();
+            const accessToken = tokenData.accessToken;
+            if (!accessToken) continue;
+
+            const fromAddress = meeting_type === 'atClient'
+              ? settings.default_office_address
+              : metadata.address || settings.default_home_address;
+
+            const toAddress = meeting_type === 'atClient'
+              ? metadata.address || settings.default_home_address
+              : settings.default_office_address;
+
+            const url = new URL('https://maps-api.apple.com/v1/directions');
+            url.searchParams.append('origin', fromAddress);
+            url.searchParams.append('destination', toAddress);
+            url.searchParams.append('transportType', 'automobile');
+            url.searchParams.append('departureTime', start.toISOString());
+
+            const res = await fetch(url.toString(), {
+              headers: {
+                Authorization: `Bearer ${accessToken}`
+              }
+            });
+
+            const data = await res.json();
+            const durationSec = data.routes?.[0]?.durationSeconds;
+            const travelTimeMin = Math.round((durationSec || 0) / 60);
+
+            const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
+            if (travelTimeMin === 0 || travelTimeMin > fallback) continue;
+
+          } catch (err) {
+            context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
+            // Om restidskontroll misslyckas, tillåt ändå slot
           }
 
-          const travelTime = meeting_type === 'atClient'
-            ? await getTravelTime(settings.default_home_address, settings.default_office_address, start)
-            : 0;
-          if (travelTime > settings.fallback_travel_time_minutes) {
-            context.log("🚗 Restid för lång – hoppar över slot.");
-            continue;
+          // 🏢 Kontrollera tillgängligt mötesrum via Graph API för atOffice
+          if (meeting_type === 'atOffice') {
+            try {
+              const tokenRes = await fetch('https://login.microsoftonline.com/' + process.env.MS365_TENANT_ID + '/oauth2/v2.0/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  client_id: process.env.MS365_CLIENT_ID,
+                  client_secret: process.env.MS365_CLIENT_SECRET,
+                  scope: 'https://graph.microsoft.com/.default',
+                  grant_type: 'client_credentials'
+                })
+              });
+
+              const tokenData = await tokenRes.json();
+              const accessToken = tokenData.access_token;
+              if (!accessToken) continue;
+
+              const roomList = settings.available_meeting_room || [];
+              const res = await fetch('https://graph.microsoft.com/v1.0/users/daniel@klrab.se/calendar/getSchedule', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  schedules: roomList,
+                  startTime: { dateTime: start.toISOString(), timeZone: 'Europe/Stockholm' },
+                  endTime: { dateTime: end.toISOString(), timeZone: 'Europe/Stockholm' },
+                  availabilityViewInterval: 30
+                })
+              });
+
+              const scheduleData = await res.json();
+              const availableRoom = scheduleData.value.find(s => !s.availabilityView.includes('1'));
+              if (!availableRoom) continue;
+
+            } catch (err) {
+              context.log('⚠️ Graph API-rumskontroll misslyckades:', err.message);
+              continue;
+            }
           }
 
-          const withinTravelWindow = dt.hour >= DateTime.fromISO(settings.travel_time_window.start).hour &&
-                                     dt.hour <= DateTime.fromISO(settings.travel_time_window.end).hour;
-          if (!withinTravelWindow) {
-            context.log("🕳️ Utanför tillåtet restidsfönster – hoppar över slot.");
-            continue;
-          }
-
-          const totalMinutes = await getWeeklyBookingMinutes(db, meeting_type, dateStr);
-          if (totalMinutes >= settings.max_weekly_booking_minutes) {
-            context.log("📉 Veckokvot överskriden – hoppar över slot.");
-            continue;
-          }
-
-          const minLength = lengths[meeting_type]?.[0] || 0;
-          const slotLength = DateTime.fromISO(end).diff(DateTime.fromISO(start), 'minutes').minutes;
-          if (slotLength < minLength) {
-            context.log("⏱️ Sloten är för kort – hoppar över.");
-            continue;
-          }
-
-          bestSlot = { start, end, room, meetingLink: generateMeetingLink(meeting_type, settings.notification_email) };
-          context.log("✅ Slot funkar:", bestSlot);
-          break;
+          // ✅ Lägg till slot
+          slots.push(start.toISOString());
         }
-
-        if (bestSlot) slots.push(bestSlot);
-      }
-
-      if (slots.length > 0) {
-        slotsByDate[dateStr] = slots;
       }
     }
 
-    context.log("📦 Samlade tillgängliga slots:", slotsByDate);
-
-    return new Response(JSON.stringify({ success: true, slots: slotsByDate }), {
+    context.res = {
       status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+      body: { slots }
+    };
   } catch (err) {
-    context.error("❌ Slot lookup error", err);
-    return new Response(JSON.stringify({ success: false, message: "Internal server error" }), {
+    context.log('❌ Fel i getavailableslots:', err.message);
+    context.res = {
       status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+      body: { error: err.message }
+    };
   } finally {
-    if (db) db.release?.(); // Säkerställ att databasanslutningen släpps
+    await pool.end();
   }
 }
