@@ -99,4 +99,4 @@ jobs:
         with:
           app-name: 'macspotbackend'
           slot-name: 'Production'
-          package: .
+          package: release.zip
