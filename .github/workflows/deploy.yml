@@ -39,9 +39,6 @@ jobs:
 
       - name: 📦 Skapa zip baserat på .funcignore
         run: |
-          echo "📂 Nuvarande arbetskatalog: $(pwd)"
-          cat .funcignore
-
           mkdir deploy
 
           while IFS= read -r line; do
@@ -50,15 +47,12 @@ jobs:
               path="${line:1}"
               if [[ -e "$path" ]]; then
                 echo "✔️  Lägger till: $path"
-                rsync -a "$path" deploy/
+                cp -r "$path" deploy/
               else
                 echo "⚠️  Skippad (finns inte): $path"
               fi
             fi
           done < .funcignore
-
-          echo "📁 Innehåll i deploy-mappen:"
-          find deploy
 
           cd deploy
           zip -r ../release.zip .
@@ -99,4 +93,4 @@ jobs:
         with:
           app-name: 'macspotbackend'
           slot-name: 'Production'
-          package: release.zip
+          package: .
