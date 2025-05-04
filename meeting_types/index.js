@@ -20,9 +20,11 @@ export default async function (context, req) {
     }
 
     const client = await pool.connect();
+    context.log("📣 Frågar efter mötestyper...");
     const result = await client.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
+    context.log("📦 Resultat från query:", result.rows);
     client.release();
 
     context.res = {
