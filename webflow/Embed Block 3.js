@@ -42,7 +42,7 @@
       console.log("✅ Svar från update_contact:", result);
 
       if (result.status === "updated" || result.status === "created") {
-        location.reload(); // Alternativt gå vidare till nästa steg
+        window.triggerSlotSearch?.();
       } else {
         alert('❌ Kunde inte spara, försök igen.');
       }
@@ -51,6 +51,52 @@
       alert('❌ Tekniskt fel vid sparande.');
     }
   }
+
+  // --- NEW FUNCTION: triggerSlotSearch ---
+  async function triggerSlotSearch() {
+    const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+    const email = document.querySelector('#booking_email')?.value.trim();
+
+    if (!meetingType || !email) {
+      console.warn("⛔️ Saknar meeting_type eller email.");
+      return;
+    }
+
+    const response = await fetch("https://macspotbackend.azurewebsites.net/api/getavailableslots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meeting_type: meetingType, email: email })
+    });
+
+    const result = await response.json();
+    console.log("📅 Tillgängliga tider:", result);
+
+    const wrapper = document.querySelector("#calendar-wrapper");
+    if (!wrapper) {
+      console.warn("⚠️ calendar-wrapper hittades inte.");
+      return;
+    }
+
+    wrapper.innerHTML = ""; // töm tidigare
+
+    if (!Array.isArray(result.slots) || result.slots.length === 0) {
+      wrapper.innerHTML = "<p>Inga tider tillgängliga just nu.</p>";
+      return;
+    }
+
+    result.slots.forEach(slot => {
+      const btn = document.createElement("button");
+      btn.textContent = new Date(slot).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+      btn.className = "calendar-slot-button";
+      btn.addEventListener("click", () => {
+        document.querySelector("#selected_slot")?.setAttribute("value", slot);
+        document.querySelector("#selected_slot_display")!.textContent = btn.textContent;
+      });
+      wrapper.appendChild(btn);
+    });
+  }
+
+  window.triggerSlotSearch = triggerSlotSearch;
 
   document.addEventListener("DOMContentLoaded", () => {
     const submitButton = document.querySelector('#contact-update-button');

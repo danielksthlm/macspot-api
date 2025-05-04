@@ -37,14 +37,14 @@
     }
 
     if (result.status === "ok") {
-      window.triggerSlotSearch?.();
+      // Removed call to window.triggerSlotSearch
     } else if (result.status === "incomplete") {
       const addressFields = ['address', 'postal_code', 'city', 'country'];
       const filteredMissing = result.missing_fields.filter(field => {
         return !addressFields.includes(field) || meetingType === 'atClient';
       });
       if (filteredMissing.length === 0) {
-        window.triggerSlotSearch?.();
+        // Removed call to window.triggerSlotSearch
         return;
       }
       console.log("🎯 Filtrerade fält:", filteredMissing);
@@ -70,7 +70,7 @@
           submitButton.value = 'Uppdatera uppgifter';
         } else {
           submitButton.style.display = 'none';
-          window.triggerSlotSearch?.();
+          // Removed call to window.triggerSlotSearch
         }
       }
     } else if (result.status === "new_customer") {
@@ -108,7 +108,7 @@
           submitButton.value = 'Skapa kontakt';
         } else {
           submitButton.style.display = 'none';
-          window.triggerSlotSearch?.();
+          // Removed call to window.triggerSlotSearch
         }
       }
     }
