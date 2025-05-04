@@ -1,5 +1,3 @@
-import { Pool } from 'pg';
-
 let pool;
 
 export default async function (context, req) {
@@ -8,6 +6,8 @@ export default async function (context, req) {
 
   try {
     if (!pool) {
+      const pg = await import('pg');
+      const { Pool } = pg;
       pool = new Pool({
         user: process.env.PGUSER,
         host: process.env.PGHOST,
