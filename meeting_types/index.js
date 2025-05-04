@@ -11,6 +11,10 @@ const pool = new Pool({
 
 export default async function (context, req) {
   context.log("🧪 meeting_types körs");
+  context.log("🔍 PGHOST:", process.env.PGHOST);
+  context.log("🔍 PGUSER:", process.env.PGUSER);
+  context.log("🔍 PGDATABASE:", process.env.PGDATABASE);
+  context.log("🔍 PGPORT:", process.env.PGPORT);
 
   try {
     const client = await pool.connect();
@@ -25,7 +29,7 @@ export default async function (context, req) {
       body: result.rows?.[0]?.value
     };
   } catch (err) {
-    context.log("❌ Fel i meeting_types:", err.message);
+    context.log("❌ Fel i meeting_types:", err.message, err.stack);
     context.res = {
       status: 500,
       body: { error: err.message }
