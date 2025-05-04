@@ -29,7 +29,7 @@ export default async function (context, req) {
     const result = await pool.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
-
+    context.log.info('🧪 Full query result from booking_settings:', result.rows);
     context.log.info('📊 Query executed');
 
     if (!result.rows || result.rows.length === 0) {
