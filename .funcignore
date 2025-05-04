@@ -1,7 +1,7 @@
-# Exclude everything first
-**
+# Ignore all by default, then selectively include
+*
 
-# Include only necessary deployment files
+# Always include essential deployment files
 !host.json
 !package.json
 !package-lock.json
@@ -11,3 +11,6 @@
 !validate_contact/**
 !getavailableslots/
 !getavailableslots/**
+
+!node_modules/
+!node_modules/**

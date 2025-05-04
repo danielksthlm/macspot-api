@@ -47,7 +47,7 @@ jobs:
               path="${line:1}"
               if [[ -e "$path" ]]; then
                 echo "✔️  Lägger till: $path"
-                cp -r "$path" deploy/
+                rsync -a "$path" deploy/
               else
                 echo "⚠️  Skippad (finns inte): $path"
               fi
