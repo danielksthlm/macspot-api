@@ -41,9 +41,13 @@ export default async function (context, req) {
       return;
     }
 
+    // ⓘ Durations for each type are defined in separate keys like:
+    // default_meeting_length_atClient, default_meeting_length_digital, etc.
+    const meetingTypes = result.rows[0].value;
+    context.log.info('📋 Available meeting types:', meetingTypes);
     context.res = {
       status: 200,
-      body: result.rows[0].value
+      body: meetingTypes
     };
     context.log.info('✅ meeting_types returned successfully');
   } catch (error) {
