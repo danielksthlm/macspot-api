@@ -11,5 +11,3 @@
 !validate_contact/**
 !getavailableslots/
 !getavailableslots/**
-!shared/
-!shared/**
