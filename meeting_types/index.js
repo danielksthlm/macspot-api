@@ -1,41 +1,43 @@
-let pool;
-
 export default async function (context, req) {
-  context.log("🧪 meeting_types körs");
-
+  let pool;
   try {
-    if (!pool) {
-      const pg = await import('pg');
-      const { Pool } = pg;
-      pool = new Pool({
-        user: process.env.PGUSER,
-        host: process.env.PGHOST,
-        database: process.env.PGDATABASE,
-        password: process.env.PGPASSWORD,
-        port: parseInt(process.env.PGPORT || '5432', 10),
-        ssl: { rejectUnauthorized: false }
-      });
-      context.log("✅ Pool initierad");
-    }
+    const { Pool } = await import('pg');
 
-    const client = await pool.connect();
-    const result = await client.query(
+    pool = new Pool({
+      user: process.env.PGUSER,
+      host: process.env.PGHOST,
+      database: process.env.PGDATABASE,
+      password: process.env.PGPASSWORD,
+      port: parseInt(process.env.PGPORT || '5432', 10),
+      ssl: { rejectUnauthorized: false }
+    });
+
+    context.log.info('✅ Pool created');
+
+    const result = await pool.query(
       "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
     );
-    client.release();
-
-    context.log("📦 Resultat från query:", result.rows);
 
     context.res = {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: result.rows?.[0]?.value
+      body: result.rows[0].value
     };
-  } catch (err) {
-    context.log("❌ Fel i meeting_types:", err.message, err.stack);
+  } catch (error) {
+    context.log.error('❌ Error during function execution:', {
+      message: error.message,
+      stack: error.stack
+    });
     context.res = {
       status: 500,
-      body: { error: err.message }
+      body: {
+        error: error.message,
+        stack: error.stack
+      }
     };
+  } finally {
+    if (pool) {
+      await pool.end();
+      context.log.info('✅ Pool closed');
+    }
   }
 }
