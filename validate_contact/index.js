@@ -4,13 +4,24 @@ export default async function (context, req) {
     const { Pool } = await import('pg');
 
     const { email, meeting_type } = req.body || {};
+    context.log.info('📥 validate_contact triggered with:', { email, meeting_type });
+
     if (!email || !meeting_type) {
       context.res = {
         status: 400,
         body: { error: "email and meeting_type are required" }
       };
+      context.log.info('📤 Validation status:', context.res.body);
       return;
     }
+
+    const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
+    for (const key of requiredEnv) {
+      if (!process.env[key]) {
+        throw new Error(`Missing environment variable: ${key}`);
+      }
+    }
+    context.log.info('🔐 Environment variables verified');
 
     pool = new Pool({
       user: process.env.PGUSER,
@@ -22,12 +33,14 @@ export default async function (context, req) {
     });
 
     const res = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
+    context.log.info('🔎 Contact lookup result:', res.rows[0]);
 
     if (res.rows.length === 0) {
       context.res = {
         status: 200,
         body: { status: "new_customer" }
       };
+      context.log.info('📤 Validation status:', context.res.body);
       return;
     }
 
@@ -37,10 +50,12 @@ export default async function (context, req) {
     if (typeof metadata !== 'object' || metadata === null) {
       metadata = {};
     }
+    context.log.info('🧾 Parsed metadata:', metadata);
     const missingFields = [];
 
     const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
     const meetingDigital = settingsRes.rows[0]?.value || [];
+    context.log.info('📁 meeting_digital types:', meetingDigital);
 
     const alwaysRequired = ['first_name', 'last_name', 'phone', 'company'];
     const addressRequired = ['address', 'postal_code', 'city', 'country'];
@@ -74,6 +89,7 @@ export default async function (context, req) {
         body: { status: "ok" }
       };
     }
+    context.log.info('📤 Validation status:', context.res.body);
 
   } catch (error) {
     context.log.error('❌ Error during validate_contact:', {
