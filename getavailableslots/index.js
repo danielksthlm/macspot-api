@@ -97,7 +97,7 @@ export default async function (context, req) {
 
           context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
 
-          // 🧭 Kontrollera restid med Apple Maps
+          // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback
           try {
             const jwt = require('jsonwebtoken');
             const fs = require('fs');
@@ -117,16 +117,25 @@ export default async function (context, req) {
               }
             });
 
-            const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
-            });
+            let accessToken;
+            try {
+              const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
+                headers: {
+                  Authorization: `Bearer ${token}`
+                }
+              });
 
-            const tokenData = await tokenRes.json();
-            const accessToken = tokenData.accessToken;
-            context.log('🔑 Apple token hämtad');
-            if (!accessToken) continue;
+              const tokenData = await tokenRes.json();
+              accessToken = tokenData.accessToken;
+              if (!accessToken) {
+                context.log('⚠️ Ingen Apple Maps accessToken – hoppar över slot');
+                continue;
+              }
+              context.log('🔑 Apple token hämtad');
+            } catch (err) {
+              context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
+              continue;
+            }
 
             const fromAddress = meeting_type === 'atClient'
               ? settings.default_office_address
@@ -146,20 +155,25 @@ export default async function (context, req) {
 
             context.log('📡 Maps request URL:', url.toString());
 
-            const res = await fetch(url.toString(), {
-              headers: {
-                Authorization: `Bearer ${accessToken}`
-              }
-            });
+            try {
+              const res = await fetch(url.toString(), {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`
+                }
+              });
 
-            const data = await res.json();
-            const durationSec = data.routes?.[0]?.durationSeconds;
-            const travelTimeMin = Math.round((durationSec || 0) / 60);
+              const data = await res.json();
+              const durationSec = data.routes?.[0]?.durationSeconds;
+              const travelTimeMin = Math.round((durationSec || 0) / 60);
 
-            context.log('⏱️ Restid:', travelTimeMin, 'min');
+              context.log('⏱️ Restid:', travelTimeMin, 'min');
 
-            const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
-            if (travelTimeMin === 0 || travelTimeMin > fallback) continue;
+              const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
+              if (travelTimeMin === 0 || travelTimeMin > fallback) continue;
+            } catch (err) {
+              context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
+              continue;
+            }
 
           } catch (err) {
             context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
@@ -169,44 +183,58 @@ export default async function (context, req) {
           // 🏢 Kontrollera tillgängligt mötesrum via Graph API för atOffice
           if (meeting_type === 'atOffice') {
             try {
-              const tokenRes = await fetch('https://login.microsoftonline.com/' + process.env.MS365_TENANT_ID + '/oauth2/v2.0/token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                  client_id: process.env.MS365_CLIENT_ID,
-                  client_secret: process.env.MS365_CLIENT_SECRET,
-                  scope: 'https://graph.microsoft.com/.default',
-                  grant_type: 'client_credentials'
-                })
-              });
+              let accessToken;
+              try {
+                const tokenRes = await fetch('https://login.microsoftonline.com/' + process.env.MS365_TENANT_ID + '/oauth2/v2.0/token', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: new URLSearchParams({
+                    client_id: process.env.MS365_CLIENT_ID,
+                    client_secret: process.env.MS365_CLIENT_SECRET,
+                    scope: 'https://graph.microsoft.com/.default',
+                    grant_type: 'client_credentials'
+                  })
+                });
 
-              const tokenData = await tokenRes.json();
-              const accessToken = tokenData.access_token;
-              context.log('📞 Graph token hämtad');
-              if (!accessToken) continue;
+                const tokenData = await tokenRes.json();
+                accessToken = tokenData.access_token;
+                if (!accessToken) {
+                  context.log('⚠️ Ingen Graph accessToken – hoppar över slot');
+                  continue;
+                }
+                context.log('📞 Graph token hämtad');
+              } catch (err) {
+                context.log('⚠️ Misslyckades hämta Graph token:', err.message);
+                continue;
+              }
 
               const roomList = settings.available_meeting_room || [];
               context.log('🏢 Rumslista:', roomList);
 
-              const res = await fetch('https://graph.microsoft.com/v1.0/users/daniel@klrab.se/calendar/getSchedule', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  schedules: roomList,
-                  startTime: { dateTime: start.toISOString(), timeZone: 'Europe/Stockholm' },
-                  endTime: { dateTime: end.toISOString(), timeZone: 'Europe/Stockholm' },
-                  availabilityViewInterval: 30
-                })
-              });
+              try {
+                const res = await fetch('https://graph.microsoft.com/v1.0/users/daniel@klrab.se/calendar/getSchedule', {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    schedules: roomList,
+                    startTime: { dateTime: start.toISOString(), timeZone: 'Europe/Stockholm' },
+                    endTime: { dateTime: end.toISOString(), timeZone: 'Europe/Stockholm' },
+                    availabilityViewInterval: 30
+                  })
+                });
 
-              const scheduleData = await res.json();
-              context.log('📊 Graph response:', scheduleData);
+                const scheduleData = await res.json();
+                context.log('📊 Graph response:', scheduleData);
 
-              const availableRoom = scheduleData.value.find(s => !s.availabilityView.includes('1'));
-              if (!availableRoom) continue;
+                const availableRoom = scheduleData.value.find(s => !s.availabilityView.includes('1'));
+                if (!availableRoom) continue;
+              } catch (err) {
+                context.log('⚠️ Misslyckades hämta Graph schema:', err.message);
+                continue;
+              }
 
             } catch (err) {
               context.log('⚠️ Graph API-rumskontroll misslyckades:', err.message);
