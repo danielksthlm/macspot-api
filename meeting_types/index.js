@@ -1,7 +1,8 @@
 import { Pool } from 'pg';
 
+let pool;
+
 export default async function (context, req) {
-  let pool;
   if (!pool) {
     pool = new Pool({
       user: process.env.PGUSER,
