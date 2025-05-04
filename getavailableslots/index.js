@@ -6,6 +6,7 @@ export default async function (context, req) {
   context.log('📥 Funktion getavailableslots anropad');
 
   const { email, meeting_type } = req.body || {};
+  context.log('📧 Email:', email, '📅 Mötestyp:', meeting_type);
   if (!email || !meeting_type) {
     context.res = {
       status: 400,
@@ -26,6 +27,8 @@ export default async function (context, req) {
     const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
     const metadata = contact?.metadata || {};
+    context.log('👤 Kontakt hittad:', contact);
+    context.log('📍 Metadata-adress:', metadata?.address);
 
     // 📦 Hämta alla inställningar
     const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
@@ -43,6 +46,7 @@ export default async function (context, req) {
         settings[row.key] = row.value;
       }
     }
+    context.log('⚙️ Inställningar laddade:', Object.keys(settings));
 
     const meetingLengths = {
       atClient: settings.default_meeting_length_atClient,
@@ -91,6 +95,8 @@ export default async function (context, req) {
           );
           if (conflictRes.rowCount > 0) continue;
 
+          context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
+
           // 🧭 Kontrollera restid med Apple Maps
           try {
             const jwt = require('jsonwebtoken');
@@ -119,6 +125,7 @@ export default async function (context, req) {
 
             const tokenData = await tokenRes.json();
             const accessToken = tokenData.accessToken;
+            context.log('🔑 Apple token hämtad');
             if (!accessToken) continue;
 
             const fromAddress = meeting_type === 'atClient'
@@ -129,11 +136,15 @@ export default async function (context, req) {
               ? metadata.address || settings.default_home_address
               : settings.default_office_address;
 
+            context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
+
             const url = new URL('https://maps-api.apple.com/v1/directions');
             url.searchParams.append('origin', fromAddress);
             url.searchParams.append('destination', toAddress);
             url.searchParams.append('transportType', 'automobile');
             url.searchParams.append('departureTime', start.toISOString());
+
+            context.log('📡 Maps request URL:', url.toString());
 
             const res = await fetch(url.toString(), {
               headers: {
@@ -144,6 +155,8 @@ export default async function (context, req) {
             const data = await res.json();
             const durationSec = data.routes?.[0]?.durationSeconds;
             const travelTimeMin = Math.round((durationSec || 0) / 60);
+
+            context.log('⏱️ Restid:', travelTimeMin, 'min');
 
             const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
             if (travelTimeMin === 0 || travelTimeMin > fallback) continue;
@@ -169,9 +182,12 @@ export default async function (context, req) {
 
               const tokenData = await tokenRes.json();
               const accessToken = tokenData.access_token;
+              context.log('📞 Graph token hämtad');
               if (!accessToken) continue;
 
               const roomList = settings.available_meeting_room || [];
+              context.log('🏢 Rumslista:', roomList);
+
               const res = await fetch('https://graph.microsoft.com/v1.0/users/daniel@klrab.se/calendar/getSchedule', {
                 method: 'POST',
                 headers: {
@@ -187,6 +203,8 @@ export default async function (context, req) {
               });
 
               const scheduleData = await res.json();
+              context.log('📊 Graph response:', scheduleData);
+
               const availableRoom = scheduleData.value.find(s => !s.availabilityView.includes('1'));
               if (!availableRoom) continue;
 
@@ -196,6 +214,7 @@ export default async function (context, req) {
             }
           }
 
+          context.log('✅ Slot godkänd:', start.toISOString());
           // ✅ Lägg till slot
           slots.push(start.toISOString());
         }
