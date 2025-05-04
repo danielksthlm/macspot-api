@@ -6,27 +6,24 @@ const pool = new Pool({
 });
 
 export default async function (context, req) {
-  context.log("🧪 Funktion startade");
+  context.log("🧪 meeting_types körs");
 
   try {
     const client = await pool.connect();
-    context.log("✅ Ansluten till databasen");
-
-    const result = await client.query("SELECT value FROM booking_settings WHERE key = 'meeting_types'");
+    const result = await client.query(
+      "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
+    );
     client.release();
-
-    context.log("📦 Query-resultat:", result?.rows);
 
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: result?.rows?.[0]?.value
+      body: result.rows?.[0]?.value
     };
   } catch (err) {
-    context.log("❌ DB-fel:", err.message);
+    context.log("❌ Fel i meeting_types:", err.message);
     context.res = {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
       body: { error: err.message }
     };
   }
