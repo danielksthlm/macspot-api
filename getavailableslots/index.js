@@ -591,9 +591,11 @@ export default async function (context, req) {
       status: 500,
       body: { error: err.message }
     };
+    return;
   } finally {
     if (pool && typeof pool.end === 'function') {
       await pool.end();
     }
+    return;
   }
 }
