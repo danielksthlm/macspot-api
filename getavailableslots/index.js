@@ -148,7 +148,8 @@ export default async function (context, req) {
     // Ny cache per dag+timme+mötestyp för Graph API
     const graphHourlyCache = {}; // ny cache per dag+timme
 
-    for (let i = 1; i <= 14; i++) {
+    const maxDays = settings.max_days_in_advance || 14;
+    for (let i = 1; i <= maxDays; i++) {
       const day = new Date();
       day.setDate(now.getDate() + i);
       const dayStr = day.toISOString().split('T')[0];
