@@ -568,6 +568,7 @@ export default async function (context, req) {
       status: 200,
       body: { slots: chosen }
     };
+    return;
 
     if (!context.res) {
       context.res = {
