@@ -97,6 +97,7 @@ export default async function (context, req) {
       }
     }
     context.log('⚙️ Inställningar laddade:', Object.keys(settings));
+    context.log(`🕓 Öppettider enligt inställningar: ${settings.open_time}–${settings.close_time}`);
     const requiredKeys = [
       'default_office_address',
       'default_home_address',
@@ -155,7 +156,9 @@ export default async function (context, req) {
       const dayStr = day.toISOString().split('T')[0];
 
       // 🧠 Kontrollera om slot redan finns i available_slots_cache
-      for (let hour = 8; hour <= 16; hour++) {
+      const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
+      const closeHour = parseInt((settings.close_time || '16:00').split(':')[0], 10);
+      for (let hour = openHour; hour <= closeHour; hour++) {
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
         try {
