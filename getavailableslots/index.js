@@ -250,12 +250,12 @@ export default async function (context, req) {
             try {
               let accessToken;
               try {
-                const tokenRes = await fetch('https://login.microsoftonline.com/' + process.env.MS365_TENANT_ID + '/oauth2/v2.0/token', {
+                const tokenRes = await fetch('https://login.microsoftonline.com/' + process.env.GRAPH_TENANT_ID + '/oauth2/v2.0/token', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                   body: new URLSearchParams({
-                    client_id: process.env.MS365_CLIENT_ID,
-                    client_secret: process.env.MS365_CLIENT_SECRET,
+                    client_id: process.env.GRAPH_CLIENT_ID,
+                    client_secret: process.env.GRAPH_CLIENT_SECRET,
                     scope: 'https://graph.microsoft.com/.default',
                     grant_type: 'client_credentials'
                   })
@@ -267,6 +267,7 @@ export default async function (context, req) {
                   context.log('⚠️ Ingen Graph accessToken – hoppar över slot');
                   continue;
                 }
+                context.log('🌐 Graph via MacSpot Debug App (guest)');
                 context.log('📞 Graph token hämtad');
               } catch (err) {
                 context.log('⚠️ Misslyckades hämta Graph token:', err.message);
@@ -277,7 +278,7 @@ export default async function (context, req) {
               context.log('🏢 Rumslista:', roomList);
 
               try {
-                const res = await fetch('https://graph.microsoft.com/v1.0/users/daniel@klrab.se/calendar/getSchedule', {
+                const res = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendar/getSchedule`, {
                   method: 'POST',
                   headers: {
                     Authorization: `Bearer ${accessToken}`,
