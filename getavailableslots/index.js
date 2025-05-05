@@ -88,7 +88,6 @@ export default async function (context, req) {
     // Ny cache per dag+timme+mötestyp för Graph API
     const graphHourlyCache = {}; // ny cache per dag+timme
 
-    const maxDays = settings.max_days_in_advance || 14;
     for (let i = 1; i <= maxDays; i++) {
       const day = new Date();
       day.setDate(now.getDate() + i);
@@ -181,6 +180,8 @@ export default async function (context, req) {
           if (missing.length > 0) {
             context.log.warn('⚠️ Saknade settings-nycklar:', missing);
           }
+
+          const maxDays = settings.max_days_in_advance || 14;
 
           // Flytta hit kod som behöver settings (meetingLengths, requestedLength, lengths)
           const meetingLengths = {
