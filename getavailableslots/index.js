@@ -56,6 +56,10 @@ export default async function (context, req) {
     const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
     const metadata = contact?.metadata || {};
+    const fullAddress = [metadata.address, metadata.postal_number, metadata.city]
+      .filter(Boolean)
+      .join(', ');
+    context.log('📍 Fullständig kundadress:', fullAddress);
     context.log('👤 Kontakt hittad:', contact);
     context.log('📍 Metadata-adress:', metadata?.address);
 
@@ -319,10 +323,10 @@ export default async function (context, req) {
 
               const fromAddress = meeting_type === 'atClient'
                 ? settings.default_office_address
-                : metadata.address || settings.default_home_address;
+                : fullAddress || settings.default_home_address;
 
               const toAddress = meeting_type === 'atClient'
-                ? metadata.address || settings.default_home_address
+                ? fullAddress || settings.default_home_address
                 : settings.default_office_address;
 
               context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
@@ -367,7 +371,11 @@ export default async function (context, req) {
             }
           }
           const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
-          if (appleCache[slotIso] > fallback) continue;
+          context.log(`🚦 Fallback restidsgräns: ${fallback} min`);
+          if (appleCache[slotIso] > fallback) {
+            context.log(`❌ Slot avvisad: restid ${appleCache[slotIso]} > fallback ${fallback}`);
+            continue;
+          }
 
           // Kontrollera Graph API schema för atOffice, hoppa om ej tillgängligt
           if (meeting_type === 'atOffice') {
