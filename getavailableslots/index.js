@@ -96,7 +96,16 @@ export default async function (context, req) {
       Teams: settings.default_meeting_length_digital
     };
 
-    const lengths = meetingLengths[meeting_type] || [30];
+    const requestedLength = parseInt(req.body.meeting_length, 10);
+    if (!requestedLength || isNaN(requestedLength)) {
+      context.res = {
+        status: 400,
+        body: { error: "meeting_length måste anges (t.ex. 60)" }
+      };
+      return;
+    }
+    context.log('📐 Möteslängd vald av kund:', requestedLength);
+    
     const now = new Date();
     // const slots = [];
     const slotMap = {}; // dag_fm/em → [{ iso, score }]
