@@ -1,11 +1,7 @@
 import psycopg2
 import json
-from pathlib import Path
 from datetime import datetime
-from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
-
-# Skapa en mapp för sync-data
-Path("sync_outbox").mkdir(exist_ok=True)
+from config import LOCAL_DB_CONFIG
 
 # Anslutning till lokal PostgreSQL
 conn = psycopg2.connect(**LOCAL_DB_CONFIG)

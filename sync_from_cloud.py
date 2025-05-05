@@ -1,18 +1,6 @@
 import psycopg2
 import json
-from pathlib import Path
-import subprocess
-from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
-
-def visa_notis(titel, meddelande):
-    try:
-        subprocess.run([
-            "/opt/homebrew/bin/terminal-notifier",
-            "-title", titel,
-            "-message", meddelande.replace("!", "\\!")
-        ], check=True)
-    except Exception as e:
-        print(f"❌ Kunde inte visa notis: {e}")
+from config import LOCAL_DB_CONFIG
 
 def connect_db(config):
     return psycopg2.connect(**config)
@@ -21,14 +9,9 @@ def apply_change(cur, table, operation, payload):
     if operation == "INSERT":
         cols = ", ".join(payload.keys())
         placeholders = ", ".join(["%s"] * len(payload))
-        values = list(payload.values())
         sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING"
-        params = [json.dumps(v) if isinstance(v, dict) else v for v in values]
-        print(f"📝 SQL: {cur.mogrify(sql, params).decode()}")
-        cur.execute(sql, params)
+        cur.execute(sql, [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()])
     elif operation == "UPDATE":
-        sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
-        values = [payload[col] for col in payload if col != "id"]
         if table == "contact" and "metadata" in payload:
             cur.execute(f"SELECT metadata FROM {table} WHERE id = %s", (payload["id"],))
             row = cur.fetchone()
@@ -37,20 +20,18 @@ def apply_change(cur, table, operation, payload):
                 incoming_metadata = payload["metadata"] if isinstance(payload["metadata"], dict) else json.loads(payload["metadata"])
                 existing_metadata.update(incoming_metadata)
                 payload["metadata"] = existing_metadata
+        sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
+        values = [json.dumps(payload[col]) if isinstance(payload[col], dict) else payload[col] for col in payload if col != "id"]
         values.append(payload["id"])
         sql = f"UPDATE {table} SET {sets} WHERE id = %s"
-        params = [json.dumps(v) if isinstance(v, dict) else v for v in values]
-        print(f"📝 SQL: {cur.mogrify(sql, params).decode()}")
-        cur.execute(sql, params)
+        cur.execute(sql, values)
     elif operation == "DELETE":
         sql = f"DELETE FROM {table} WHERE id = %s"
-        params = [payload["id"]]
-        print(f"📝 SQL: {cur.mogrify(sql, params).decode()}")
-        cur.execute(sql, params)
+        cur.execute(sql, [payload["id"]])
 
 def sync():
     print("🔗 Ansluter till remote databasen...")
-    remote_conn = connect_db(REMOTE_DB_CONFIG)
+    remote_conn = connect_db(LOCAL_DB_CONFIG)
     remote_cur = remote_conn.cursor()
 
     print("🔗 Ansluter till lokal databasen...")
@@ -80,7 +61,7 @@ def sync():
             apply_change(local_cur, table, operation, payload)
             print(f"✅ Utförde {operation} på {table}.")
             if table == "bookings" and operation == "INSERT":
-                visa_notis("📅 Ny bokning!", "En kund har precis bokat tid online.")
+                pass  # Notis borttagen
             local_cur.execute("""
                 INSERT INTO event_log (id, source, event_type, payload, received_at)
                 VALUES (gen_random_uuid(), %s, %s, %s, now())

@@ -1,6 +1,6 @@
 import psycopg2
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
 
 def connect_db(config):
@@ -22,8 +22,6 @@ def mark_as_processed(conn, change_id):
         conn.commit()
 
 def apply_change(conn, change, local_conn):
-    from datetime import timezone
-
     table_name, record_id, operation, payload = change[1], change[2], change[3], change[4]
     with conn.cursor() as cur:
         data = json.loads(payload) if isinstance(payload, str) else payload
@@ -59,39 +57,61 @@ def apply_change(conn, change, local_conn):
             columns = ', '.join(data.keys())
             placeholders = ', '.join(['%s'] * len(data))
             values = list(data.values())
-            if table_name in ['contact', 'bookings', 'event_log']:
-                update_clause = ', '.join([f"{k} = EXCLUDED.{k}" for k in data.keys() if k != 'id'])
-                cur.execute(
-                    f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) "
-                    f"ON CONFLICT (id) DO UPDATE SET {update_clause}",
-                    values
-                )
-            else:
-                cur.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", values)
-        if table_name == 'contact' and 'metadata' in data:
-            # Merge metadata with existing remote value
+            cur.execute(
+                f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) "
+                f"ON CONFLICT (id) DO UPDATE SET "
+                f"{', '.join([f'{k} = EXCLUDED.{k}' for k in data.keys() if k != 'id'])}",
+                values
+            )
+        if 'metadata' in data and table_name == 'contact':
+            # Merge metadata with existing remote value and ensure JSON string
             cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))
             row = cur.fetchone()
-            if row and isinstance(row[0], dict):
-                existing_metadata = row[0]
-            elif row and isinstance(row[0], str):
-                existing_metadata = json.loads(row[0])
+            if row and row[0]:
+                if isinstance(row[0], dict):
+                    existing_metadata = row[0]
+                else:
+                    existing_metadata = json.loads(row[0])
             else:
                 existing_metadata = {}
-            # Update with incoming keys
             incoming_metadata = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
             existing_metadata.update(incoming_metadata)
             data['metadata'] = json.dumps(existing_metadata)
-        elif operation == 'UPDATE':
+
+        if operation == 'UPDATE':
+            # Check if local updated_at is newer than remote before UPDATE
+            if 'updated_at' in data:
+                cur.execute(f"SELECT updated_at FROM {table_name} WHERE id = %s", (record_id,))
+                row = cur.fetchone()
+                if row and row[0] and isinstance(row[0], datetime):
+                    remote_ts = row[0]
+                    local_ts = datetime.fromisoformat(data['updated_at'])
+                    print(f"🕓 local_ts (from payload): {local_ts}")
+                    print(f"🕓 remote_ts (from DB):     {remote_ts}")
+                    if local_ts <= remote_ts:
+                        print(f"↩️  Hoppar över äldre UPDATE på {table_name} (id={record_id}) – lokalt {local_ts} <= moln {remote_ts}")
+                        mark_as_processed(local_conn, change[0])
+                        return
+                    else:
+                        print(f"✅ Lokala ändringen är nyare – uppdaterar {table_name} (id={record_id})")
             columns = ', '.join(data.keys())
             placeholders = ', '.join(['%s'] * len(data))
             values = list(data.values())
-            update_clause = ', '.join([f"{k} = EXCLUDED.{k}" for k in data.keys() if k != 'id'])
+            update_keys = [k for k in data.keys() if k != 'id']
+            update_set = ', '.join([f"{k} = %s" for k in update_keys])
+            update_values = [data[k] for k in update_keys]
+            update_values.append(record_id)
             cur.execute(
-                f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) "
-                f"ON CONFLICT (id) DO UPDATE SET {update_clause}",
-                values
+                f"UPDATE {table_name} SET {update_set} WHERE id = %s",
+                update_values
             )
+            cur.execute(f"SELECT metadata, updated_at FROM {table_name} WHERE id = %s", (record_id,))
+            updated_row = cur.fetchone()
+            if updated_row is None:
+                print(f"❗ Ingen rad hittades efter UPDATE – kontrollera att id={record_id} finns i {table_name}.")
+            else:
+                updated_address = updated_row[0].get('address', 'saknas') if updated_row[0] else 'saknas'
+                print(f"🧾 Uppdaterat i moln-DB: address = {updated_address}, updated_at = {updated_row[1]}")
         elif operation == 'DELETE':
             cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
         conn.commit()
