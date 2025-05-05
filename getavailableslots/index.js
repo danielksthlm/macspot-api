@@ -570,12 +570,11 @@ export default async function (context, req) {
       context.log(`📅 ${key}: testade ${list.length} kandidater`);
     });
 
+    await pool.end();
     context.res = {
       status: 200,
       body: { slots: chosen }
     };
-    // Flytta pool.end() hit – endast efter lyckat svar
-    await pool.end();
     return;
   } catch (err) {
     context.log('❌ Fel i getavailableslots:', err.message);
