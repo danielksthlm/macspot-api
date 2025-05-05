@@ -161,6 +161,10 @@ export default async function (context, req) {
       for (let hour = openHour; hour <= closeHour; hour++) {
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
+        if (slotGroupPicked[`${dayStr}_${slotPart}`]) {
+          context.log(`⏩ Skippar ${dayStr}_${slotPart} – slot redan vald`);
+          continue;
+        }
         try {
           const cachedSlot = await db.query(`
             SELECT slot_iso
