@@ -301,6 +301,16 @@ export default async function (context, req) {
           const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
           if (bookedMinutes + len > (settings.max_weekly_booking_minutes || 99999)) continue;
 
+          // 🍽️ Uteslut slot som helt eller delvis överlappar lunch
+          const lunchStart = settings.lunch_start || '11:45';
+          const lunchEnd = settings.lunch_end || '13:15';
+          const lunchStartDate = new Date(start.toISOString().split('T')[0] + 'T' + lunchStart + ':00');
+          const lunchEndDate = new Date(start.toISOString().split('T')[0] + 'T' + lunchEnd + ':00');
+          if (start < lunchEndDate && end > lunchStartDate) {
+            context.log(`🍽️ Slot avvisad: överlappar lunch (${lunchStart}–${lunchEnd})`);
+            continue;
+          }
+
           // ⛔ Krockar (förenklad mock – riktig logik kan ersättas senare)
           const conflictRes = await db.query(
             `SELECT 1 FROM bookings
@@ -462,6 +472,13 @@ export default async function (context, req) {
             continue;
           }
 
+          // 🍽️ Undvik restid mitt i lunch
+          const arrivalTime = new Date(start.getTime() - appleCache[slotIso] * 60000);
+          if (arrivalTime >= lunchStartDate && arrivalTime < lunchEndDate) {
+            context.log(`🍽️ Slot avvisad: restid skär i lunch (${arrivalTime.toISOString()} inom lunch)`);
+            continue;
+          }
+
           // Kontrollera Graph API schema för atOffice, hoppa om ej tillgängligt
           if (meeting_type === 'atOffice') {
             const scheduleData = graphHourlyCache[graphHourKey];
@@ -481,6 +498,18 @@ export default async function (context, req) {
               context.log('⚠️ Ogiltig Graph response:', scheduleData);
               continue;
             }
+          }
+
+          // ⏰ Kontrollera travel_time_window_start/end
+          const travelStart = arrivalTime;
+          const travelHour = travelStart.getHours();
+          const windowStart = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
+          const windowEnd = parseInt((settings.travel_time_window_end || '23:00').split(':')[0], 10);
+          const requiresApproval = settings.require_approval || [];
+
+          if (travelHour < windowStart || travelHour > windowEnd) {
+            context.log(`⏰ Slot kräver godkännande: restid utanför tillåtet fönster (${travelHour}:00)`);
+            if (!requiresApproval.includes(true)) continue;
           }
 
           context.log('✅ Slot godkänd:', start.toISOString());
