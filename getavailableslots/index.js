@@ -122,6 +122,9 @@ export default async function (context, req) {
     const graphCache = {}; // key = dayStr_fm/em, value = Graph schedule data
     const appleCache = {}; // key = slot ISO, value = travel time (minutes)
 
+    // Ny cache per dag+timme+mötestyp för Graph API
+    const graphHourlyCache = {}; // ny cache per dag+timme
+
     for (let i = 1; i <= 14; i++) {
       const day = new Date();
       day.setDate(now.getDate() + i);
@@ -129,9 +132,15 @@ export default async function (context, req) {
 
       for (let hour = 8; hour <= 16; hour++) {
         const graphKey = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+        // Nyckel för caching per timme, dag och mötestyp
+        const graphHourKey = `${dayStr}_${hour}_${meeting_type}`;
 
-        // 🏢 Kontrollera tillgängligt mötesrum via Graph API för atOffice (cache per day-part)
-        if (meeting_type === 'atOffice' && !graphCache[graphKey]) {
+        // Flytta ut startTime och endTime så de kan återanvändas
+        const startTime = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':00:00');
+        const endTime = new Date(startTime.getTime() + Math.max(...lengths) * 60000);
+
+        // 🏢 Kontrollera tillgängligt mötesrum via Graph API för atOffice (cache per dag+timme+mötestyp)
+        if (meeting_type === 'atOffice' && !graphHourlyCache[graphHourKey]) {
           try {
             let accessToken;
             try {
@@ -169,9 +178,7 @@ export default async function (context, req) {
               context.log('🏢 Rumslista:', roomList);
 
               try {
-                const startTime = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':00:00');
-                const endTime = new Date(startTime.getTime() + Math.max(...lengths) * 60000);
-
+                // startTime och endTime är redan definierade ovan
                 const res = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendar/getSchedule`, {
                   method: 'POST',
                   headers: {
@@ -186,11 +193,12 @@ export default async function (context, req) {
                   })
                 });
 
-                graphCache[graphKey] = await res.json();
-                context.log('📊 Graph response cached for', graphKey);
+                const scheduleData = await res.json();
+                graphHourlyCache[graphHourKey] = scheduleData;
+                context.log('📊 Graph response cached for', graphHourKey);
               } catch (err) {
                 context.log('⚠️ Misslyckades hämta Graph schema:', err.message);
-                graphCache[graphKey] = null;
+                graphHourlyCache[graphHourKey] = null;
               }
             }
           } catch (err) {
@@ -333,7 +341,15 @@ export default async function (context, req) {
 
               // --- Travel time cache per address pair ---
               const travelKey = `${fromAddress}->${toAddress}`;
+              // --- Additional cache per hour ---
+              const hourKey = `${fromAddress}|${toAddress}|${start.getHours()}`;
               let travelTimeMin;
+              if (travelTimeCache[hourKey] !== undefined) {
+                travelTimeMin = travelTimeCache[hourKey];
+                context.log('📍 Återanvänder restid (timvis cache):', travelTimeMin, 'min');
+                appleCache[slotIso] = travelTimeMin;
+                continue;
+              }
               if (travelTimeCache[travelKey] !== undefined) {
                 travelTimeMin = travelTimeCache[travelKey];
                 context.log('📍 Återanvänder restid från cache:', travelTimeMin, 'min');
@@ -357,10 +373,12 @@ export default async function (context, req) {
                   const durationSec = data.routes?.[0]?.durationSeconds;
                   travelTimeMin = Math.round((durationSec || 0) / 60);
                   travelTimeCache[travelKey] = travelTimeMin;
+                  travelTimeCache[hourKey] = travelTimeMin; // Spara även per timme
                 } catch (err) {
                   context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
                   travelTimeMin = Number.MAX_SAFE_INTEGER;
                   travelTimeCache[travelKey] = travelTimeMin;
+                  travelTimeCache[hourKey] = travelTimeMin; // Spara även per timme
                 }
               }
               context.log('⏱️ Restid:', travelTimeMin, 'min');
@@ -379,7 +397,7 @@ export default async function (context, req) {
 
           // Kontrollera Graph API schema för atOffice, hoppa om ej tillgängligt
           if (meeting_type === 'atOffice') {
-            const scheduleData = graphCache[graphKey];
+            const scheduleData = graphHourlyCache[graphHourKey];
             if (!scheduleData) continue;
             const errors = (scheduleData.value || [])
               .filter(s => s.error)
