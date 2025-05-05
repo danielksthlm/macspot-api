@@ -81,11 +81,9 @@ jobs:
         run: unzip release.zip
       
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_AE9C6EED90184ADFA69B5B23CF701596 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_69313E9E1CB8456FBAD31C9DF70A3D67 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_23AC0E7BB91B40C59E2FA1C1E53D75FD }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
