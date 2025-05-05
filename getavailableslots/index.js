@@ -386,11 +386,14 @@ export default async function (context, req) {
               .map(s => ({ room: s.scheduleId, message: s.error.message }));
             context.log('🧨 Graph errors per rum:', errors);
 
-            const availableRoom = Array.isArray(scheduleData.value)
-              ? scheduleData.value.find(s => s.availabilityView && !s.availabilityView.includes('1'))
-              : null;
-            if (!availableRoom) {
-              context.log('⚠️ Inget tillgängligt rum i Graph response:', scheduleData.value);
+            if (Array.isArray(scheduleData.value)) {
+              const availableRoom = scheduleData.value.find(s => Array.isArray(s.availabilityView) && !s.availabilityView.includes('1'));
+              if (!availableRoom) {
+                context.log('⚠️ Inget tillgängligt rum i Graph response:', scheduleData.value);
+                continue;
+              }
+            } else {
+              context.log('⚠️ Ogiltig Graph response:', scheduleData);
               continue;
             }
           }
