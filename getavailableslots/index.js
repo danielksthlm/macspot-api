@@ -101,14 +101,86 @@ export default async function (context, req) {
     // const slots = [];
     const slotMap = {}; // dag_fm/em → [{ iso, score }]
 
+    const graphCache = {}; // key = dayStr_fm/em, value = Graph schedule data
+    const appleCache = {}; // key = slot ISO, value = travel time (minutes)
+
     for (let i = 1; i <= 14; i++) {
       const day = new Date();
       day.setDate(now.getDate() + i);
       const dayStr = day.toISOString().split('T')[0];
 
       for (let hour = 8; hour <= 16; hour++) {
+        const graphKey = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+
+        // 🏢 Kontrollera tillgängligt mötesrum via Graph API för atOffice (cache per day-part)
+        if (meeting_type === 'atOffice' && !graphCache[graphKey]) {
+          try {
+            let accessToken;
+            try {
+              const tokenRes = await fetch('https://login.microsoftonline.com/' + process.env.GRAPH_TENANT_ID + '/oauth2/v2.0/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  client_id: process.env.GRAPH_CLIENT_ID,
+                  client_secret: process.env.GRAPH_CLIENT_SECRET,
+                  scope: 'https://graph.microsoft.com/.default',
+                  grant_type: 'client_credentials'
+                })
+              });
+
+              const tokenData = await tokenRes.json();
+              accessToken = tokenData.access_token;
+              if (!accessToken) {
+                context.log('⚠️ Ingen Graph accessToken – hoppar över slotgrupp');
+                graphCache[graphKey] = null;
+              } else {
+                context.log('🌐 Graph via MacSpot Debug App (guest)');
+                context.log('📞 Graph token hämtad');
+              }
+            } catch (err) {
+              context.log('⚠️ Misslyckades hämta Graph token:', err.message);
+              graphCache[graphKey] = null;
+            }
+
+            if (accessToken) {
+              const roomList = settings.available_meeting_room || [];
+              context.log('🏢 Rumslista:', roomList);
+
+              try {
+                const startTime = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':00:00');
+                const endTime = new Date(startTime.getTime() + Math.max(...lengths) * 60000);
+
+                const res = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendar/getSchedule`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    schedules: roomList,
+                    startTime: { dateTime: startTime.toISOString(), timeZone: 'Europe/Stockholm' },
+                    endTime: { dateTime: endTime.toISOString(), timeZone: 'Europe/Stockholm' },
+                    availabilityViewInterval: 30
+                  })
+                });
+
+                graphCache[graphKey] = await res.json();
+                context.log('📊 Graph response cached for', graphKey);
+              } catch (err) {
+                context.log('⚠️ Misslyckades hämta Graph schema:', err.message);
+                graphCache[graphKey] = null;
+              }
+            }
+          } catch (err) {
+            context.log('⚠️ Graph API-rumskontroll misslyckades:', err.message);
+            graphCache[graphKey] = null;
+          }
+        }
+
         for (const len of lengths) {
-          const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
+          const start = new Date();
+          start.setDate(day.getDate());
+          start.setHours(hour, 0, 0, 0);
           const end = new Date(start.getTime() + len * 60000);
 
           // 🚫 Kolla helg
@@ -152,7 +224,7 @@ export default async function (context, req) {
 
           const slotStart = start.getTime();
           const slotEnd = end.getTime();
-          const hour = start.getHours(); // moved up before key usage
+          const hourSlot = start.getHours();
           const bufferMin = settings.buffer_between_meetings || 15;
           const bufferMs = bufferMin * 60 * 1000;
 
@@ -170,7 +242,7 @@ export default async function (context, req) {
           }
           if (!isIsolated) continue;
 
-          const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+          const key = `${dayStr}_${hourSlot < 12 ? 'fm' : 'em'}`;
           context.log(`🕵️‍♀️ Slotgruppsnyckel: ${key}`);
           if (!slotMap[key]) slotMap[key] = [];
 
@@ -181,152 +253,104 @@ export default async function (context, req) {
           });
           context.log(`⭐️ Slot score (isolation): ${isFinite(minDist) ? minDist : 99999}`);
 
-          // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback
-          try {
-            const teamId = process.env.APPLE_MAPS_TEAM_ID;
-            const keyId = process.env.APPLE_MAPS_KEY_ID;
-            const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
-
-            const token = jwt.sign({}, privateKey, {
-              algorithm: 'ES256',
-              issuer: teamId,
-              keyid: keyId,
-              expiresIn: '1h',
-              header: {
-                alg: 'ES256',
-                kid: keyId,
-                typ: 'JWT'
-              }
-            });
-
-            let accessToken;
+          // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback (cache per slot)
+          const slotIso = start.toISOString();
+          if (!appleCache[slotIso]) {
             try {
-              const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
-                headers: {
-                  Authorization: `Bearer ${token}`
+              const teamId = process.env.APPLE_MAPS_TEAM_ID;
+              const keyId = process.env.APPLE_MAPS_KEY_ID;
+              const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+
+              const token = jwt.sign({}, privateKey, {
+                algorithm: 'ES256',
+                issuer: teamId,
+                keyid: keyId,
+                expiresIn: '1h',
+                header: {
+                  alg: 'ES256',
+                  kid: keyId,
+                  typ: 'JWT'
                 }
               });
 
-              const tokenData = await tokenRes.json();
-              accessToken = tokenData.accessToken;
-              if (!accessToken) {
-                context.log('⚠️ Ingen Apple Maps accessToken – hoppar över slot');
-                continue;
-              }
-              context.log('🔑 Apple token hämtad');
-            } catch (err) {
-              context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
-              continue;
-            }
-
-            const fromAddress = meeting_type === 'atClient'
-              ? settings.default_office_address
-              : metadata.address || settings.default_home_address;
-
-            const toAddress = meeting_type === 'atClient'
-              ? metadata.address || settings.default_home_address
-              : settings.default_office_address;
-
-            context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
-
-            const url = new URL('https://maps-api.apple.com/v1/directions');
-            url.searchParams.append('origin', fromAddress);
-            url.searchParams.append('destination', toAddress);
-            url.searchParams.append('transportType', 'automobile');
-            url.searchParams.append('departureTime', start.toISOString());
-
-            context.log('📡 Maps request URL:', url.toString());
-
-            try {
-              const res = await fetch(url.toString(), {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`
-                }
-              });
-
-              const data = await res.json();
-              const durationSec = data.routes?.[0]?.durationSeconds;
-              const travelTimeMin = Math.round((durationSec || 0) / 60);
-
-              context.log('⏱️ Restid:', travelTimeMin, 'min');
-
-              const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
-              if (travelTimeMin === 0 || travelTimeMin > fallback) continue;
-            } catch (err) {
-              context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
-              continue;
-            }
-
-          } catch (err) {
-            context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
-            // Om restidskontroll misslyckas, tillåt ändå slot
-          }
-
-          // 🏢 Kontrollera tillgängligt mötesrum via Graph API för atOffice
-          if (meeting_type === 'atOffice') {
-            try {
               let accessToken;
               try {
-                const tokenRes = await fetch('https://login.microsoftonline.com/' + process.env.GRAPH_TENANT_ID + '/oauth2/v2.0/token', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: new URLSearchParams({
-                    client_id: process.env.GRAPH_CLIENT_ID,
-                    client_secret: process.env.GRAPH_CLIENT_SECRET,
-                    scope: 'https://graph.microsoft.com/.default',
-                    grant_type: 'client_credentials'
-                  })
+                const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
+                  headers: {
+                    Authorization: `Bearer ${token}`
+                  }
                 });
 
                 const tokenData = await tokenRes.json();
-                accessToken = tokenData.access_token;
+                accessToken = tokenData.accessToken;
                 if (!accessToken) {
-                  context.log('⚠️ Ingen Graph accessToken – hoppar över slot');
+                  context.log('⚠️ Ingen Apple Maps accessToken – hoppar över slot');
+                  appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
                   continue;
                 }
-                context.log('🌐 Graph via MacSpot Debug App (guest)');
-                context.log('📞 Graph token hämtad');
+                context.log('🔑 Apple token hämtad');
               } catch (err) {
-                context.log('⚠️ Misslyckades hämta Graph token:', err.message);
+                context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
+                appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
                 continue;
               }
 
-              const roomList = settings.available_meeting_room || [];
-              context.log('🏢 Rumslista:', roomList);
+              const fromAddress = meeting_type === 'atClient'
+                ? settings.default_office_address
+                : metadata.address || settings.default_home_address;
+
+              const toAddress = meeting_type === 'atClient'
+                ? metadata.address || settings.default_home_address
+                : settings.default_office_address;
+
+              context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
+
+              const url = new URL('https://maps-api.apple.com/v1/directions');
+              url.searchParams.append('origin', fromAddress);
+              url.searchParams.append('destination', toAddress);
+              url.searchParams.append('transportType', 'automobile');
+              url.searchParams.append('departureTime', start.toISOString());
+
+              context.log('📡 Maps request URL:', url.toString());
 
               try {
-                const res = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendar/getSchedule`, {
-                  method: 'POST',
+                const res = await fetch(url.toString(), {
                   headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    schedules: roomList,
-                    startTime: { dateTime: start.toISOString(), timeZone: 'Europe/Stockholm' },
-                    endTime: { dateTime: end.toISOString(), timeZone: 'Europe/Stockholm' },
-                    availabilityViewInterval: 30
-                  })
+                    Authorization: `Bearer ${accessToken}`
+                  }
                 });
 
-                const scheduleData = await res.json();
-                context.log('📊 Graph response:', scheduleData);
-                const errors = (scheduleData.value || [])
-                  .filter(s => s.error)
-                  .map(s => ({ room: s.scheduleId, message: s.error.message }));
-                context.log('🧨 Graph errors per rum:', errors);
+                const data = await res.json();
+                const durationSec = data.routes?.[0]?.durationSeconds;
+                const travelTimeMin = Math.round((durationSec || 0) / 60);
 
-                const availableRoom = scheduleData.value.find(s => s.availabilityView && !s.availabilityView.includes('1'));
-                if (!availableRoom) continue;
+                context.log('⏱️ Restid:', travelTimeMin, 'min');
+
+                appleCache[slotIso] = travelTimeMin;
               } catch (err) {
-                context.log('⚠️ Misslyckades hämta Graph schema:', err.message);
-                continue;
+                context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
+                appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
               }
 
             } catch (err) {
-              context.log('⚠️ Graph API-rumskontroll misslyckades:', err.message);
-              continue;
+              context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
+              appleCache[slotIso] = 0; // tillåt ändå slot
             }
+          }
+          const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
+          if (appleCache[slotIso] > fallback) continue;
+
+          // Kontrollera Graph API schema för atOffice, hoppa om ej tillgängligt
+          if (meeting_type === 'atOffice') {
+            const scheduleData = graphCache[graphKey];
+            if (!scheduleData) continue;
+            const errors = (scheduleData.value || [])
+              .filter(s => s.error)
+              .map(s => ({ room: s.scheduleId, message: s.error.message }));
+            context.log('🧨 Graph errors per rum:', errors);
+
+            const availableRoom = scheduleData.value.find(s => s.availabilityView && !s.availabilityView.includes('1'));
+            if (!availableRoom) continue;
           }
 
           context.log('✅ Slot godkänd:', start.toISOString());
