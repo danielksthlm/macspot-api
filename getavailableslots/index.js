@@ -152,10 +152,9 @@ export default async function (context, req) {
 
           const slotStart = start.getTime();
           const slotEnd = end.getTime();
+          const hour = start.getHours(); // moved up before key usage
           const bufferMin = settings.buffer_between_meetings || 15;
           const bufferMs = bufferMin * 60 * 1000;
-          // Ensure hour is declared here and only once, before key
-          const hour = start.getHours();
 
           // Avvisa om sloten ligger för nära annan bokning
           let isIsolated = true;
@@ -335,9 +334,12 @@ export default async function (context, req) {
     }
 
     const chosen = [];
-    Object.entries(slotMap).forEach(([_, candidates]) => {
+    Object.entries(slotMap).forEach(([key, candidates]) => {
       const best = candidates.sort((a, b) => b.score - a.score)[0];
-      if (best) chosen.push(best.iso);
+      if (best) {
+        context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
+        chosen.push(best.iso);
+      }
     });
 
     context.log('📊 Antal godkända slots (totalt):', chosen.length);
