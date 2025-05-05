@@ -557,9 +557,12 @@ export default async function (context, req) {
     }
 
     const chosen = [];
+    context.log('🧮 Börjar välja bästa slot per grupp...');
     Object.entries(slotMap).forEach(([key, candidates]) => {
+      context.log(`📅 Utvärderar slotgrupp ${key} med ${candidates.length} kandidater`);
       const best = candidates.sort((a, b) => b.score - a.score)[0];
       if (best) {
+        context.log(`✅ Valde slot ${best.iso} för grupp ${key}`);
         context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
         context.log(`🏆 Vald slot för ${key}: ${best.iso} (score: ${best.score})`);
         chosen.push(best.iso);
@@ -575,10 +578,12 @@ export default async function (context, req) {
     //   context.log(`📅 ${key}: testade ${list.length} kandidater`);
     // });
 
+    context.log('📤 Förbereder svar med valda slots:', chosen);
     context.res = {
       status: 200,
       body: { slots: chosen }
     };
+    context.log('🚀 Svar skickas till klient');
     return;
   } catch (err) {
     context.log('❌ Fel i getavailableslots:', err.message);
