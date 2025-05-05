@@ -84,7 +84,8 @@ export default async function (context, req) {
 
     const lengths = meetingLengths[meeting_type] || [30];
     const now = new Date();
-    const slots = [];
+    // const slots = [];
+    const slotMap = {}; // dag_fm/em → [{ iso, score }]
 
     for (let i = 1; i <= 14; i++) {
       const day = new Date();
@@ -122,6 +123,46 @@ export default async function (context, req) {
           if (conflictRes.rowCount > 0) continue;
 
           context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
+
+          // Hämta dagens bokningar
+          const existingRes = await db.query(
+            `SELECT start_time, end_time FROM bookings
+             WHERE start_time::date = $1`,
+            [dayStr]
+          );
+          const existing = existingRes.rows.map(r => ({
+            start: new Date(r.start_time).getTime(),
+            end: new Date(r.end_time).getTime()
+          }));
+
+          const slotStart = start.getTime();
+          const slotEnd = end.getTime();
+          const bufferMin = settings.buffer_between_meetings || 15;
+          const bufferMs = bufferMin * 60 * 1000;
+
+          // Avvisa om sloten ligger för nära annan bokning
+          let isIsolated = true;
+          for (const e of existing) {
+            if (
+              (Math.abs(slotStart - e.end) < bufferMs) ||
+              (Math.abs(slotEnd - e.start) < bufferMs) ||
+              (slotStart < e.end && slotEnd > e.start)
+            ) {
+              isIsolated = false;
+              break;
+            }
+          }
+          if (!isIsolated) continue;
+
+          const hour = start.getHours();
+          const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+          if (!slotMap[key]) slotMap[key] = [];
+
+          const minDist = Math.min(...existing.map(e => Math.abs(slotStart - e.end)));
+          slotMap[key].push({
+            iso: start.toISOString(),
+            score: isFinite(minDist) ? minDist : 99999
+          });
 
           // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback
           try {
@@ -271,16 +312,22 @@ export default async function (context, req) {
           }
 
           context.log('✅ Slot godkänd:', start.toISOString());
-          // ✅ Lägg till slot
-          slots.push(start.toISOString());
+          // slots.push(start.toISOString());
         }
       }
     }
 
+    const chosen = [];
+    Object.entries(slotMap).forEach(([_, candidates]) => {
+      const best = candidates.sort((a, b) => b.score - a.score)[0];
+      if (best) chosen.push(best.iso);
+    });
+
     context.res = {
       status: 200,
-      body: { slots }
+      body: { slots: chosen }
     };
+    return;
   } catch (err) {
     context.log('❌ Fel i getavailableslots:', err.message);
     context.res = {
