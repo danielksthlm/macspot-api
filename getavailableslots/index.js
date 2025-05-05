@@ -15,10 +15,23 @@ export default async function (context, req) {
     return;
   }
 
+  const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
+  for (const key of requiredEnv) {
+    if (!process.env[key]) {
+      throw new Error(`Missing environment variable: ${key}`);
+    }
+  }
+  context.log.info('🔐 Environment variables verified');
+
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    user: process.env.PGUSER,
+    host: process.env.PGHOST,
+    database: process.env.PGDATABASE,
+    password: process.env.PGPASSWORD,
+    port: parseInt(process.env.PGPORT || '5432', 10),
     ssl: { rejectUnauthorized: false }
   });
+  context.log.info('✅ PostgreSQL pool created');
 
   try {
     const db = await pool.connect();
