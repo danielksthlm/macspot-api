@@ -171,6 +171,7 @@ export default async function (context, req) {
           if (!isIsolated) continue;
 
           const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+          context.log(`🕵️‍♀️ Slotgruppsnyckel: ${key}`);
           if (!slotMap[key]) slotMap[key] = [];
 
           const minDist = Math.min(...existing.map(e => Math.abs(slotStart - e.end)));
@@ -178,6 +179,7 @@ export default async function (context, req) {
             iso: start.toISOString(),
             score: isFinite(minDist) ? minDist : 99999
           });
+          context.log(`⭐️ Slot score (isolation): ${isFinite(minDist) ? minDist : 99999}`);
 
           // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback
           try {
