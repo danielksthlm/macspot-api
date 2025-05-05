@@ -571,11 +571,10 @@ export default async function (context, req) {
     context.log('📈 Slotmönsterfrekvens per timme/längd:', slotPatternFrequency);
 
     context.log('📊 Antal godkända slots (totalt):', chosen.length);
-    Object.entries(slotMap).forEach(([key, list]) => {
-      context.log(`📅 ${key}: testade ${list.length} kandidater`);
-    });
+    // Object.entries(slotMap).forEach(([key, list]) => {
+    //   context.log(`📅 ${key}: testade ${list.length} kandidater`);
+    // });
 
-    await pool.end();
     context.res = {
       status: 200,
       body: { slots: chosen }
@@ -588,6 +587,8 @@ export default async function (context, req) {
       body: { error: err.message }
     };
   } finally {
-    // (pool.end() moved to after successful response only)
+    if (pool && typeof pool.end === 'function') {
+      await pool.end();
+    }
   }
 }
