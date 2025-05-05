@@ -154,6 +154,8 @@ export default async function (context, req) {
           const slotEnd = end.getTime();
           const bufferMin = settings.buffer_between_meetings || 15;
           const bufferMs = bufferMin * 60 * 1000;
+          // Ensure hour is declared here and only once, before key
+          const hour = start.getHours();
 
           // Avvisa om sloten ligger för nära annan bokning
           let isIsolated = true;
@@ -169,7 +171,6 @@ export default async function (context, req) {
           }
           if (!isIsolated) continue;
 
-          const hour = start.getHours();
           const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
           if (!slotMap[key]) slotMap[key] = [];
 
