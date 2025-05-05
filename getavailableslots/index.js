@@ -49,17 +49,11 @@ export default async function (context, req) {
   try {
     const db = await pool.connect();
 
-    // 🛠️ Hämta kontaktmetadata (om finns) eller använd testmetadata för daniel@anynode.se
-    let metadata = {};
-    if (email === 'daniel@anynode.se') {
-      metadata = { address: 'Taxgatan 4, 115 45 Stockholm' };
-      context.log('👤 Använder testmetadata för daniel@anynode.se:', metadata);
-    } else {
-      const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
-      const contact = contactRes.rows[0];
-      metadata = contact?.metadata || {};
-      context.log('👤 Kontakt hittad:', contact);
-    }
+    // 🛠️ Hämta kontaktmetadata (om finns) från contact-tabellen
+    const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
+    const contact = contactRes.rows[0];
+    const metadata = contact?.metadata || {};
+    context.log('👤 Kontakt hittad:', contact);
     context.log('📍 Metadata-adress:', metadata?.address);
 
     // 📦 Hämta alla inställningar
@@ -79,6 +73,20 @@ export default async function (context, req) {
       }
     }
     context.log('⚙️ Inställningar laddade:', Object.keys(settings));
+    const requiredKeys = [
+      'default_office_address',
+      'default_home_address',
+      'fallback_travel_time_minutes',
+      'buffer_between_meetings',
+      'available_meeting_room',
+      'default_meeting_length_atOffice',
+      'default_meeting_length_atClient',
+      'default_meeting_length_digital'
+    ];
+    const missing = requiredKeys.filter(k => settings[k] === undefined);
+    if (missing.length > 0) {
+      context.log.warn('⚠️ Saknade settings-nycklar:', missing);
+    }
 
     const meetingLengths = {
       atClient: settings.default_meeting_length_atClient,
