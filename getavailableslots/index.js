@@ -270,9 +270,7 @@ export default async function (context, req) {
           if (slotGroupPicked[key]) {
             continue; // hoppa över resterande slots för denna grupp (fm/em) om en redan valts
           }
-          const start = new Date();
-          start.setDate(day.getDate());
-          start.setHours(hour, 0, 0, 0);
+          const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
           const end = new Date(start.getTime() + len * 60000);
 
           // Track repeated slot patterns (hour/length)
