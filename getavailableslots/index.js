@@ -584,6 +584,7 @@ export default async function (context, req) {
       body: { slots: chosen }
     };
     context.log('🚀 Svar skickas till klient');
+    pool.end().then(() => context.log('🛑 pool.end() klar')).catch(e => context.log('⚠️ pool.end() fel:', e.message));
     return;
   } catch (err) {
     context.log('❌ Fel i getavailableslots:', err.message);
@@ -593,9 +594,6 @@ export default async function (context, req) {
     };
     return;
   } finally {
-    if (pool && typeof pool.end === 'function') {
-      await pool.end();
-    }
     return;
   }
 }
