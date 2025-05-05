@@ -161,6 +161,11 @@ export default async function (context, req) {
       for (let hour = openHour; hour <= closeHour; hour++) {
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
+        // Avbryt dagen om både fm och em redan valda
+        if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
+          context.log(`✅ Både fm/em valda för ${dayStr} – hoppar resten av dagen`);
+          break;
+        }
         if (slotGroupPicked[`${dayStr}_${slotPart}`]) {
           context.log(`⏩ Skippar ${dayStr}_${slotPart} – slot redan vald`);
           continue;
@@ -184,7 +189,8 @@ export default async function (context, req) {
             slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
             slotGroupPicked[`${slotDay}_${slotPart}`] = true;
             context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
-            continue; // hoppa till nästa timme
+            // Skip expensive processing if cached slot exists
+            continue;
           }
         } catch (err) {
           context.log('⚠️ Kunde inte läsa från available_slots_cache:', err.message);
@@ -271,8 +277,10 @@ export default async function (context, req) {
           // Uppdatera slotCacheKey om längd varierar
           const slotCacheKey = `${booking_email}_${meeting_type}_${len}_${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
           const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+          // Hoppa om slot redan vald för denna grupp
           if (slotGroupPicked[key]) {
-            continue; // hoppa över resterande slots för denna grupp (fm/em) om en redan valts
+            context.log(`⏩ Skippar ${key} – redan vald slot`);
+            continue;
           }
           const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
           const end = new Date(start.getTime() + len * 60000);
@@ -292,7 +300,7 @@ export default async function (context, req) {
             continue;
           }
 
-          // ⏱️ Kontrollera veckokvot, krockar och hämta dagens bokningar parallellt
+          // Endast om vi verkligen behöver validera denna slot
           const [weekRes, conflictRes, existingRes] = await Promise.all([
             db.query(
               `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
@@ -546,7 +554,6 @@ export default async function (context, req) {
             travelTimeMin
           ]);
           context.log(`🗃️ Slot cache tillagd i available_slots_cache: ${slotIso}`);
-          // slots.push(start.toISOString());
         }
         // ⛔ Avsluta tidigare om alla fm/em-tider har hittats
         if (Object.keys(slotGroupPicked).length >= maxDays * 2) {
