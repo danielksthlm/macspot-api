@@ -62,23 +62,18 @@ export default async function (context, req) {
   }
   await pruneExpiredSlotCache();
 
+  let db;
   try {
-    const db = await pool.connect();
 
-    // 🛠️ Hämta kontaktmetadata (om finns) från contact-tabellen
-    const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [booking_email]);
     // --- Slot cache logic ---
     // Skapa slotCacheKey inklusive booking_email
     // Exempel: `${booking_email}_${meeting_type}_${meeting_length}_${dayStr}_${hour < 12 ? 'fm' : 'em'}`
     // Används för slot_cache queries och inserts
-    const contact = contactRes.rows[0];
-    const metadata = contact?.metadata || {};
-    const fullAddress = [metadata.address, metadata.postal_number, metadata.city]
-      .filter(Boolean)
-      .join(', ');
-    context.log('📍 Fullständig kundadress:', fullAddress);
-    context.log('👤 Kontakt hittad:', contact);
-    context.log('📍 Metadata-adress:', metadata?.address);
+    // db initialiseras först när vi behöver slå mot databasen utanför cache
+
+    // Vi flyttar db-connect så att det bara sker om vi verkligen behöver det (ingen cached slot)
+    // Kontaktmetadata och inställningar laddas först när vi vet att vi behöver generera slots
+    let contact, metadata, fullAddress, settingsRes, settings;
 
     // 📦 Hämta alla inställningar
     const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
@@ -156,8 +151,8 @@ export default async function (context, req) {
       const dayStr = day.toISOString().split('T')[0];
 
       // 🧠 Kontrollera om slot redan finns i available_slots_cache
-      const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
-      const closeHour = parseInt((settings.close_time || '16:00').split(':')[0], 10);
+      const openHour = parseInt((settings?.open_time || '08:00').split(':')[0], 10);
+      const closeHour = parseInt((settings?.close_time || '16:00').split(':')[0], 10);
       for (let hour = openHour; hour <= closeHour; hour++) {
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
@@ -170,8 +165,11 @@ export default async function (context, req) {
           context.log(`⏩ Skippar ${dayStr}_${slotPart} – slot redan vald`);
           continue;
         }
+        // Gör db.connect() först efter att vi vet att ingen cached slot finns
+        if (!db) db = await pool.connect();
+        let cachedSlot;
         try {
-          const cachedSlot = await db.query(`
+          cachedSlot = await db.query(`
             SELECT slot_iso
             FROM available_slots_cache
             WHERE meeting_type = $1
@@ -182,18 +180,62 @@ export default async function (context, req) {
             ORDER BY slot_score DESC
             LIMIT 1
           `, [meeting_type, requestedLength, slotDay, slotPart]);
-
-          if (cachedSlot.rows.length > 0) {
-            const iso = cachedSlot.rows[0].slot_iso;
-            if (!slotMap[`${slotDay}_${slotPart}`]) slotMap[`${slotDay}_${slotPart}`] = [];
-            slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
-            slotGroupPicked[`${slotDay}_${slotPart}`] = true;
-            context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
-            // Skip expensive processing if cached slot exists
-            continue;
-          }
         } catch (err) {
           context.log('⚠️ Kunde inte läsa från available_slots_cache:', err.message);
+        }
+        if (cachedSlot?.rows.length > 0) {
+          const iso = cachedSlot.rows[0].slot_iso;
+          if (!slotMap[`${slotDay}_${slotPart}`]) slotMap[`${slotDay}_${slotPart}`] = [];
+          slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
+          slotGroupPicked[`${slotDay}_${slotPart}`] = true;
+          context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
+          // Skip expensive processing if cached slot exists
+          continue;
+        }
+        // Initiera kontaktmetadata och settings om vi inte redan gjort det
+        if (!contact) {
+          // Första gången vi behöver slå mot tabeller utöver cache
+          const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [booking_email]);
+          contact = contactRes.rows[0];
+          metadata = contact?.metadata || {};
+          fullAddress = [metadata.address, metadata.postal_number, metadata.city]
+            .filter(Boolean)
+            .join(', ');
+          context.log('📍 Fullständig kundadress:', fullAddress);
+          context.log('👤 Kontakt hittad:', contact);
+          context.log('📍 Metadata-adress:', metadata?.address);
+
+          settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
+          settings = {};
+          for (const row of settingsRes.rows) {
+            if (row.value_type === 'json' || row.value_type === 'array') {
+              try {
+                settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
+              } catch (_) {}
+            } else if (row.value_type === 'int') {
+              settings[row.key] = parseInt(row.value);
+            } else if (row.value_type === 'bool') {
+              settings[row.key] = row.value === 'true';
+            } else {
+              settings[row.key] = row.value;
+            }
+          }
+          context.log('⚙️ Inställningar laddade:', Object.keys(settings));
+          context.log(`🕓 Öppettider enligt inställningar: ${settings.open_time}–${settings.close_time}`);
+          const requiredKeys = [
+            'default_office_address',
+            'default_home_address',
+            'fallback_travel_time_minutes',
+            'buffer_between_meetings',
+            'available_meeting_room',
+            'default_meeting_length_atOffice',
+            'default_meeting_length_atClient',
+            'default_meeting_length_digital'
+          ];
+          const missing = requiredKeys.filter(k => settings[k] === undefined);
+          if (missing.length > 0) {
+            context.log.warn('⚠️ Saknade settings-nycklar:', missing);
+          }
         }
         // Definiera slotCacheKey för varje dag/timme/typ
         const slotCacheKey = `${booking_email}_${meeting_type}_${requestedLength}_${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
@@ -591,7 +633,7 @@ export default async function (context, req) {
       body: { slots: chosen }
     };
     context.log('🚀 Svar skickas till klient');
-    pool.end().then(() => context.log('🛑 pool.end() klar')).catch(e => context.log('⚠️ pool.end() fel:', e.message));
+    setTimeout(() => pool.end().then(() => context.log('🛑 pool.end() klar')).catch(e => context.log('⚠️ pool.end() fel:', e.message)), 0);
     return;
   } catch (err) {
     context.log('❌ Fel i getavailableslots:', err.message);
@@ -601,6 +643,6 @@ export default async function (context, req) {
     };
     return;
   } finally {
-    return;
+    // Lägg till återställning/loggning här vid behov
   }
 }
