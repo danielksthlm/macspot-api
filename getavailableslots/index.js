@@ -143,6 +143,10 @@ export default async function (context, req) {
               });
 
               const tokenData = await tokenRes.json();
+              context.log('🔐 Graph token response:', tokenData);
+              if (!tokenRes.ok) {
+                context.log('❌ Graph token fetch failed with status:', tokenRes.status);
+              }
               accessToken = tokenData.access_token;
               if (!accessToken) {
                 context.log('⚠️ Ingen Graph accessToken – hoppar över slotgrupp');
