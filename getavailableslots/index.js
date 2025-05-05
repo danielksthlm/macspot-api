@@ -112,7 +112,12 @@ export default async function (context, req) {
       return;
     }
     context.log('📐 Möteslängd vald av kund:', requestedLength);
-    const lengths = [requestedLength];
+    let lengths;
+    if (meeting_type === 'atClient' && Array.isArray(settings.default_meeting_length_atClient)) {
+      lengths = settings.default_meeting_length_atClient;
+    } else {
+      lengths = [requestedLength];
+    }
     
     const now = new Date();
     // const slots = [];
@@ -221,6 +226,11 @@ export default async function (context, req) {
           if (settings.block_weekends) {
             const wd = start.getDay();
             if (wd === 0 || wd === 6) continue;
+          }
+          const wd = start.getDay();
+          const weekdayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][wd];
+          if (meeting_type === 'atClient' && Array.isArray(settings.allowed_atClient_meeting_days) && !settings.allowed_atClient_meeting_days.includes(weekdayName)) {
+            continue;
           }
 
           // ⏱️ Kontrollera veckokvot
