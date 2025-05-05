@@ -340,6 +340,7 @@ export default async function (context, req) {
       const best = candidates.sort((a, b) => b.score - a.score)[0];
       if (best) {
         context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
+        context.log(`🏆 Vald slot för ${key}: ${best.iso} (score: ${best.score})`);
         chosen.push(best.iso);
       }
     });
