@@ -292,14 +292,26 @@ export default async function (context, req) {
             continue;
           }
 
-          // ⏱️ Kontrollera veckokvot
-          const weekRes = await db.query(
-            `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
-             FROM bookings WHERE meeting_type = $1
-             AND start_time >= $2::date
-             AND start_time < ($2::date + interval '7 days')`,
-            [meeting_type, start.toISOString()]
-          );
+          // ⏱️ Kontrollera veckokvot, krockar och hämta dagens bokningar parallellt
+          const [weekRes, conflictRes, existingRes] = await Promise.all([
+            db.query(
+              `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
+               FROM bookings WHERE meeting_type = $1
+               AND start_time >= $2::date
+               AND start_time < ($2::date + interval '7 days')`,
+              [meeting_type, start.toISOString()]
+            ),
+            db.query(
+              `SELECT 1 FROM bookings
+               WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
+              [start.toISOString(), end.toISOString()]
+            ),
+            db.query(
+              `SELECT start_time, end_time FROM bookings
+               WHERE start_time::date = $1`,
+              [dayStr]
+            )
+          ]);
           const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
           if (bookedMinutes + len > (settings.max_weekly_booking_minutes || 99999)) continue;
 
@@ -314,22 +326,12 @@ export default async function (context, req) {
           }
 
           // ⛔ Krockar (förenklad mock – riktig logik kan ersättas senare)
-          const conflictRes = await db.query(
-            `SELECT 1 FROM bookings
-             WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
-            [start.toISOString(), end.toISOString()]
-          );
           if (conflictRes.rowCount > 0) continue;
 
           context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
           context.log('📄 Slotdata:', { start: start.toISOString(), end: end.toISOString(), len });
 
           // Hämta dagens bokningar
-          const existingRes = await db.query(
-            `SELECT start_time, end_time FROM bookings
-             WHERE start_time::date = $1`,
-            [dayStr]
-          );
           const existing = existingRes.rows.map(r => ({
             start: new Date(r.start_time).getTime(),
             end: new Date(r.end_time).getTime()
@@ -572,38 +574,8 @@ export default async function (context, req) {
       status: 200,
       body: { slots: chosen }
     };
-    return;
-
-    if (!context.res) {
-      context.res = {
-        status: 500,
-        body: { error: 'No response was generated in function' }
-      };
-      context.log.error('❌ Ingen context.res satt – returnerar fallback 500');
-    }
-
-    // --- Spara slot-cache per kund och slotgrupp (dag + fm/em) ---
-    const slotCacheInsert = `
-      INSERT INTO slot_cache (booking_email, meeting_type, meeting_length, slot_day, slot_part, slots, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-    `;
-    for (const [key, list] of Object.entries(slotMap)) {
-      const [dayStr, part] = key.split('_');
-      const insertSql = `
-        INSERT INTO slot_cache (booking_email, meeting_type, meeting_length, slot_day, slot_part, slots, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      `;
-      await db.query(insertSql, [
-        booking_email,
-        meeting_type,
-        requestedLength,
-        dayStr,
-        part,
-        JSON.stringify(list.map(s => s.iso))
-      ]);
-      context.log(`🗃️ Slot-cache sparad för ${dayStr} ${part}`);
-    }
-
+    // Flytta pool.end() hit – endast efter lyckat svar
+    await pool.end();
     return;
   } catch (err) {
     context.log('❌ Fel i getavailableslots:', err.message);
@@ -612,6 +584,6 @@ export default async function (context, req) {
       body: { error: err.message }
     };
   } finally {
-    await pool.end();
+    // (pool.end() moved to after successful response only)
   }
 }
