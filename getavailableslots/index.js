@@ -1,3 +1,6 @@
+// Slot pattern frequency tracker
+const slotPatternFrequency = {}; // key = hour + meeting_length → count
+const travelTimeCache = {}; // key = fromAddress->toAddress
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 export default async function (context, req) {
@@ -105,9 +108,11 @@ export default async function (context, req) {
       return;
     }
     context.log('📐 Möteslängd vald av kund:', requestedLength);
+    const lengths = [requestedLength];
     
     const now = new Date();
     // const slots = [];
+    // const lengths = ... (old declaration removed, see above)
     const slotMap = {}; // dag_fm/em → [{ iso, score }]
 
     const graphCache = {}; // key = dayStr_fm/em, value = Graph schedule data
@@ -191,6 +196,10 @@ export default async function (context, req) {
           start.setDate(day.getDate());
           start.setHours(hour, 0, 0, 0);
           const end = new Date(start.getTime() + len * 60000);
+
+          // Track repeated slot patterns (hour/length)
+          const slotKey = `${start.getHours()}_${len}`;
+          slotPatternFrequency[slotKey] = (slotPatternFrequency[slotKey] || 0) + 1;
 
           // 🚫 Kolla helg
           if (settings.block_weekends) {
@@ -314,33 +323,40 @@ export default async function (context, req) {
 
               context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
 
-              const url = new URL('https://maps-api.apple.com/v1/directions');
-              url.searchParams.append('origin', fromAddress);
-              url.searchParams.append('destination', toAddress);
-              url.searchParams.append('transportType', 'automobile');
-              url.searchParams.append('departureTime', start.toISOString());
+              // --- Travel time cache per address pair ---
+              const travelKey = `${fromAddress}->${toAddress}`;
+              let travelTimeMin;
+              if (travelTimeCache[travelKey] !== undefined) {
+                travelTimeMin = travelTimeCache[travelKey];
+                context.log('📍 Återanvänder restid från cache:', travelTimeMin, 'min');
+              } else {
+                const url = new URL('https://maps-api.apple.com/v1/directions');
+                url.searchParams.append('origin', fromAddress);
+                url.searchParams.append('destination', toAddress);
+                url.searchParams.append('transportType', 'automobile');
+                url.searchParams.append('departureTime', start.toISOString());
 
-              context.log('📡 Maps request URL:', url.toString());
+                context.log('📡 Maps request URL:', url.toString());
 
-              try {
-                const res = await fetch(url.toString(), {
-                  headers: {
-                    Authorization: `Bearer ${accessToken}`
-                  }
-                });
+                try {
+                  const res = await fetch(url.toString(), {
+                    headers: {
+                      Authorization: `Bearer ${accessToken}`
+                    }
+                  });
 
-                const data = await res.json();
-                const durationSec = data.routes?.[0]?.durationSeconds;
-                const travelTimeMin = Math.round((durationSec || 0) / 60);
-
-                context.log('⏱️ Restid:', travelTimeMin, 'min');
-
-                appleCache[slotIso] = travelTimeMin;
-              } catch (err) {
-                context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
-                appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
+                  const data = await res.json();
+                  const durationSec = data.routes?.[0]?.durationSeconds;
+                  travelTimeMin = Math.round((durationSec || 0) / 60);
+                  travelTimeCache[travelKey] = travelTimeMin;
+                } catch (err) {
+                  context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
+                  travelTimeMin = Number.MAX_SAFE_INTEGER;
+                  travelTimeCache[travelKey] = travelTimeMin;
+                }
               }
-
+              context.log('⏱️ Restid:', travelTimeMin, 'min');
+              appleCache[slotIso] = travelTimeMin;
             } catch (err) {
               context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
               appleCache[slotIso] = 0; // tillåt ändå slot
@@ -377,6 +393,9 @@ export default async function (context, req) {
         chosen.push(best.iso);
       }
     });
+
+    // Log frequency map of slot patterns
+    context.log('📈 Slotmönsterfrekvens per timme/längd:', slotPatternFrequency);
 
     context.log('📊 Antal godkända slots (totalt):', chosen.length);
     Object.entries(slotMap).forEach(([key, list]) => {
