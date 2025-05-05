@@ -137,6 +137,7 @@ export default async function (context, req) {
           if (conflictRes.rowCount > 0) continue;
 
           context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
+          context.log('📄 Slotdata:', { start: start.toISOString(), end: end.toISOString(), len });
 
           // Hämta dagens bokningar
           const existingRes = await db.query(
@@ -338,10 +339,24 @@ export default async function (context, req) {
       if (best) chosen.push(best.iso);
     });
 
+    context.log('📊 Antal godkända slots (totalt):', chosen.length);
+    Object.entries(slotMap).forEach(([key, list]) => {
+      context.log(`📅 ${key}: testade ${list.length} kandidater`);
+    });
+
     context.res = {
       status: 200,
       body: { slots: chosen }
     };
+
+    if (!context.res) {
+      context.res = {
+        status: 500,
+        body: { error: 'No response was generated in function' }
+      };
+      context.log.error('❌ Ingen context.res satt – returnerar fallback 500');
+    }
+
     return;
   } catch (err) {
     context.log('❌ Fel i getavailableslots:', err.message);
