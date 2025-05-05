@@ -548,6 +548,11 @@ export default async function (context, req) {
           context.log(`🗃️ Slot cache tillagd i available_slots_cache: ${slotIso}`);
           // slots.push(start.toISOString());
         }
+        // ⛔ Avsluta tidigare om alla fm/em-tider har hittats
+        if (Object.keys(slotGroupPicked).length >= maxDays * 2) {
+          context.log(`✅ Alla ${maxDays} dagar har både fm och em – avbryter tidigare`);
+          break;
+        }
       }
     }
 
