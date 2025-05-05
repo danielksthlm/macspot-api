@@ -528,7 +528,7 @@ export default async function (context, req) {
               travel_time_min,
               generated_at,
               expires_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + interval '1 day')
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + interval '${settings.cache_ttl_minutes || 1440} minutes')
             ON CONFLICT DO NOTHING
           `, [
             meeting_type,
