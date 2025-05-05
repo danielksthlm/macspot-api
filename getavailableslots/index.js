@@ -63,6 +63,8 @@ export default async function (context, req) {
   await pruneExpiredSlotCache();
 
   let db;
+  let requestedLength;
+  let lengths;
   try {
 
     // --- Slot cache logic ---
@@ -193,7 +195,7 @@ export default async function (context, req) {
             Teams: settings.default_meeting_length_digital
           };
 
-          const requestedLength = parseInt(req.body.meeting_length, 10);
+          requestedLength = parseInt(req.body.meeting_length, 10);
           if (!requestedLength || isNaN(requestedLength)) {
             context.res = {
               status: 400,
