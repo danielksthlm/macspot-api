@@ -22,8 +22,9 @@ export default async function (context, req) {
   context.log('📥 Funktion getavailableslots anropad');
 
   const { email, meeting_type } = req.body || {};
-  context.log('📧 Email:', email, '📅 Mötestyp:', meeting_type);
-  if (!email || !meeting_type) {
+  const booking_email = email; // Use booking_email for cache key and queries
+  context.log('📧 Email:', booking_email, '📅 Mötestyp:', meeting_type);
+  if (!booking_email || !meeting_type) {
     context.res = {
       status: 400,
       body: { error: 'Email och mötestyp krävs.' }
@@ -49,11 +50,27 @@ export default async function (context, req) {
   });
   context.log.info('✅ PostgreSQL pool created');
 
+  // 🔁 Rensa gamla cacheade slots
+  async function pruneExpiredSlotCache() {
+    try {
+      // Använd pool direkt för enkelhet här
+      await pool.query('DELETE FROM available_slots_cache WHERE expires_at < NOW()');
+      context.log('🧹 Rensade utgångna slots från available_slots_cache');
+    } catch (err) {
+      context.log.warn('⚠️ Kunde inte rensa cache:', err.message);
+    }
+  }
+  await pruneExpiredSlotCache();
+
   try {
     const db = await pool.connect();
 
     // 🛠️ Hämta kontaktmetadata (om finns) från contact-tabellen
-    const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
+    const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [booking_email]);
+    // --- Slot cache logic ---
+    // Skapa slotCacheKey inklusive booking_email
+    // Exempel: `${booking_email}_${meeting_type}_${meeting_length}_${dayStr}_${hour < 12 ? 'fm' : 'em'}`
+    // Används för slot_cache queries och inserts
     const contact = contactRes.rows[0];
     const metadata = contact?.metadata || {};
     const fullAddress = [metadata.address, metadata.postal_number, metadata.city]
@@ -123,6 +140,7 @@ export default async function (context, req) {
     // const slots = [];
     // const lengths = ... (old declaration removed, see above)
     const slotMap = {}; // dag_fm/em → [{ iso, score }]
+    const slotGroupPicked = {}; // nyckel: dag_fm/em, värde: true om en slot redan valts
 
     const graphCache = {}; // key = dayStr_fm/em, value = Graph schedule data
     const appleCache = {}; // key = slot ISO, value = travel time (minutes)
@@ -135,7 +153,36 @@ export default async function (context, req) {
       day.setDate(now.getDate() + i);
       const dayStr = day.toISOString().split('T')[0];
 
+      // 🧠 Kontrollera om slot redan finns i available_slots_cache
       for (let hour = 8; hour <= 16; hour++) {
+        const slotDay = dayStr;
+        const slotPart = hour < 12 ? 'fm' : 'em';
+        try {
+          const cachedSlot = await db.query(`
+            SELECT slot_iso
+            FROM available_slots_cache
+            WHERE meeting_type = $1
+              AND meeting_length = $2
+              AND slot_day = $3
+              AND slot_part = $4
+              AND expires_at > NOW()
+            ORDER BY slot_score DESC
+            LIMIT 1
+          `, [meeting_type, requestedLength, slotDay, slotPart]);
+
+          if (cachedSlot.rows.length > 0) {
+            const iso = cachedSlot.rows[0].slot_iso;
+            if (!slotMap[`${slotDay}_${slotPart}`]) slotMap[`${slotDay}_${slotPart}`] = [];
+            slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
+            slotGroupPicked[`${slotDay}_${slotPart}`] = true;
+            context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
+            continue; // hoppa till nästa timme
+          }
+        } catch (err) {
+          context.log('⚠️ Kunde inte läsa från available_slots_cache:', err.message);
+        }
+        // Definiera slotCacheKey för varje dag/timme/typ
+        const slotCacheKey = `${booking_email}_${meeting_type}_${requestedLength}_${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
         const graphKey = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
         // Nyckel för caching per timme, dag och mötestyp
         const graphHourKey = `${dayStr}_${hour}_${meeting_type}`;
@@ -213,6 +260,12 @@ export default async function (context, req) {
         }
 
         for (const len of lengths) {
+          // Uppdatera slotCacheKey om längd varierar
+          const slotCacheKey = `${booking_email}_${meeting_type}_${len}_${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+          const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+          if (slotGroupPicked[key]) {
+            continue; // hoppa över resterande slots för denna grupp (fm/em) om en redan valts
+          }
           const start = new Date();
           start.setDate(day.getDate());
           start.setHours(hour, 0, 0, 0);
@@ -286,7 +339,7 @@ export default async function (context, req) {
           }
           if (!isIsolated) continue;
 
-          const key = `${dayStr}_${hourSlot < 12 ? 'fm' : 'em'}`;
+          // key redan beräknad ovan
           context.log(`🕵️‍♀️ Slotgruppsnyckel: ${key}`);
           if (!slotMap[key]) slotMap[key] = [];
 
@@ -427,6 +480,35 @@ export default async function (context, req) {
           }
 
           context.log('✅ Slot godkänd:', start.toISOString());
+          // --- Cache slot in available_slots_cache ---
+          const slotDay = start.toISOString().split('T')[0];
+          const slotPart = hour < 12 ? 'fm' : 'em';
+          const slotScore = isFinite(minDist) ? minDist : 99999;
+          const travelTimeMin = appleCache[slotIso] ?? null;
+
+          await db.query(`
+            INSERT INTO available_slots_cache (
+              meeting_type,
+              meeting_length,
+              slot_day,
+              slot_part,
+              slot_iso,
+              slot_score,
+              travel_time_min,
+              generated_at,
+              expires_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + interval '1 day')
+            ON CONFLICT DO NOTHING
+          `, [
+            meeting_type,
+            len,
+            slotDay,
+            slotPart,
+            slotIso,
+            slotScore,
+            travelTimeMin
+          ]);
+          context.log(`🗃️ Slot cache tillagd i available_slots_cache: ${slotIso}`);
           // slots.push(start.toISOString());
         }
       }
@@ -439,6 +521,7 @@ export default async function (context, req) {
         context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
         context.log(`🏆 Vald slot för ${key}: ${best.iso} (score: ${best.score})`);
         chosen.push(best.iso);
+        slotGroupPicked[key] = true; // markera att gruppen har fått en vald slot
       }
     });
 
@@ -461,6 +544,28 @@ export default async function (context, req) {
         body: { error: 'No response was generated in function' }
       };
       context.log.error('❌ Ingen context.res satt – returnerar fallback 500');
+    }
+
+    // --- Spara slot-cache per kund och slotgrupp (dag + fm/em) ---
+    const slotCacheInsert = `
+      INSERT INTO slot_cache (booking_email, meeting_type, meeting_length, slot_day, slot_part, slots, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `;
+    for (const [key, list] of Object.entries(slotMap)) {
+      const [dayStr, part] = key.split('_');
+      const insertSql = `
+        INSERT INTO slot_cache (booking_email, meeting_type, meeting_length, slot_day, slot_part, slots, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `;
+      await db.query(insertSql, [
+        booking_email,
+        meeting_type,
+        requestedLength,
+        dayStr,
+        part,
+        JSON.stringify(list.map(s => s.iso))
+      ]);
+      context.log(`🗃️ Slot-cache sparad för ${dayStr} ${part}`);
     }
 
     return;
