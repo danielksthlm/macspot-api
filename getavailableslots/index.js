@@ -73,64 +73,8 @@ export default async function (context, req) {
 
     // Vi flyttar db-connect så att det bara sker om vi verkligen behöver det (ingen cached slot)
     // Kontaktmetadata och inställningar laddas först när vi vet att vi behöver generera slots
-    let contact, metadata, fullAddress, settingsRes, settings;
-
-    // 📦 Hämta alla inställningar
-    const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
-    const settings = {};
-    for (const row of settingsRes.rows) {
-      if (row.value_type === 'json' || row.value_type === 'array') {
-        try {
-          settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
-        } catch (_) {}
-      } else if (row.value_type === 'int') {
-        settings[row.key] = parseInt(row.value);
-      } else if (row.value_type === 'bool') {
-        settings[row.key] = row.value === 'true';
-      } else {
-        settings[row.key] = row.value;
-      }
-    }
-    context.log('⚙️ Inställningar laddade:', Object.keys(settings));
-    context.log(`🕓 Öppettider enligt inställningar: ${settings.open_time}–${settings.close_time}`);
-    const requiredKeys = [
-      'default_office_address',
-      'default_home_address',
-      'fallback_travel_time_minutes',
-      'buffer_between_meetings',
-      'available_meeting_room',
-      'default_meeting_length_atOffice',
-      'default_meeting_length_atClient',
-      'default_meeting_length_digital'
-    ];
-    const missing = requiredKeys.filter(k => settings[k] === undefined);
-    if (missing.length > 0) {
-      context.log.warn('⚠️ Saknade settings-nycklar:', missing);
-    }
-
-    const meetingLengths = {
-      atClient: settings.default_meeting_length_atClient,
-      atOffice: settings.default_meeting_length_atOffice,
-      Zoom: settings.default_meeting_length_digital,
-      FaceTime: settings.default_meeting_length_digital,
-      Teams: settings.default_meeting_length_digital
-    };
-
-    const requestedLength = parseInt(req.body.meeting_length, 10);
-    if (!requestedLength || isNaN(requestedLength)) {
-      context.res = {
-        status: 400,
-        body: { error: "meeting_length måste anges (t.ex. 60)" }
-      };
-      return;
-    }
-    context.log('📐 Möteslängd vald av kund:', requestedLength);
-    let lengths;
-    if (meeting_type === 'atClient' && Array.isArray(settings.default_meeting_length_atClient)) {
-      lengths = settings.default_meeting_length_atClient;
-    } else {
-      lengths = [requestedLength];
-    }
+    let contact, metadata, fullAddress, settings;
+    let settingsRes;
     
     const now = new Date();
     // const slots = [];
@@ -205,6 +149,7 @@ export default async function (context, req) {
           context.log('👤 Kontakt hittad:', contact);
           context.log('📍 Metadata-adress:', metadata?.address);
 
+          // 📦 Hämta alla inställningar EFTER db har skapats
           settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
           settings = {};
           for (const row of settingsRes.rows) {
@@ -235,6 +180,30 @@ export default async function (context, req) {
           const missing = requiredKeys.filter(k => settings[k] === undefined);
           if (missing.length > 0) {
             context.log.warn('⚠️ Saknade settings-nycklar:', missing);
+          }
+
+          // Flytta hit kod som behöver settings (meetingLengths, requestedLength, lengths)
+          const meetingLengths = {
+            atClient: settings.default_meeting_length_atClient,
+            atOffice: settings.default_meeting_length_atOffice,
+            Zoom: settings.default_meeting_length_digital,
+            FaceTime: settings.default_meeting_length_digital,
+            Teams: settings.default_meeting_length_digital
+          };
+
+          const requestedLength = parseInt(req.body.meeting_length, 10);
+          if (!requestedLength || isNaN(requestedLength)) {
+            context.res = {
+              status: 400,
+              body: { error: "meeting_length måste anges (t.ex. 60)" }
+            };
+            return;
+          }
+          context.log('📐 Möteslängd vald av kund:', requestedLength);
+          if (meeting_type === 'atClient' && Array.isArray(settings.default_meeting_length_atClient)) {
+            lengths = settings.default_meeting_length_atClient;
+          } else {
+            lengths = [requestedLength];
           }
         }
         // Definiera slotCacheKey för varje dag/timme/typ
