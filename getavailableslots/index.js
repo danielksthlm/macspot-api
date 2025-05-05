@@ -123,8 +123,8 @@ export default async function (context, req) {
 
           // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback
           try {
-            const jwt = require('jsonwebtoken');
-            const fs = require('fs');
+            import jwt from 'jsonwebtoken';
+            import fs from 'fs';
             const teamId = process.env.APPLE_MAPS_TEAM_ID;
             const keyId = process.env.APPLE_MAPS_KEY_ID;
             const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
@@ -253,7 +253,7 @@ export default async function (context, req) {
                 const scheduleData = await res.json();
                 context.log('📊 Graph response:', scheduleData);
 
-                const availableRoom = scheduleData.value.find(s => !s.availabilityView.includes('1'));
+                const availableRoom = scheduleData.value.find(s => s.availabilityView && !s.availabilityView.includes('1'));
                 if (!availableRoom) continue;
               } catch (err) {
                 context.log('⚠️ Misslyckades hämta Graph schema:', err.message);
