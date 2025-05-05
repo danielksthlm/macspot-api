@@ -49,11 +49,17 @@ export default async function (context, req) {
   try {
     const db = await pool.connect();
 
-    // 🛠️ Hämta kontaktmetadata (om finns)
-    const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
-    const contact = contactRes.rows[0];
-    const metadata = contact?.metadata || {};
-    context.log('👤 Kontakt hittad:', contact);
+    // 🛠️ Hämta kontaktmetadata (om finns) eller använd testmetadata för daniel@anynode.se
+    let metadata = {};
+    if (email === 'daniel@anynode.se') {
+      metadata = { address: 'Taxgatan 4, 115 45 Stockholm' };
+      context.log('👤 Använder testmetadata för daniel@anynode.se:', metadata);
+    } else {
+      const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
+      const contact = contactRes.rows[0];
+      metadata = contact?.metadata || {};
+      context.log('👤 Kontakt hittad:', contact);
+    }
     context.log('📍 Metadata-adress:', metadata?.address);
 
     // 📦 Hämta alla inställningar
