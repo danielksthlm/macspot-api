@@ -252,6 +252,10 @@ export default async function (context, req) {
 
                 const scheduleData = await res.json();
                 context.log('📊 Graph response:', scheduleData);
+                const errors = (scheduleData.value || [])
+                  .filter(s => s.error)
+                  .map(s => ({ room: s.scheduleId, message: s.error.message }));
+                context.log('🧨 Graph errors per rum:', errors);
 
                 const availableRoom = scheduleData.value.find(s => s.availabilityView && !s.availabilityView.includes('1'));
                 if (!availableRoom) continue;
