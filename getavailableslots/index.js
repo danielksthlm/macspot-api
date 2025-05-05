@@ -1,7 +1,18 @@
 export default async function (context, req) {
-  const { Pool } = await import('pg');
-  const fetch = (await import('node-fetch')).default;
-  const { v4: uuidv4 } = await import('uuid');
+  let Pool, fetch, uuidv4;
+  try {
+    ({ Pool } = await import('pg'));
+    fetch = (await import('node-fetch')).default;
+    ({ v4: uuidv4 } = await import('uuid'));
+    context.log('📦 Imports lyckades');
+  } catch (err) {
+    context.log.error('❌ Import-fel:', err.message);
+    context.res = {
+      status: 500,
+      body: { error: 'Import misslyckades', detail: err.message }
+    };
+    return;
+  }
 
   context.log('📥 Funktion getavailableslots anropad');
 
