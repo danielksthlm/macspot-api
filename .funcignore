@@ -11,6 +11,8 @@
 !validate_contact/**
 !getavailableslots/
 !getavailableslots/**
+!refreshRemainingSlots/
+!refreshRemainingSlots/**
 
 !node_modules/
 !node_modules/**
