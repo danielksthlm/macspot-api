@@ -391,6 +391,17 @@ export default async function (context, req) {
 
           // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback (cache per slot)
           const slotIso = start.toISOString();
+          const fromAddress = meeting_type === 'atClient'
+            ? settings.default_office_address
+            : fullAddress || settings.default_home_address;
+          const toAddress = meeting_type === 'atClient'
+            ? fullAddress || settings.default_home_address
+            : settings.default_office_address;
+          // Block-cache för negativa resultat (innan Apple Maps-anrop)
+          if (appleCache[`${fromAddress}->${toAddress}`] === 'BLOCKED') {
+            context.log(`🚫 Hoppar Maps-anrop: tidigare blockerat för ${fromAddress} → ${toAddress}`);
+            continue;
+          }
           if (!(slotIso in appleCache)) {
             try {
               const teamId = process.env.APPLE_MAPS_TEAM_ID;
@@ -431,14 +442,6 @@ export default async function (context, req) {
                 continue;
               }
 
-              const fromAddress = meeting_type === 'atClient'
-                ? settings.default_office_address
-                : fullAddress || settings.default_home_address;
-
-              const toAddress = meeting_type === 'atClient'
-                ? fullAddress || settings.default_home_address
-                : settings.default_office_address;
-
               context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
 
               // --- Travel time cache per address pair ---
@@ -450,11 +453,10 @@ export default async function (context, req) {
                 travelTimeMin = travelTimeCache[hourKey];
                 context.log('📍 Återanvänder restid (timvis cache):', travelTimeMin, 'min');
                 appleCache[slotIso] = travelTimeMin;
-                continue;
-              }
-              if (travelTimeCache[travelKey] !== undefined) {
+              } else if (travelTimeCache[travelKey] !== undefined) {
                 travelTimeMin = travelTimeCache[travelKey];
                 context.log('📍 Återanvänder restid från cache:', travelTimeMin, 'min');
+                appleCache[slotIso] = travelTimeMin;
               } else {
                 const url = new URL('https://maps-api.apple.com/v1/directions');
                 url.searchParams.append('origin', fromAddress);
@@ -476,15 +478,24 @@ export default async function (context, req) {
                   travelTimeMin = Math.round((durationSec || 0) / 60);
                   travelTimeCache[travelKey] = travelTimeMin;
                   travelTimeCache[hourKey] = travelTimeMin; // Spara även per timme
+                  appleCache[slotIso] = travelTimeMin;
                 } catch (err) {
                   context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
                   travelTimeMin = Number.MAX_SAFE_INTEGER;
                   travelTimeCache[travelKey] = travelTimeMin;
                   travelTimeCache[hourKey] = travelTimeMin; // Spara även per timme
+                  appleCache[slotIso] = travelTimeMin;
                 }
               }
-              context.log('⏱️ Restid:', travelTimeMin, 'min');
-              appleCache[slotIso] = travelTimeMin;
+              // Om travelTimeMin inte satt av ovan, hämta från cache
+              if (appleCache[slotIso] === undefined) {
+                appleCache[slotIso] = travelTimeMin;
+              }
+              // Lägg till block-cache för negativa resultat
+              const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
+              if (appleCache[slotIso] > fallback) {
+                appleCache[`${fromAddress}->${toAddress}`] = 'BLOCKED';
+              }
             } catch (err) {
               context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
               appleCache[slotIso] = 0; // tillåt ändå slot
