@@ -1,5 +1,3 @@
-
-
 // Global Apple Maps access token cache
 let appleMapsAccessToken = null;
 // Slot pattern frequency tracker
@@ -167,10 +165,7 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
 // ────────────── HUVUDFUNKTION ──────────────
 export default async function (context, req) {
   // ────────────── 1. INITIERA KONTAKT + INSTÄLLNINGAR ──────────────
-  let Pool, fetch, uuidv4;
-  let execStart;
-  let db;
-  let lengths;
+  let Pool, fetch, uuidv4, execStart, db, lengths;
   try {
     ({ Pool } = await import('pg'));
     fetch = (await import('node-fetch')).default;
