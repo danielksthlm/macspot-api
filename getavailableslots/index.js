@@ -20,6 +20,7 @@ export default async function (context, req) {
   }
 
   context.log('📥 Funktion getavailableslots anropad');
+  const execStart = Date.now();
 
   const { email, meeting_type } = req.body || {};
   let requestedLength = parseInt(req.body.meeting_length, 10);
@@ -90,18 +91,83 @@ export default async function (context, req) {
     // Ny cache per dag+timme+mötestyp för Graph API
     const graphHourlyCache = {}; // ny cache per dag+timme
 
-    // maxDays is set after settings is loaded
-    let maxDays;
-    for (let i = 1; ; i++) {
-      // We'll set maxDays after settings is loaded
+    // --- Ladda kontakt, metadata, settings, fullAddress --- (en gång innan slot-loopen)
+    if (!db) db = await pool.connect();
+    // Hämta kontakt
+    const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [booking_email]);
+    contact = contactRes.rows[0];
+    metadata = contact?.metadata || {};
+    fullAddress = [metadata.address, metadata.postal_number, metadata.city]
+      .filter(Boolean)
+      .join(', ');
+    context.log('📍 Fullständig kundadress:', fullAddress);
+    context.log('👤 Kontakt hittad:', contact);
+    context.log('📍 Metadata-adress:', metadata?.address);
+    // Hämta alla inställningar
+    settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
+    settings = {};
+    for (const row of settingsRes.rows) {
+      if (row.value_type === 'json' || row.value_type === 'array') {
+        try {
+          settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
+        } catch (_) {}
+      } else if (row.value_type === 'int') {
+        settings[row.key] = parseInt(row.value);
+      } else if (row.value_type === 'bool') {
+        settings[row.key] = row.value === 'true';
+      } else {
+        settings[row.key] = row.value;
+      }
+    }
+    context.log('⚙️ Inställningar laddade:', Object.keys(settings));
+    context.log(`🕓 Öppettider enligt inställningar: ${settings.open_time}–${settings.close_time}`);
+    const requiredKeys = [
+      'default_office_address',
+      'default_home_address',
+      'fallback_travel_time_minutes',
+      'buffer_between_meetings',
+      'available_meeting_room',
+      'default_meeting_length_atOffice',
+      'default_meeting_length_atClient',
+      'default_meeting_length_digital'
+    ];
+    const missing = requiredKeys.filter(k => settings[k] === undefined);
+    if (missing.length > 0) {
+      context.log.warn('⚠️ Saknade settings-nycklar:', missing);
+    }
+    // maxDays och möteslängder
+    const maxDays = settings.max_days_in_advance || 14;
+    const meetingLengths = {
+      atClient: settings.default_meeting_length_atClient,
+      atOffice: settings.default_meeting_length_atOffice,
+      Zoom: settings.default_meeting_length_digital,
+      FaceTime: settings.default_meeting_length_digital,
+      Teams: settings.default_meeting_length_digital
+    };
+    if (!requestedLength || isNaN(requestedLength)) {
+      context.res = {
+        status: 400,
+        body: { error: "meeting_length måste anges (t.ex. 60)" }
+      };
+      return;
+    }
+    context.log('📐 Möteslängd vald av kund:', requestedLength);
+    if (meeting_type === 'atClient' && Array.isArray(settings.default_meeting_length_atClient)) {
+      lengths = settings.default_meeting_length_atClient;
+    } else {
+      lengths = [requestedLength];
+    }
+
+    // --- Cacha bokningar per dag ---
+    const bookingsByDay = {};
+
+    for (let i = 1; i <= maxDays; i++) {
       const day = new Date();
       day.setDate(now.getDate() + i);
       const dayStr = day.toISOString().split('T')[0];
 
-      // 🧠 Kontrollera om slot redan finns i available_slots_cache
-      const openHour = parseInt((settings?.open_time || '08:00').split(':')[0], 10);
-      const closeHour = parseInt((settings?.close_time || '16:00').split(':')[0], 10);
-      // We'll set lengths after settings is loaded, so we can compute lastAllowedStartHour
+      const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
+      const closeHour = parseInt((settings.close_time || '16:00').split(':')[0], 10);
       let lastAllowedStartHour = closeHour;
       if (lengths) {
         lastAllowedStartHour = closeHour - Math.max(...lengths) / 60;
@@ -113,8 +179,7 @@ export default async function (context, req) {
           context.log(`⏩ Skippar ${dayStr}_${slotPart} – slot redan vald`);
           continue;
         }
-        // Gör db.connect() först efter att vi vet att ingen cached slot finns
-        if (!db) db = await pool.connect();
+        // Gör db.connect() först efter att vi vet att ingen cached slot finns (redan ansluten ovan)
         let cachedSlot;
         try {
           cachedSlot = await db.query(`
@@ -139,77 +204,6 @@ export default async function (context, req) {
           context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
           // Skip expensive processing if cached slot exists
           continue;
-        }
-        // Initiera kontaktmetadata och settings om vi inte redan gjort det
-        if (!contact) {
-          // Första gången vi behöver slå mot tabeller utöver cache
-          const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [booking_email]);
-          contact = contactRes.rows[0];
-          metadata = contact?.metadata || {};
-          fullAddress = [metadata.address, metadata.postal_number, metadata.city]
-            .filter(Boolean)
-            .join(', ');
-          context.log('📍 Fullständig kundadress:', fullAddress);
-          context.log('👤 Kontakt hittad:', contact);
-          context.log('📍 Metadata-adress:', metadata?.address);
-
-          // 📦 Hämta alla inställningar EFTER db har skapats
-          settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
-          settings = {};
-          for (const row of settingsRes.rows) {
-            if (row.value_type === 'json' || row.value_type === 'array') {
-              try {
-                settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
-              } catch (_) {}
-            } else if (row.value_type === 'int') {
-              settings[row.key] = parseInt(row.value);
-            } else if (row.value_type === 'bool') {
-              settings[row.key] = row.value === 'true';
-            } else {
-              settings[row.key] = row.value;
-            }
-          }
-          context.log('⚙️ Inställningar laddade:', Object.keys(settings));
-          context.log(`🕓 Öppettider enligt inställningar: ${settings.open_time}–${settings.close_time}`);
-          const requiredKeys = [
-            'default_office_address',
-            'default_home_address',
-            'fallback_travel_time_minutes',
-            'buffer_between_meetings',
-            'available_meeting_room',
-            'default_meeting_length_atOffice',
-            'default_meeting_length_atClient',
-            'default_meeting_length_digital'
-          ];
-          const missing = requiredKeys.filter(k => settings[k] === undefined);
-          if (missing.length > 0) {
-            context.log.warn('⚠️ Saknade settings-nycklar:', missing);
-          }
-
-          maxDays = settings.max_days_in_advance || 14;
-
-          // Flytta hit kod som behöver settings (meetingLengths, requestedLength, lengths)
-          const meetingLengths = {
-            atClient: settings.default_meeting_length_atClient,
-            atOffice: settings.default_meeting_length_atOffice,
-            Zoom: settings.default_meeting_length_digital,
-            FaceTime: settings.default_meeting_length_digital,
-            Teams: settings.default_meeting_length_digital
-          };
-
-          if (!requestedLength || isNaN(requestedLength)) {
-            context.res = {
-              status: 400,
-              body: { error: "meeting_length måste anges (t.ex. 60)" }
-            };
-            return;
-          }
-          context.log('📐 Möteslängd vald av kund:', requestedLength);
-          if (meeting_type === 'atClient' && Array.isArray(settings.default_meeting_length_atClient)) {
-            lengths = settings.default_meeting_length_atClient;
-          } else {
-            lengths = [requestedLength];
-          }
         }
         // Definiera slotCacheKey för varje dag/timme/typ
         const slotCacheKey = `${booking_email}_${meeting_type}_${requestedLength}_${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
@@ -317,7 +311,20 @@ export default async function (context, req) {
           }
 
           // Endast om vi verkligen behöver validera denna slot
-          const [weekRes, conflictRes, existingRes] = await Promise.all([
+          // --- Cacha dagens bokningar ---
+          if (!bookingsByDay[dayStr]) {
+            const existingRes = await db.query(
+              `SELECT start_time, end_time FROM bookings WHERE start_time::date = $1`,
+              [dayStr]
+            );
+            bookingsByDay[dayStr] = existingRes.rows.map(r => ({
+              start: new Date(r.start_time).getTime(),
+              end: new Date(r.end_time).getTime()
+            }));
+          }
+          const existing = bookingsByDay[dayStr];
+          // De övriga queries körs som vanligt
+          const [weekRes, conflictRes] = await Promise.all([
             db.query(
               `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
                FROM bookings WHERE meeting_type = $1
@@ -329,11 +336,6 @@ export default async function (context, req) {
               `SELECT 1 FROM bookings
                WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
               [start.toISOString(), end.toISOString()]
-            ),
-            db.query(
-              `SELECT start_time, end_time FROM bookings
-               WHERE start_time::date = $1`,
-              [dayStr]
             )
           ]);
           const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
@@ -355,11 +357,6 @@ export default async function (context, req) {
           context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
           context.log('📄 Slotdata:', { start: start.toISOString(), end: end.toISOString(), len });
 
-          // Hämta dagens bokningar
-          const existing = existingRes.rows.map(r => ({
-            start: new Date(r.start_time).getTime(),
-            end: new Date(r.end_time).getTime()
-          }));
 
           const slotStart = start.getTime();
           const slotEnd = end.getTime();
@@ -394,7 +391,7 @@ export default async function (context, req) {
 
           // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback (cache per slot)
           const slotIso = start.toISOString();
-          if (!appleCache[slotIso]) {
+          if (!(slotIso in appleCache)) {
             try {
               const teamId = process.env.APPLE_MAPS_TEAM_ID;
               const keyId = process.env.APPLE_MAPS_KEY_ID;
@@ -579,7 +576,7 @@ export default async function (context, req) {
         }
       }
       // Stop loop if maxDays reached
-      if (maxDays && i >= maxDays) break;
+      // (inte behövs, loopen är nu for (let i = 1; i <= maxDays; i++) )
     }
 
     const chosen = [];
@@ -620,6 +617,8 @@ export default async function (context, req) {
     };
     return;
   } finally {
+    const execEnd = Date.now();
+    context.log(`⏱️ Total exekveringstid: ${execEnd - execStart} ms`);
     if (db) db.release();
   }
 }
