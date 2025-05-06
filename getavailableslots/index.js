@@ -162,8 +162,9 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
   }
 }
 
+
 // ────────────── HUVUDFUNKTION ──────────────
-  // ────────────── 1. INITIERA KONTAKT + INSTÄLLNINGAR ──────────────
+export default async function (context, req) {
   let Pool, fetch, uuidv4, execStart, db, lengths;
   try {
     ({ Pool } = await import('pg'));
