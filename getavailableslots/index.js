@@ -7,7 +7,7 @@ const travelTimeCache = {}; // key = fromAddress->toAddress
 let jwt;
 
 // ────────────── Microsoft Graph Access Token Helper ──────────────
-async function getGraphAccessToken() {
+async function getGraphAccessToken(fetch) {
   const tenant = process.env.GRAPH_TENANT_ID;
   const clientId = process.env.GRAPH_CLIENT_ID;
   const clientSecret = process.env.GRAPH_CLIENT_SECRET;
@@ -467,7 +467,7 @@ export default async function (context, req) {
           let availableRoom = true;
           if (meeting_type === 'atOffice') {
             const roomList = settings.available_meeting_room || [];
-            const accessToken = await getGraphAccessToken();
+            const accessToken = await getGraphAccessToken(fetch);
             const res = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendar/getSchedule`, {
               method: 'POST',
               headers: {
