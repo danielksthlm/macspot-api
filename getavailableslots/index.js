@@ -5,7 +5,7 @@ const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
-let Pool, fetch, uuidv4, execStart, db, lengths;
+
 
 
 // ────────────── Hjälpfunktioner ──────────────
@@ -162,6 +162,9 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
 
 // ────────────── HUVUDFUNKTION ──────────────
 export default async function (context, req) {
+  let execStart;
+  let db;
+  let lengths;
   try {
     ({ Pool } = await import('pg'));
     fetch = (await import('node-fetch')).default;
