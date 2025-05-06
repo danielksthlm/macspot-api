@@ -191,11 +191,19 @@ export default async function (context, req) {
   let execStart;
   let db;
   let lengths;
+  context.log('🔍 Börjar köra funktionen – före import');
   try {
+    context.log('📦 Försöker importera pg...');
     ({ Pool } = await import('pg'));
+    context.log('✅ pg importerat');
+
+    context.log('📦 Försöker importera node-fetch...');
     fetch = (await import('node-fetch')).default;
+    context.log('✅ node-fetch importerat');
+
+    context.log('📦 Försöker importera uuid...');
     ({ v4: uuidv4 } = await import('uuid'));
-    context.log('📦 Imports lyckades');
+    context.log('✅ uuid importerat');
   } catch (err) {
     context.log.error('❌ Import-fel:', err.message);
     context.res = {
