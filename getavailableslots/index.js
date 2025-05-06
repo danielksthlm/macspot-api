@@ -1,3 +1,5 @@
+// Global Apple Maps access token cache
+let appleMapsAccessToken = null;
 // Slot pattern frequency tracker
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
@@ -161,39 +163,52 @@ export default async function (context, req) {
     // Förladdar restider med Apple Maps (kl 08:00 för varje dag i maxDays)
     const preloadTravelTime = async () => {
       context.log('🚚 Förladdar restider med Apple Maps...');
-      const fromAddress = meeting_type === 'atClient'
-        ? settings.default_office_address
-        : fullAddress || settings.default_home_address;
-      const toAddress = meeting_type === 'atClient'
-        ? fullAddress || settings.default_home_address
-        : settings.default_office_address;
+      // Normalisera adresser för cache
+      const fromAddress = (
+        meeting_type === 'atClient'
+          ? settings.default_office_address
+          : fullAddress || settings.default_home_address
+      )?.trim().toLowerCase();
+      const toAddress = (
+        meeting_type === 'atClient'
+          ? fullAddress || settings.default_home_address
+          : settings.default_office_address
+      )?.trim().toLowerCase();
 
-      const teamId = process.env.APPLE_MAPS_TEAM_ID;
-      const keyId = process.env.APPLE_MAPS_KEY_ID;
-      const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
-
-      const token = jwt.sign({}, privateKey, {
-        algorithm: 'ES256',
-        issuer: teamId,
-        keyid: keyId,
-        expiresIn: '1h',
-        header: { alg: 'ES256', kid: keyId, typ: 'JWT' }
-      });
+      // Återanvänd global token om finns
+      if (appleMapsAccessToken) {
+        context.log('🔑 Använder cachad Apple Maps accessToken vid preload');
+      }
 
       let accessToken;
-      try {
-        const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
-          headers: { Authorization: `Bearer ${token}` }
+      if (appleMapsAccessToken) {
+        accessToken = appleMapsAccessToken;
+      } else {
+        const teamId = process.env.APPLE_MAPS_TEAM_ID;
+        const keyId = process.env.APPLE_MAPS_KEY_ID;
+        const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+        const token = jwt.sign({}, privateKey, {
+          algorithm: 'ES256',
+          issuer: teamId,
+          keyid: keyId,
+          expiresIn: '1h',
+          header: { alg: 'ES256', kid: keyId, typ: 'JWT' }
         });
-        const tokenData = await tokenRes.json();
-        accessToken = tokenData.accessToken;
-        if (!accessToken) {
-          context.log('⚠️ Apple Maps-token saknas vid preload');
+        try {
+          const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const tokenData = await tokenRes.json();
+          accessToken = tokenData.accessToken;
+          if (!accessToken) {
+            context.log('⚠️ Apple Maps-token saknas vid preload');
+            return;
+          }
+          appleMapsAccessToken = tokenData.accessToken;
+        } catch (err) {
+          context.log('⚠️ Misslyckades hämta Apple-token vid preload:', err.message);
           return;
         }
-      } catch (err) {
-        context.log('⚠️ Misslyckades hämta Apple-token vid preload:', err.message);
-        return;
       }
 
       for (let i = 1; i <= maxDays; i++) {
@@ -203,6 +218,19 @@ export default async function (context, req) {
         const slotIso = testDay.toISOString();
         const travelKey = `${fromAddress}->${toAddress}`;
         const hourKey = `${fromAddress}|${toAddress}|${testDay.getHours()}`;
+
+        // Kolla travel_time_cache i databasen först
+        const existingRes = await db.query(
+          'SELECT travel_minutes FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3',
+          [fromAddress, toAddress, testDay.getHours()]
+        );
+        if (existingRes.rows.length > 0) {
+          const cachedMin = existingRes.rows[0].travel_minutes;
+          travelTimeCache[hourKey] = cachedMin;
+          appleCache[slotIso] = cachedMin;
+          context.log(`🗃️ Hittade travel_time_cache för ${slotIso}: ${cachedMin} min`);
+          continue;
+        }
 
         if (travelTimeCache[hourKey] !== undefined) continue;
 
@@ -223,6 +251,14 @@ export default async function (context, req) {
           travelTimeCache[hourKey] = travelTimeMin;
           appleCache[slotIso] = travelTimeMin;
           context.log(`📦 Förladdad restid för ${slotIso}: ${travelTimeMin} min`);
+          // Spara till travel_time_cache (upsert)
+          await db.query(`
+            INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, updated_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            ON CONFLICT (from_address, to_address, hour)
+            DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+          `, [fromAddress, toAddress, testDay.getHours(), travelTimeMin]);
+          context.log(`🗃️ Sparade travel_time_cache för ${slotIso}: ${travelTimeMin} min`);
         } catch (err) {
           context.log('⚠️ Misslyckades hämta restid vid preload:', err.message);
         }
@@ -464,12 +500,17 @@ export default async function (context, req) {
 
           // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback (cache per slot)
           const slotIso = start.toISOString();
-          const fromAddress = meeting_type === 'atClient'
-            ? settings.default_office_address
-            : fullAddress || settings.default_home_address;
-          const toAddress = meeting_type === 'atClient'
-            ? fullAddress || settings.default_home_address
-            : settings.default_office_address;
+          // Normalisera adresser för cache
+          const fromAddress = (
+            meeting_type === 'atClient'
+              ? settings.default_office_address
+              : fullAddress || settings.default_home_address
+          )?.trim().toLowerCase();
+          const toAddress = (
+            meeting_type === 'atClient'
+              ? fullAddress || settings.default_home_address
+              : settings.default_office_address
+          )?.trim().toLowerCase();
           // Block-cache för negativa resultat (innan Apple Maps-anrop)
           if (appleCache[`${fromAddress}->${toAddress}`] === 'BLOCKED') {
             context.log(`🚫 Hoppar Maps-anrop: tidigare blockerat för ${fromAddress} → ${toAddress}`);
@@ -477,42 +518,48 @@ export default async function (context, req) {
           }
           if (!(slotIso in appleCache)) {
             try {
-              const teamId = process.env.APPLE_MAPS_TEAM_ID;
-              const keyId = process.env.APPLE_MAPS_KEY_ID;
-              const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
-
-              const token = jwt.sign({}, privateKey, {
-                algorithm: 'ES256',
-                issuer: teamId,
-                keyid: keyId,
-                expiresIn: '1h',
-                header: {
-                  alg: 'ES256',
-                  kid: keyId,
-                  typ: 'JWT'
-                }
-              });
-
+              // Försök återanvända globalt token
               let accessToken;
-              try {
-                const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
-                  headers: {
-                    Authorization: `Bearer ${token}`
+              if (appleMapsAccessToken) {
+                accessToken = appleMapsAccessToken;
+                context.log('🔑 Använder cachad Apple Maps accessToken');
+              } else {
+                const teamId = process.env.APPLE_MAPS_TEAM_ID;
+                const keyId = process.env.APPLE_MAPS_KEY_ID;
+                const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+                const token = jwt.sign({}, privateKey, {
+                  algorithm: 'ES256',
+                  issuer: teamId,
+                  keyid: keyId,
+                  expiresIn: '1h',
+                  header: {
+                    alg: 'ES256',
+                    kid: keyId,
+                    typ: 'JWT'
                   }
                 });
-
-                const tokenData = await tokenRes.json();
-                accessToken = tokenData.accessToken;
-                if (!accessToken) {
-                  context.log('⚠️ Ingen Apple Maps accessToken – hoppar över slot');
+                try {
+                  const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
+                    headers: {
+                      Authorization: `Bearer ${token}`
+                    }
+                  });
+                  const tokenData = await tokenRes.json();
+                  accessToken = tokenData.accessToken;
+                  if (accessToken) {
+                    appleMapsAccessToken = tokenData.accessToken;
+                  }
+                  if (!accessToken) {
+                    context.log('⚠️ Ingen Apple Maps accessToken – hoppar över slot');
+                    appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
+                    continue;
+                  }
+                  context.log('🔑 Apple token hämtad');
+                } catch (err) {
+                  context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
                   appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
                   continue;
                 }
-                context.log('🔑 Apple token hämtad');
-              } catch (err) {
-                context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
-                appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
-                continue;
               }
 
               context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
@@ -521,13 +568,23 @@ export default async function (context, req) {
               const travelKey = `${fromAddress}->${toAddress}`;
               // --- Additional cache per hour ---
               const hourKey = `${fromAddress}|${toAddress}|${start.getHours()}`;
-              let travelTimeMin;
-              if (travelTimeCache[hourKey] !== undefined) {
-                travelTimeMin = travelTimeCache[hourKey];
+
+              // Kontrollera travel_time_cache i databasen först
+              const existingRes = await db.query(
+                'SELECT travel_minutes FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3',
+                [fromAddress, toAddress, start.getHours()]
+              );
+              if (existingRes.rows.length > 0) {
+                const cachedMin = existingRes.rows[0].travel_minutes;
+                travelTimeCache[hourKey] = cachedMin;
+                appleCache[slotIso] = cachedMin;
+                context.log(`🗃️ Hittade travel_time_cache för ${slotIso}: ${cachedMin} min`);
+              } else if (travelTimeCache[hourKey] !== undefined) {
+                const travelTimeMin = travelTimeCache[hourKey];
                 context.log('📍 Återanvänder restid (timvis cache):', travelTimeMin, 'min');
                 appleCache[slotIso] = travelTimeMin;
               } else if (travelTimeCache[travelKey] !== undefined) {
-                travelTimeMin = travelTimeCache[travelKey];
+                const travelTimeMin = travelTimeCache[travelKey];
                 context.log('📍 Återanvänder restid från cache:', travelTimeMin, 'min');
                 appleCache[slotIso] = travelTimeMin;
               } else {
@@ -548,13 +605,21 @@ export default async function (context, req) {
 
                   const data = await res.json();
                   const durationSec = data.routes?.[0]?.durationSeconds;
-                  travelTimeMin = Math.round((durationSec || 0) / 60);
+                  const travelTimeMin = Math.round((durationSec || 0) / 60);
                   travelTimeCache[travelKey] = travelTimeMin;
                   travelTimeCache[hourKey] = travelTimeMin; // Spara även per timme
                   appleCache[slotIso] = travelTimeMin;
+                  // Spara till travel_time_cache (upsert)
+                  await db.query(`
+                    INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW())
+                    ON CONFLICT (from_address, to_address, hour)
+                    DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+                  `, [fromAddress, toAddress, start.getHours(), travelTimeMin]);
+                  context.log(`🗃️ Sparade travel_time_cache för ${slotIso}: ${travelTimeMin} min`);
                 } catch (err) {
                   context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
-                  travelTimeMin = Number.MAX_SAFE_INTEGER;
+                  const travelTimeMin = Number.MAX_SAFE_INTEGER;
                   travelTimeCache[travelKey] = travelTimeMin;
                   travelTimeCache[hourKey] = travelTimeMin; // Spara även per timme
                   appleCache[slotIso] = travelTimeMin;
@@ -562,7 +627,7 @@ export default async function (context, req) {
               }
               // Om travelTimeMin inte satt av ovan, hämta från cache
               if (appleCache[slotIso] === undefined) {
-                appleCache[slotIso] = travelTimeMin;
+                appleCache[slotIso] = travelTimeCache[hourKey];
               }
               // Lägg till block-cache för negativa resultat
               const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
