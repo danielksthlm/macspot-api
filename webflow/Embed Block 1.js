@@ -51,7 +51,7 @@
       const radios = container.querySelectorAll('input[name="meeting_type"]');
       radios.forEach(r => r.addEventListener('change', () => {
         console.log('Mötestyp vald:', r.value);
-        validateAndRenderCustomerFields();
+        setTimeout(validateAndRenderCustomerFields, 50);
       }));
     } catch (error) {
       console.error('Error loading meeting types:', error);
@@ -70,13 +70,14 @@
     if (meetingTypeGroup) {
       meetingTypeGroup.style.display = isValid ? 'block' : 'none';
     }
-    if (isValid) {
+    if (email.length > 0 && email.includes('@')) {
       loadMeetingTypes();
     }
     validateAndRenderCustomerFields();
   }
 
   async function validateAndRenderCustomerFields() {
+    console.log('🔁 validateAndRenderCustomerFields() körs');
     const emailEl = document.querySelector('#booking_email');
     const email = emailEl ? emailEl.value.trim() : '';
     const meetingTypeEl = document.querySelector('input[name="meeting_type"]:checked');
@@ -84,11 +85,17 @@
 
     const customerFieldsGroup = document.getElementById('customer_fields_group');
     const addressField = document.getElementById('address_field');
-
-    // Clear previous missing field messages
     const missingFieldsContainer = document.getElementById('missing_fields_messages');
+    const submitButton = document.querySelector('button[type="submit"]');
+    const loadingEl = document.getElementById('contact_validation_loading');
+
+    // Clear previous missing field messages and remove .needs-filling classes
     if (missingFieldsContainer) {
       missingFieldsContainer.innerHTML = '';
+    }
+    if (customerFieldsGroup) {
+      const inputs = customerFieldsGroup.querySelectorAll('input, textarea, select');
+      inputs.forEach(input => input.classList.remove('needs-filling'));
     }
 
     if (!email || !meetingType) {
@@ -98,18 +105,34 @@
       if (addressField) {
         addressField.style.display = 'none';
       }
+      if (submitButton) {
+        submitButton.style.display = 'none';
+      }
       return;
     }
 
     try {
-      const url = `/api/validate_contact?email=${encodeURIComponent(email)}&meeting_type=${encodeURIComponent(meetingType)}`;
-      const response = await fetch(url);
+      if (loadingEl) loadingEl.style.display = 'block';
+
+      const url = `https://macspotbackend.azurewebsites.net/api/validate_contact`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, meeting_type: meetingType })
+      });
+      console.log('📡 validate_contact status:', response.status);
 
       if (!response.ok) {
         throw new Error('Failed to validate contact');
       }
 
       const data = await response.json();
+      console.log('✅ API JSON:', data);
+      if (!Array.isArray(data.missing_fields)) {
+        console.warn('⚠️ missing_fields saknas eller inte en array');
+      }
 
       if (customerFieldsGroup) {
         customerFieldsGroup.style.display = 'block';
@@ -122,6 +145,13 @@
             p.style.color = 'red';
             p.textContent = `Saknat fält: ${field}`;
             missingFieldsContainer.appendChild(p);
+            // Mark corresponding input fields with .needs-filling
+            if (customerFieldsGroup) {
+              const fieldInput = customerFieldsGroup.querySelector(`[name="${field}"]`);
+              if (fieldInput) {
+                fieldInput.classList.add('needs-filling');
+              }
+            }
           });
         }
       }
@@ -136,6 +166,18 @@
         }
       }
 
+      // Show submit button only if at least one visible field is empty
+      let showSubmit = false;
+      if (customerFieldsGroup) {
+        const visibleInputs = Array.from(customerFieldsGroup.querySelectorAll('input, textarea, select')).filter(el => {
+          return el.offsetParent !== null; // visible
+        });
+        showSubmit = visibleInputs.some(input => !input.value.trim());
+      }
+      if (submitButton) {
+        submitButton.style.display = showSubmit ? 'block' : 'none';
+      }
+
     } catch (error) {
       console.error('Error validating contact:', error);
       if (customerFieldsGroup) {
@@ -144,6 +186,11 @@
       if (addressField) {
         addressField.style.display = 'none';
       }
+      if (submitButton) {
+        submitButton.style.display = 'none';
+      }
+    } finally {
+      if (loadingEl) loadingEl.style.display = 'none';
     }
   }
 

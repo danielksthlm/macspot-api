@@ -37,11 +37,21 @@ export default async function (context, req) {
     context.log.info('🔎 Contact lookup result:', res.rows[0]);
 
     if (res.rows.length === 0) {
+      const missingFields = ['first_name', 'last_name', 'phone', 'company'];
+      const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
+      const meetingDigital = settingsRes.rows[0]?.value || [];
+      const isDigital = meetingDigital.includes(meeting_type) || meeting_type === 'atOffice';
+      if (!isDigital) {
+        missingFields.push('address', 'postal_code', 'city', 'country');
+      }
       context.res = {
         status: 200,
-        body: { status: "new_customer" }
+        body: {
+          status: "new_customer",
+          missing_fields: missingFields
+        }
       };
-      context.log.info('📤 Validation status:', context.res.body);
+      context.log.info('📤 Validation status (new):', context.res.body);
       return;
     }
 
