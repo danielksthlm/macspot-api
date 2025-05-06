@@ -1,5 +1,3 @@
-
-
 const { getAvailableSlots } = require('../availableSlots/logic');
 const { logInfo } = require('../shared/log');
 const { connectToDb, closeDb } = require('../shared/db');
@@ -40,6 +38,20 @@ module.exports = async function (context, req) {
     const now = dayjs();
     const endOfMonth = now.endOf('month');
 
+    logInfo('📅 Förladdar slots för innevarande månad...');
+    const currentMonthSlots = await getAvailableSlots({
+      email,
+      meetingType,
+      meetingLength,
+      contact,
+      settings,
+      onlyAfter: now.startOf('month'),
+      onlyBefore: now.endOf('month'),
+    });
+    for (const slot of currentMonthSlots) {
+      await cacheSlots(slot);
+    }
+
     logInfo('🚧 Startar förladdning av slots utanför innevarande månad...');
 
     const slots = await getAvailableSlots({
@@ -57,6 +69,21 @@ module.exports = async function (context, req) {
 
     const duration = Date.now() - startTime;
     logInfo(`✅ refreshRemainingSlots klar på ${duration} ms`);
+    // Trigger background refresh of remaining slots
+    try {
+      fetch('https://macspotbackend.azurewebsites.net/api/refreshremainingslots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          meeting_type: meetingType,
+          meeting_length: meetingLength,
+        }),
+      });
+      logInfo('🔁 Bakgrundsanrop till refreshRemainingSlots initierat');
+    } catch (e) {
+      logInfo(`⚠️ Fel vid bakgrundsanrop: ${e.message}`);
+    }
     context.res = {
       status: 200,
       body: `Refreshed remaining slots after ${endOfMonth.format('YYYY-MM-DD')}`,
