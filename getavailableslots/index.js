@@ -109,11 +109,6 @@ export default async function (context, req) {
       for (let hour = openHour; hour <= lastAllowedStartHour; hour++) {
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
-        // Avbryt dagen om både fm och em redan valda
-        if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
-          context.log(`✅ Både fm/em valda för ${dayStr} – hoppar resten av dagen`);
-          break;
-        }
         if (slotGroupPicked[`${dayStr}_${slotPart}`]) {
           context.log(`⏩ Skippar ${dayStr}_${slotPart} – slot redan vald`);
           continue;
