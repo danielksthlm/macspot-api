@@ -163,10 +163,6 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
 }
 
 // ────────────── HUVUDFUNKTION ──────────────
-
-// ────────────── HUVUDFUNKTION ──────────────
-export default async function (context, req) {
-  // Flytta in hela kodkroppen här
   // ────────────── 1. INITIERA KONTAKT + INSTÄLLNINGAR ──────────────
   let Pool, fetch, uuidv4, execStart, db, lengths;
   try {
