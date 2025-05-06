@@ -39,7 +39,8 @@ export default async function (context, req) {
     if (res.rows.length === 0) {
       const missingFields = ['first_name', 'last_name', 'phone', 'company'];
       const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
-      const meetingDigital = settingsRes.rows[0]?.value || [];
+      const raw = settingsRes.rows[0]?.value;
+      const meetingDigital = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
       const isDigital = meetingDigital.includes(meeting_type) || meeting_type === 'atOffice';
       if (!isDigital) {
         missingFields.push('address', 'postal_code', 'city', 'country');
@@ -65,7 +66,8 @@ export default async function (context, req) {
     const missingFields = [];
 
     const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
-    const meetingDigital = settingsRes.rows[0]?.value || [];
+    const raw = settingsRes.rows[0]?.value;
+    const meetingDigital = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
     context.log.info('📁 meeting_digital types:', meetingDigital);
 
     const alwaysRequired = ['first_name', 'last_name', 'phone', 'company'];
