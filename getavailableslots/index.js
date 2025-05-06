@@ -5,6 +5,7 @@ const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
+let Pool, fetch, uuidv4, execStart, db, lengths;
 
 
 // ────────────── Hjälpfunktioner ──────────────
@@ -54,7 +55,7 @@ function logDuration(context, execStart) {
 }
 
 // ────────────── Förladda restider ──────────────
-async function preloadTravelTime(context, db, settings, fullAddress, meeting_type) {
+async function preloadTravelTime(context, db, settings, fullAddress, meeting_type, fetchParam) {
   context.log('🚚 Förladdar restider med Apple Maps...');
   const now = new Date();
   const maxDays = settings.max_days_in_advance || 14;
@@ -90,8 +91,7 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
       header: { alg: 'ES256', kid: keyId, typ: 'JWT' }
     });
     try {
-      const fetch = (await import('node-fetch')).default;
-      const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
+      const tokenRes = await fetchParam('https://maps-api.apple.com/v1/token', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const tokenData = await tokenRes.json();
@@ -137,16 +137,13 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
     url.searchParams.append('departureTime', slotIso);
 
     try {
-      const fetch = (await import('node-fetch')).default;
-      const res = await fetch(url.toString(), {
+      const res = await fetchParam(url.toString(), {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       const data = await res.json();
       const durationSec = data.routes?.[0]?.durationSeconds;
       const travelTimeMin = Math.round((durationSec || 0) / 60);
-      // travelTimeCache[travelKey] = travelTimeMin; // removed as per instructions
       travelTimeCache[hourKey] = travelTimeMin;
-      // appleCache[slotIso] = travelTimeMin;
       context.log(`📦 Förladdad restid för ${slotIso}: ${travelTimeMin} min`);
       // Spara till travel_time_cache (upsert)
       await db.query(`
@@ -165,7 +162,6 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
 
 // ────────────── HUVUDFUNKTION ──────────────
 export default async function (context, req) {
-  let Pool, fetch, uuidv4, execStart, db, lengths;
   try {
     ({ Pool } = await import('pg'));
     fetch = (await import('node-fetch')).default;
@@ -223,7 +219,6 @@ export default async function (context, req) {
   context.log.info('✅ PostgreSQL pool created');
 
   await pruneExpiredSlotCache(context, pool);
-
   try {
     // --- Slot cache logic ---
     // Skapa slotCacheKey inklusive booking_email
@@ -297,7 +292,7 @@ export default async function (context, req) {
     }
 
     // ────────────── 2. FÖRLADDA RESTIDER ──────────────
-    await preloadTravelTime(context, db, settings, fullAddress, meeting_type);
+    await preloadTravelTime(context, db, settings, fullAddress, meeting_type, fetch);
 
     // ────────────── 3. GENERERA TILLGÄNGLIGA SLOTS ──────────────
     // --- Cacha bokningar per dag ---
