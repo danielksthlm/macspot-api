@@ -90,8 +90,10 @@ export default async function (context, req) {
     // Ny cache per dag+timme+mötestyp för Graph API
     const graphHourlyCache = {}; // ny cache per dag+timme
 
-    const maxDays = settings?.max_days_in_advance || 14;
-    for (let i = 1; i <= maxDays; i++) {
+    // maxDays is set after settings is loaded
+    let maxDays;
+    for (let i = 1; ; i++) {
+      // We'll set maxDays after settings is loaded
       const day = new Date();
       day.setDate(now.getDate() + i);
       const dayStr = day.toISOString().split('T')[0];
@@ -99,7 +101,12 @@ export default async function (context, req) {
       // 🧠 Kontrollera om slot redan finns i available_slots_cache
       const openHour = parseInt((settings?.open_time || '08:00').split(':')[0], 10);
       const closeHour = parseInt((settings?.close_time || '16:00').split(':')[0], 10);
-      for (let hour = openHour; hour <= closeHour; hour++) {
+      // We'll set lengths after settings is loaded, so we can compute lastAllowedStartHour
+      let lastAllowedStartHour = closeHour;
+      if (lengths) {
+        lastAllowedStartHour = closeHour - Math.max(...lengths) / 60;
+      }
+      for (let hour = openHour; hour <= lastAllowedStartHour; hour++) {
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
         // Avbryt dagen om både fm och em redan valda
@@ -184,7 +191,7 @@ export default async function (context, req) {
             context.log.warn('⚠️ Saknade settings-nycklar:', missing);
           }
 
-          const maxDays = settings.max_days_in_advance || 14;
+          maxDays = settings.max_days_in_advance || 14;
 
           // Flytta hit kod som behöver settings (meetingLengths, requestedLength, lengths)
           const meetingLengths = {
@@ -571,11 +578,13 @@ export default async function (context, req) {
           context.log(`🎯 Slot score som cachades: ${slotScore}`);
         }
         // ⛔ Avsluta tidigare om alla fm/em-tider har hittats
-        if (Object.keys(slotGroupPicked).length >= maxDays * 2) {
+        if (maxDays && Object.keys(slotGroupPicked).length >= maxDays * 2) {
           context.log(`✅ Alla ${maxDays} dagar har både fm och em – avbryter tidigare`);
           break;
         }
       }
+      // Stop loop if maxDays reached
+      if (maxDays && i >= maxDays) break;
     }
 
     const chosen = [];
