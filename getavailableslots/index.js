@@ -16,8 +16,6 @@ function isInCurrentMonth(date) {
     date.getUTCMonth() === now.getUTCMonth()
   );
 }
-
-export default async function (context, req) {
   let Pool, fetch, uuidv4;
   try {
     ({ Pool } = await import('pg'));
