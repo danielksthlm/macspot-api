@@ -31,6 +31,14 @@ export default async function (context, req) {
   }
 
   context.log('📥 Funktion getavailableslots anropad');
+  if (!req || !req.body) {
+    context.log.error('❌ Ingen req.body – felaktigt API-anrop?');
+    context.res = {
+      status: 400,
+      body: { error: 'Bad request – saknar req.body' }
+    };
+    return;
+  }
   const execStart = Date.now();
 
   context.log('🔥 Funktion startar – req.body:', req.body);
