@@ -112,7 +112,7 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
     testDay.setDate(now.getDate() + i);
     testDay.setUTCHours(8, 0, 0, 0);
     const slotIso = testDay.toISOString();
-    const travelKey = `${fromAddress}->${toAddress}`;
+    // const travelKey = `${fromAddress}->${toAddress}`; // removed as per instructions
     const hourKey = `${fromAddress}|${toAddress}|${testDay.getHours()}`;
 
     // Kolla travel_time_cache i databasen först
@@ -144,7 +144,7 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
       const data = await res.json();
       const durationSec = data.routes?.[0]?.durationSeconds;
       const travelTimeMin = Math.round((durationSec || 0) / 60);
-      travelTimeCache[travelKey] = travelTimeMin;
+      // travelTimeCache[travelKey] = travelTimeMin; // removed as per instructions
       travelTimeCache[hourKey] = travelTimeMin;
       // appleCache[slotIso] = travelTimeMin;
       context.log(`📦 Förladdad restid för ${slotIso}: ${travelTimeMin} min`);

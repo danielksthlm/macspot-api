@@ -47,6 +47,7 @@ module.exports = async function (context, req) {
       contact,
       settings,
       onlyAfter: endOfMonth.add(1, 'minute'),
+      skipCacheCheck: true
     });
 
     await Promise.all(slots.map(slot => cacheSlots(slot)));
