@@ -356,7 +356,11 @@ export default async function (context, req) {
 
           // 3. Krockkoll: Finns bokning som krockar?
           // (Pseudo: hämta krockar från DB, här simulerat)
-          let conflictRes = { rowCount: 0 };
+          const conflictRes = await db.query(
+            `SELECT 1 FROM bookings
+             WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
+            [start.toISOString(), end.toISOString()]
+          );
           // ... här skulle DB-koden gå ...
           if (conflictRes.rowCount > 0) {
             context.log('📛 Avvisad: krockar med befintlig bokning');
@@ -364,21 +368,54 @@ export default async function (context, req) {
           }
 
           // 4. Veckokvot koll (ex: max_weekly_booking_minutes)
-          let bookedMinutes = 0; // Simulerat, här bör summering ske
+          const weekRes = await db.query(
+            `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
+             FROM bookings WHERE meeting_type = $1
+             AND start_time >= $2::date
+             AND start_time < ($2::date + interval '7 days')`,
+            [meeting_type, start.toISOString()]
+          );
+          const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
           if (bookedMinutes + len > (settings.max_weekly_booking_minutes || 99999)) {
             context.log(`📛 Avvisad: veckokvot överskriden (${bookedMinutes} + ${len} > ${settings.max_weekly_booking_minutes})`);
             continue;
           }
 
           // 5. Isolationskoll (för nära annan bokning?)
-          let isIsolated = true; // Simulerat
+          let isIsolated = true;
+          if (!bookingsByDay[dayStr]) {
+            const existingRes = await db.query(
+              `SELECT start_time, end_time FROM bookings WHERE start_time::date = $1`,
+              [dayStr]
+            );
+            bookingsByDay[dayStr] = existingRes.rows.map(r => ({
+              start: new Date(r.start_time).getTime(),
+              end: new Date(r.end_time).getTime()
+            }));
+          }
+          const existing = bookingsByDay[dayStr];
+          const bufferMin = settings.buffer_between_meetings || 15;
+          const bufferMs = bufferMin * 60 * 1000;
+          const slotStart = start.getTime();
+          const slotEnd = end.getTime();
+          for (const e of existing) {
+            if (
+              (Math.abs(slotStart - e.end) < bufferMs) ||
+              (Math.abs(slotEnd - e.start) < bufferMs) ||
+              (slotStart < e.end && slotEnd > e.start)
+            ) {
+              isIsolated = false;
+              break;
+            }
+          }
           if (!isIsolated) {
             context.log('📛 Avvisad: för nära annan bokning (ej isolerad)');
             continue;
           }
 
           // 6. Restidskoll (ex: travelTimeMin > fallback)
-          let travelTimeMin = 0; // Simulerat, här bör restid hämtas
+          const hourKey = `${fullAddress.toLowerCase()}|${settings.default_office_address.toLowerCase()}|${start.getUTCHours()}`;
+          let travelTimeMin = travelTimeCache[hourKey] || settings.fallback_travel_time_minutes || 90;
           const fallback = settings.fallback_travel_time_minutes || 60;
           if (travelTimeMin > fallback) {
             context.log(`📛 Avvisad: restid ${travelTimeMin} > fallback ${fallback}`);
@@ -393,7 +430,26 @@ export default async function (context, req) {
           }
 
           // 8. Graph: ledigt mötesrum?
-          let availableRoom = true; // Simulerat
+          let availableRoom = true;
+          if (meeting_type === 'atOffice') {
+            const roomList = settings.available_meeting_room || [];
+            const accessToken = null; // tilldela ditt befintliga token här om du har
+            const res = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendar/getSchedule`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                schedules: roomList,
+                startTime: { dateTime: start.toISOString(), timeZone: 'Europe/Stockholm' },
+                endTime: { dateTime: end.toISOString(), timeZone: 'Europe/Stockholm' },
+                availabilityViewInterval: 30
+              })
+            });
+            const data = await res.json();
+            availableRoom = Array.isArray(data.value) && data.value.find(s => !s.availabilityView.includes('1'));
+          }
           if (!availableRoom) {
             context.log('📛 Avvisad: inget tillgängligt mötesrum enligt Graph');
             continue;
