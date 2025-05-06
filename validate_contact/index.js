@@ -41,7 +41,7 @@ export default async function (context, req) {
       const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
       const raw = settingsRes.rows[0]?.value;
       const meetingDigital = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
-      const isDigital = meetingDigital.includes(meeting_type) || meeting_type === 'atOffice';
+      const isDigital = meetingDigital.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atOffice';
       if (!isDigital) {
         missingFields.push('address', 'postal_code', 'city', 'country');
       }
@@ -79,7 +79,7 @@ export default async function (context, req) {
       }
     });
 
-    const isDigital = meetingDigital.includes(meeting_type) || meeting_type === 'atOffice';
+    const isDigital = meetingDigital.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atOffice';
     if (!isDigital) {
       addressRequired.forEach(field => {
         if (!metadata[field] || metadata[field].trim() === '') {
