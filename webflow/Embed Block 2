@@ -1,244 +1,118 @@
 <script>
-  async function validateContact() {
-    const emailEl = document.querySelector('#booking_email');
+  let lastValidatedEmail = '';
+  let lastValidatedMeetingType = '';
+
+  function getSelectedMeetingType() {
+    const selected = document.querySelector('input[name="meeting_type"]:checked');
+    return selected ? selected.value : '';
+  }
+
+  async function validateAndRenderCustomerFields() {
+    console.log('🔥 validateCustomerContact() har anropats!');
+    console.log('🚩 validateAndRenderCustomerFields() körs...');
+    // Get email and meeting type
+    const emailEl = document.getElementById('booking_email');
     const email = emailEl ? emailEl.value.trim() : '';
-    const meetingInput = document.querySelector('input[name="meeting_type"]:checked');
-    const meetingType = meetingInput ? meetingInput.value : '';
-    console.log("📌 Vald mötestyp:", meetingType);
+    const meeting_type = getSelectedMeetingType();
+    console.log('📨 email:', email);
+    console.log('📍 meeting_type:', meeting_type);
+    console.log('📧 full emailEl.value:', emailEl ? emailEl.value : '(saknas)');
 
     if (!email || !email.includes('@')) {
+      console.warn('⚠️ Ogiltig e-post:', email);
       return;
     }
-    if (!meetingType) {
+    if (!meeting_type) {
+      console.warn('⚠️ Mötestyp saknas.');
       return;
     }
 
-    const response = await fetch('https://macspotbackend.azurewebsites.net/api/validate_contact', {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, meeting_type: meetingType })
-    });
-
-    const result = await response.json();
-    console.log("✅ API-svar:", result);
-    console.log("🧠 Backend-svar (debug):", JSON.stringify(result, null, 2));
-
-    const submitButton = document.querySelector('#contact-update-button');
-    const addressWrapper = document.querySelector('#autofilled-fields-at-client');
-    if (addressWrapper) {
-      addressWrapper.classList.add('atClientField');
-    }
-    const fields = ['first_name', 'last_name', 'phone', 'company'];
-
-    fields.forEach(field => {
-      const input = document.querySelector(`#${field}`);
-      if (input) {
-        input.style.display = 'none';
-        input.classList.remove('needs-filling');
-      }
-    });
-    if (addressWrapper && result.status === "ok") addressWrapper.style.display = 'none';
-    if (submitButton) submitButton.style.display = 'none';
-
-    if (result.status === "ok") {
-      const contact = result.contact || {};
-      const metadata = contact.metadata || {};
-      const combined = { ...contact, ...metadata };
-      const allFields = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
-      allFields.forEach(field => {
-        const input = document.querySelector(`#${field}`);
-        if (input) {
-          if (combined[field]) {
-            input.value = combined[field];
-            input.style.display = 'none';
-            input.classList.remove('needs-filling');
-          } else {
-            input.value = '';
-            input.style.display = 'block';
-            input.classList.add('needs-filling');
-          }
-        }
-      });
-      return;
-    } else if (result.status === "incomplete") {
-      const addressFields = ['address', 'postal_code', 'city', 'country'];
-      const filteredMissing = result.missing_fields.filter(field => {
-        return !(addressFields.includes(field) && meetingType !== 'atClient');
-      });
-      const onlyCountryMissing = filteredMissing.length === 1 && filteredMissing[0] === 'country';
-      if (onlyCountryMissing) {
-        const input = document.querySelector(`#country`);
-        if (input) {
-          input.style.display = 'block';
-          input.classList.add('needs-filling');
-        }
-        if (addressWrapper) addressWrapper.style.display = 'block';
-        if (submitButton) {
-          submitButton.style.display = 'block';
-          submitButton.value = 'Uppdatera land';
-        }
-        return;
-      }
-      console.log("🔍 Backend saknade fält:", result.missing_fields);
-      if (filteredMissing.length === 0) {
-        return;
-      }
-
-      console.log("🎯 Filtrerade fält:", filteredMissing);
-      result.missing_fields = filteredMissing;
-      fields.forEach(field => {
-        const input = document.querySelector(`#${field}`);
-        if (input && filteredMissing.includes(field)) {
-          input.style.display = 'block';
-          input.classList.add('needs-filling');
-        }
-      });
-
-      if (meetingType !== 'atClient' && addressWrapper) {
-        const anyAddressMissing = filteredMissing.some(f => addressFields.includes(f));
-        if (anyAddressMissing) {
-          addressWrapper.style.display = 'block';
-        } else {
-          addressWrapper.style.display = 'none';
-        }
-      }
-
-      const needsFillingElements = document.querySelectorAll('.needs-filling');
-      const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
-
-      if (submitButton) {
-        if (allVisibleAndEmpty) {
-          submitButton.style.display = 'block';
-          submitButton.value = 'Uppdatera uppgifter';
-        } else {
-          submitButton.style.display = 'none';
-        }
-      }
-    } else if (result.status === "new_customer") {
-      fields.forEach(field => {
-        const input = document.querySelector(`#${field}`);
-        if (input) {
-          input.style.display = 'block';
-          input.classList.add('needs-filling');
-        }
-      });
-      if (meetingType === 'atClient') {
-        if (addressWrapper) {
-          const allAddressFieldsFilled = ['address', 'postal_code', 'city', 'country'].every(field => {
-            const el = document.querySelector(`#${field}`);
-            return el && el.value.trim();
-          });
-          if (!allAddressFieldsFilled) addressWrapper.style.display = 'block';
-          const addressFields = ['address', 'postal_code', 'city', 'country'];
-          addressFields.forEach(field => {
-            const input = document.querySelector(`#${field}`);
-            if (input) input.classList.add('needs-filling');
-          });
-        }
-      } else {
-        if (addressWrapper) addressWrapper.style.display = 'none';
-        const addressFields = ['address', 'postal_code', 'city', 'country'];
-        addressFields.forEach(field => {
-          const input = document.querySelector(`#${field}`);
-          if (input) input.classList.remove('needs-filling');
-        });
-      }
-
-      const needsFillingElements = document.querySelectorAll('.needs-filling');
-      const allVisibleAndEmpty = Array.from(needsFillingElements).some(el => el.offsetParent !== null && !el.value.trim());
-
-      if (submitButton) {
-        if (allVisibleAndEmpty) {
-          submitButton.style.display = 'block';
-          submitButton.value = 'Skapa kontakt';
-        } else {
-          submitButton.style.display = 'none';
-        }
-      }
-    }
-
-    if (result.status === 'ok') {
-      const visibleFields = document.querySelectorAll('.needs-filling');
-      if (visibleFields.length === 0 && submitButton) {
-        submitButton.style.display = 'none';
-      }
-    }
-  }
-
-  // --- NEW FUNCTION: submitContactUpdate ---
-  async function submitContactUpdate() {
-    const emailEl = document.querySelector('#booking_email');
-    const email = emailEl ? emailEl.value.trim() : '';
-    const meetingInput = document.querySelector('input[name="meeting_type"]:checked');
-    const meetingType = meetingInput ? meetingInput.value : '';
-    const fields = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
-
-    const payload = { email, meeting_type: meetingType };
-    fields.forEach(field => {
-      const input = document.querySelector(`#${field}`);
-      if (input && input.style.display !== 'none') {
-        payload[field] = input.value.trim();
-      }
-    });
-
+    // Call /api/validate_contact
+    let response;
     try {
-      const response = await fetch('https://macspotbackend.azurewebsites.net/api/update_contact', {
+      response = await fetch('/api/validate_contact', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, meeting_type })
       });
-
-      const result = await response.json();
-      console.log('✅ Kontaktuppdatering svar:', result);
-
-      if (result.status === 'success') {
-        if (typeof window.triggerSlotSearch === 'function') {
-          window.triggerSlotSearch();
-        }
-        const submitButton = document.querySelector('#contact-update-button');
-        if (submitButton) {
-          submitButton.style.display = 'none';
-        }
-      } else {
-        alert('Det gick inte att uppdatera kontakten. Försök igen.');
-      }
-    } catch (error) {
-      console.error('❌ Fel vid kontaktuppdatering:', error);
-      alert('Ett fel uppstod vid kontaktuppdatering.');
+    } catch (e) {
+      // Optionally handle error
+      return;
     }
+    if (!response.ok) {
+      // Optionally handle error
+      return;
+    }
+    let result;
+    try {
+      result = await response.json();
+    } catch (e) {
+      return;
+    }
+
+    const missingFields = result.missing_fields || [];
+    // Fallback for atClient: if undefined, infer from meeting_type
+    const isAtClient = meeting_type === 'atclient';
+    const atClient = result.hasOwnProperty('atClient') ? !!result.atClient : isAtClient;
+    console.log('✅ API-svar:', result);
+    console.log('📌 Mötestyp:', meeting_type);
+    console.log('📌 missing_fields:', missingFields);
+    console.log('📌 atClient:', atClient);
+
+    // All fields that could be shown/hidden
+    const allFields = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    // If atClient is false, hide address fields
+    const addressFields = ['address', 'postal_code', 'city', 'country'];
+
+    allFields.forEach(field => {
+      const el = document.getElementById(field);
+      if (!el) return;
+      // Hide address fields if atClient is false
+      if (addressFields.includes(field) && !atClient) {
+        el.closest('.form-group') ? el.closest('.form-group').style.display = 'none' : el.style.display = 'none';
+        return;
+      }
+      // Show field if missing, hide if not missing
+      if (missingFields.includes(field)) {
+        el.closest('.form-group') ? el.closest('.form-group').style.display = '' : el.style.display = '';
+      } else {
+        el.closest('.form-group') ? el.closest('.form-group').style.display = 'none' : el.style.display = 'none';
+      }
+    });
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const meetingTypeGroup = document.querySelector('#meeting_type_group');
-    const emailField = document.querySelector('#booking_email');
-    const submitButton = document.querySelector('#contact-update-button');
+  window.validateCustomerContact = validateAndRenderCustomerFields;
+</script>
 
-    if (meetingTypeGroup) {
-      meetingTypeGroup.style.display = 'none';
-    }
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('✅ DOMContentLoaded körs och checkAndValidate() är aktiv');
+  const emailEl = document.getElementById('booking_email');
+  if (!emailEl) return;
 
-    if (emailField) {
-      emailField.addEventListener('blur', () => {
-        const email = emailField.value.trim();
-        if (email && email.includes('@')) {
-          if (meetingTypeGroup) meetingTypeGroup.style.display = 'block';
-        }
-      });
-    }
+  function checkAndValidate() {
+    const email = emailEl.value.trim();
+    setTimeout(() => {
+      const meetingType = getSelectedMeetingType();
+      const isValidEmail = email.length > 0 && email.includes('@');
+      if (isValidEmail && meetingType) {
+        if (
+          email.toLowerCase() === lastValidatedEmail.toLowerCase() &&
+          meetingType === lastValidatedMeetingType
+        ) return;
+        lastValidatedEmail = email;
+        lastValidatedMeetingType = meetingType;
+        console.log('🚀 Validering körs med:', { email, meetingType });
+        validateCustomerContact();
+      }
+    }, 0);
+  }
 
-    if (submitButton) {
-      submitButton.style.display = 'none';
-      submitButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        submitContactUpdate();
-      });
-    }
-
-    document.querySelectorAll('input[name="meeting_type"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        console.log("🎯 Radioknapp valdes:", e.target.value);
-        validateContact();
-      });
-    });
+  emailEl.addEventListener('input', checkAndValidate);
+  document.querySelectorAll('input[name="meeting_type"]').forEach(radio => {
+    radio.addEventListener('change', checkAndValidate);
   });
+});
 </script>

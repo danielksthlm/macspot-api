@@ -21,6 +21,22 @@ def mark_as_processed(conn, change_id):
         cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
         conn.commit()
 
+#
+# 📝 SYNC-BETEENDE: Hantering av metadata
+#
+# Viktigt att förstå skillnaden:
+#
+# 1. Ändring av värde:
+#    - Exempel: "postal_code": "111 11" → "115 32"
+#    - Hanteras som en vanlig UPDATE (om updated_at är nyare)
+#
+# 2. Ändring av nyckel (etikett):
+#    - Exempel: "postal_number" → "postal_code"
+#    - Molnet kommer *inte* ta bort "postal_number" utan force_resync
+#    - Lägg till `"force_resync": true` i metadata för att tvinga full överskrivning
+#
+# Detta minskar risken att data i molnet raderas av misstag.
+
 def apply_change(conn, change, local_conn):
     table_name, record_id, operation, payload = change[1], change[2], change[3], change[4]
     with conn.cursor() as cur:
@@ -33,6 +49,17 @@ def apply_change(conn, change, local_conn):
                 print(f"⚠️ Skickas ej: origin != klrab.se – {data.get('booking_email')}")
                 mark_as_processed(local_conn, change[0])
                 return
+
+        # Om force_resync finns i metadata, alltid kör UPDATE utan tidsjämförelse
+        if 'metadata' in data and table_name == 'contact':
+            meta = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
+            if meta.pop('force_resync', False):
+                print("🔁 Tvingad synk via force_resync – uppdaterar direkt")
+                data['metadata'] = json.dumps(meta)
+                operation = 'UPDATE'
+                data["_force_resync_applied"] = True
+            else:
+                print("ℹ️ Ingen force_resync – kör normal UPDATE om updated_at är nyare")
 
         print(f"🟡 Försöker köra: {operation} på {table_name}")
         print(f"➡️  Data: {data}")
@@ -63,7 +90,7 @@ def apply_change(conn, change, local_conn):
                 f"{', '.join([f'{k} = EXCLUDED.{k}' for k in data.keys() if k != 'id'])}",
                 values
             )
-        if 'metadata' in data and table_name == 'contact':
+        if 'metadata' in data and table_name == 'contact' and not data.get("_force_resync_applied"):
             # Merge metadata with existing remote value and ensure JSON string
             cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))
             row = cur.fetchone()
@@ -74,9 +101,21 @@ def apply_change(conn, change, local_conn):
                     existing_metadata = json.loads(row[0])
             else:
                 existing_metadata = {}
+
             incoming_metadata = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
+            print(f"🔍 Före merge – metadata i molnet: {json.dumps(existing_metadata)}")
+            print(f"🔍 Incoming metadata: {json.dumps(incoming_metadata)}")
             existing_metadata.update(incoming_metadata)
-            data['metadata'] = json.dumps(existing_metadata)
+            print(f"🧬 Efter merge – metadata som kommer sparas: {json.dumps(existing_metadata)}")
+            # Säkerställ att metadata är JSON-sträng och inte dubbelt serialiserad
+            if isinstance(existing_metadata, str):
+                try:
+                    json.loads(existing_metadata)  # Already JSON string
+                    data['metadata'] = existing_metadata
+                except:
+                    data['metadata'] = json.dumps(existing_metadata)
+            else:
+                data['metadata'] = json.dumps(existing_metadata)
 
         if operation == 'UPDATE':
             # Check if local updated_at is newer than remote before UPDATE
@@ -94,6 +133,8 @@ def apply_change(conn, change, local_conn):
                         return
                     else:
                         print(f"✅ Lokala ändringen är nyare – uppdaterar {table_name} (id={record_id})")
+            if "_force_resync_applied" in data:
+                del data["_force_resync_applied"]
             columns = ', '.join(data.keys())
             placeholders = ', '.join(['%s'] * len(data))
             values = list(data.values())

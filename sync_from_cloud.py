@@ -6,19 +6,35 @@ def connect_db(config):
     return psycopg2.connect(**config)
 
 def apply_change(cur, table, operation, payload):
+    # Om force_resync finns i metadata, alltid kör UPDATE utan tidsjämförelse
+    skip_merge = False
+    if 'metadata' in payload and table == 'contact':
+        meta = json.loads(payload['metadata']) if isinstance(payload['metadata'], str) else payload['metadata']
+        if meta.pop('force_resync', False):
+            print("🔁 Tvingad synk via force_resync – ersätter metadata fullständigt")
+            payload['metadata'] = json.dumps(meta)
+            print(f"🧨 force_resync: Ersätter metadata fullständigt med: {payload['metadata']}")
+            operation = 'UPDATE'
+            payload["_force_resync_applied"] = True
+        else:
+            skip_merge = False
+
     if operation == "INSERT":
         cols = ", ".join(payload.keys())
         placeholders = ", ".join(["%s"] * len(payload))
         sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING"
         cur.execute(sql, [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()])
     elif operation == "UPDATE":
-        if table == "contact" and "metadata" in payload:
+        if not payload.get("_force_resync_applied") and table == "contact" and "metadata" in payload:
             cur.execute(f"SELECT metadata FROM {table} WHERE id = %s", (payload["id"],))
             row = cur.fetchone()
             if row and row[0]:
                 existing_metadata = row[0] if isinstance(row[0], dict) else json.loads(row[0])
                 incoming_metadata = payload["metadata"] if isinstance(payload["metadata"], dict) else json.loads(payload["metadata"])
+                print(f"🔍 Före merge – lokal metadata: {json.dumps(existing_metadata)}")
+                print(f"🔍 Incoming metadata från moln: {json.dumps(incoming_metadata)}")
                 existing_metadata.update(incoming_metadata)
+                print(f"🧬 Efter merge – metadata som kommer sparas lokalt: {json.dumps(existing_metadata)}")
                 payload["metadata"] = existing_metadata
         sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
         values = [json.dumps(payload[col]) if isinstance(payload[col], dict) else payload[col] for col in payload if col != "id"]

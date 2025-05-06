@@ -1,0 +1,37 @@
+import psycopg2
+import json
+import sys
+from config import LOCAL_DB_CONFIG
+
+if len(sys.argv) not in [2, 3]:
+    print("Användning: python sync_force_resync <email> [--clear]")
+    sys.exit(1)
+
+email = sys.argv[1]
+clear = len(sys.argv) == 3 and sys.argv[2] == "--clear"
+
+conn = psycopg2.connect(**LOCAL_DB_CONFIG)
+cur = conn.cursor()
+
+cur.execute("SELECT id, metadata FROM contact WHERE booking_email = %s", (email,))
+row = cur.fetchone()
+if not row:
+    print(f"❌ Hittade ingen kontakt med e-post: {email}")
+    sys.exit(1)
+
+contact_id, metadata = row
+metadata = json.loads(metadata) if isinstance(metadata, str) else metadata
+
+if clear:
+    metadata.pop("force_resync", None)
+    print("🧹 force_resync borttagen")
+else:
+    metadata["force_resync"] = True
+    print("✅ force_resync satt")
+
+cur.execute("UPDATE contact SET metadata = %s WHERE id = %s", (json.dumps(metadata), contact_id))
+conn.commit()
+cur.close()
+conn.close()
+
+print(f"🆗 Uppdaterad metadata för {email}")

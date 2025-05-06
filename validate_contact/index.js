@@ -3,7 +3,8 @@ export default async function (context, req) {
   try {
     const { Pool } = await import('pg');
 
-    const { email, meeting_type } = req.body || {};
+    const email = req.body?.email || req.query?.email;
+    const meeting_type = req.body?.meeting_type || req.query?.meeting_type;
     context.log.info('📥 validate_contact triggered with:', { email, meeting_type });
 
     if (!email || !meeting_type) {

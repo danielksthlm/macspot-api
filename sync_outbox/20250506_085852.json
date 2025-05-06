@@ -1,0 +1,49 @@
+[
+  {
+    "change_id": "98c1d48a-e984-4b35-8273-02c2f8b48879",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "Stockholm",
+        "phone": "0709561480",
+        "origin": "klrab.se",
+        "address": "Erik Dahlbergsgatan 35",
+        "company": "AnyNode",
+        "country": "Sverige",
+        "last_name": "Källberg",
+        "last_sync": "2025-05-05 14:09:50.904942+02",
+        "first_name": "Daniel",
+        "postal_code": "115 32"
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "updated_at": "2025-05-06T08:56:49.63414+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  },
+  {
+    "change_id": "f44aae80-b086-430e-9801-c5783de3c131",
+    "table": "contact",
+    "operation": "UPDATE",
+    "data": {
+      "id": "298c095b-e866-443f-858a-b5316df2b47f",
+      "metadata": {
+        "city": "Stockholm",
+        "phone": "0709561480",
+        "origin": "klrab.se",
+        "address": "Erik Dahlbergsgatan 35",
+        "company": "AnyNode",
+        "country": "Sverige",
+        "last_name": "Källberg",
+        "last_sync": "2025-05-05 14:09:50.904942+02",
+        "first_name": "Daniel",
+        "postal_code": "115 32",
+        "force_resync": true
+      },
+      "created_at": "2025-04-23T17:12:02.554503+02:00",
+      "updated_at": "2025-05-06T08:56:49.697882+02:00",
+      "booking_email": "daniel@anynode.se"
+    }
+  }
+]
