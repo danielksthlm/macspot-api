@@ -3,8 +3,34 @@ let appleMapsAccessToken = null;
 // Slot pattern frequency tracker
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
+
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
+
+// ────────────── Microsoft Graph Access Token Helper ──────────────
+async function getGraphAccessToken() {
+  const tenant = process.env.GRAPH_TENANT_ID;
+  const clientId = process.env.GRAPH_CLIENT_ID;
+  const clientSecret = process.env.GRAPH_CLIENT_SECRET;
+  const tokenUrl = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    scope: 'https://graph.microsoft.com/.default',
+    client_secret: clientSecret,
+    grant_type: 'client_credentials',
+  });
+
+  const res = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+
+  const data = await res.json();
+  if (!data.access_token) throw new Error('Kunde inte hämta Graph-token');
+  return data.access_token;
+}
 
 
 
@@ -431,7 +457,7 @@ export default async function (context, req) {
           let availableRoom = true;
           if (meeting_type === 'atOffice') {
             const roomList = settings.available_meeting_room || [];
-            const accessToken = null; // tilldela ditt befintliga token här om du har
+            const accessToken = await getGraphAccessToken();
             const res = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendar/getSchedule`, {
               method: 'POST',
               headers: {
