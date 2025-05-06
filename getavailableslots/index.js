@@ -476,6 +476,7 @@ export default async function (context, req) {
           }
           if (!availableRoom) {
             context.log('📛 Avvisad: inget tillgängligt mötesrum enligt Graph');
+            context.log('🪪 Graph-svar:', JSON.stringify(data, null, 2));
             continue;
           }
 
