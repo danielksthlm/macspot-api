@@ -4,8 +4,7 @@ let appleMapsAccessToken = null;
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 
-import jwt from 'jsonwebtoken';
-import fs from 'fs';
+let jwt;
 
 // ────────────── Microsoft Graph Access Token Helper ──────────────
 async function getGraphAccessToken() {
@@ -108,6 +107,7 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
   } else {
     const teamId = process.env.APPLE_MAPS_TEAM_ID;
     const keyId = process.env.APPLE_MAPS_KEY_ID;
+    const fs = await import('fs');
     const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
     const token = jwt.sign({}, privateKey, {
       algorithm: 'ES256',
@@ -204,6 +204,8 @@ export default async function (context, req) {
     context.log('📦 Försöker importera uuid...');
     ({ v4: uuidv4 } = await import('uuid'));
     context.log('✅ uuid importerat');
+
+    jwt = await import('jsonwebtoken');
   } catch (err) {
     context.log.error('❌ Import-fel:', err.message);
     context.res = {
