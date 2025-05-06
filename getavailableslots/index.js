@@ -5,6 +5,15 @@ const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
+
+// Hjälpfunktion: Kolla om datum är i innevarande månad
+function isInCurrentMonth(date) {
+  const now = new Date();
+  return (
+    date.getUTCFullYear() === now.getUTCFullYear() &&
+    date.getUTCMonth() === now.getUTCMonth()
+  );
+}
 export default async function (context, req) {
   let Pool, fetch, uuidv4;
   try {
@@ -273,6 +282,9 @@ export default async function (context, req) {
     for (let i = 1; i <= maxDays; i++) {
       const day = new Date();
       day.setDate(now.getDate() + i);
+      // Steg 2: Endast bearbeta dagar i innevarande månad
+      const processingPhase = isInCurrentMonth(day) ? 'initial' : 'deferred';
+      if (processingPhase === 'deferred') continue; // Endast kör innevarande månad i detta steg
       const dayStr = day.toISOString().split('T')[0];
 
       const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
@@ -756,6 +768,16 @@ export default async function (context, req) {
       body: { slots: chosen }
     };
     context.log('🚀 Svar skickas till klient');
+
+    // Trigga bakgrundsrefresh för resterande dagar (deferred)
+    fetch(process.env.BACKGROUND_SLOT_REFRESH_URL || 'https://macspotbackend.azurewebsites.net/api/refreshRemainingSlots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: booking_email, meeting_type, meeting_length: requestedLength })
+    })
+      .then(() => context.log('🚀 Bakgrundsrefresh av slots startad'))
+      .catch(err => context.log('⚠️ Misslyckades trigga bakgrundsrefresh:', err.message));
+
     setTimeout(() => pool.end().then(() => context.log('🛑 pool.end() klar')).catch(e => context.log('⚠️ pool.end() fel:', e.message)), 0);
     return;
   } catch (err) {
