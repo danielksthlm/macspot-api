@@ -52,20 +52,26 @@
     }
   }
 
-  // --- NEW FUNCTION: triggerSlotSearch ---
+  // --- UPDATED FUNCTION: triggerSlotSearch ---
   async function triggerSlotSearch() {
     const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
     const email = document.querySelector('#booking_email')?.value.trim();
+    const meetingLengthStr = document.querySelector('#meeting_length')?.value.trim();
+    const meetingLength = parseInt(meetingLengthStr, 10);
 
-    if (!meetingType || !email) {
-      console.warn("⛔️ Saknar meeting_type eller email.");
+    if (!meetingType || !email || isNaN(meetingLength)) {
+      console.warn("⛔️ Saknar meeting_type, email eller giltig meeting_length.");
       return;
     }
 
     const response = await fetch("https://macspotbackend.azurewebsites.net/api/getavailableslots", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ meeting_type: meetingType, email: email })
+      body: JSON.stringify({
+        meeting_type: meetingType,
+        email: email,
+        meeting_length: meetingLength
+      })
     });
 
     const result = await response.json();
@@ -90,7 +96,7 @@
       btn.className = "calendar-slot-button";
       btn.addEventListener("click", () => {
         document.querySelector("#selected_slot")?.setAttribute("value", slot);
-        document.querySelector("#selected_slot_display")!.textContent = btn.textContent;
+        document.querySelector("#selected_slot_display").textContent = btn.textContent;
       });
       wrapper.appendChild(btn);
     });

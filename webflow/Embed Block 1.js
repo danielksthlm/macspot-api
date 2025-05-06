@@ -1,50 +1,61 @@
 <script>
-  // Hämtar element via ID för tydlighet och säkerhet (ingen klassanvändning)
-  async function loadMeetingTypes() {
-    try {
-      const response = await fetch('https://macspotbackend.azurewebsites.net/api/meeting_types');
-      const meetingTypes = await response.json();
-      console.log("✅ Mötestyper hämtade:", meetingTypes);
+  function validateContact() {
+    const emailEl = document.querySelector('#booking_email');
+    const email = emailEl ? emailEl.value.trim() : '';
+    const meetingInput = document.querySelector('input[name="meeting_type"]:checked');
+    const meetingType = meetingInput ? meetingInput.value : '';
 
-      const labels = {
-        Zoom: "Digitalt via Zoom",
-        FaceTime: "Digitalt via FaceTime",
-        Teams: "Digitalt via Teams",
-        atClient: "Vi ses hos dig",
-        atOffice: "Vi ses på vårt kontor i Stockholm"
-      };
+    const isValidEmail = email.length > 0 && email.includes('@');
+    const isMeetingTypeSelected = meetingType.length > 0;
 
-      const meetingTypeSelect = document.getElementById('meeting_type_select');
-      meetingTypeSelect.innerHTML = '';
-
-      meetingTypes.forEach((type, index) => {
-        const label = document.createElement('label');
-        label.className = 'radio-button-items w-radio';
-
-        const input = document.createElement('input');
-        input.type = 'radio';
-        input.name = 'meeting_type';
-        input.value = type;
-        input.id = `meeting_type_${index}`;
-        input.className = 'w-form-formradioinput w-radio-input';
-        input.setAttribute('data-name', type);
-
-        const span = document.createElement('span');
-        span.className = 'w-form-label';
-        span.setAttribute('for', `meeting_type_${index}`);
-        span.textContent = labels[type] || type; // Visa översatt etikett om den finns
-
-        input.addEventListener('change', validateContact);
-
-        label.appendChild(input);
-        label.appendChild(span);
-
-        meetingTypeSelect.appendChild(label);
-      });
-    } catch (error) {
-      console.error('❌ Kunde inte ladda mötestyper:', error);
+    const submitBtn = document.getElementById('submit_contact');
+    if (submitBtn) {
+      submitBtn.disabled = !(isValidEmail && isMeetingTypeSelected);
     }
   }
 
-  document.addEventListener('DOMContentLoaded', loadMeetingTypes);
+  async function submitContactUpdate() {
+    const emailInput = document.querySelector('#booking_email');
+    const email = emailInput ? emailInput.value.trim() : '';
+    const meetingInput = document.querySelector('input[name="meeting_type"]:checked');
+    const meetingType = meetingInput ? meetingInput.value : '';
+
+    if (!email || !meetingType) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/update_contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, meetingType }),
+      });
+
+      if (response.ok) {
+        alert('Contact updated successfully!');
+        if (typeof window.triggerSlotSearch === 'function') {
+          window.triggerSlotSearch();
+        }
+      } else {
+        alert('Failed to update contact.');
+      }
+    } catch (error) {
+      console.error('Error updating contact:', error);
+      alert('An error occurred while updating contact.');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const emailEl = document.querySelector('#booking_email');
+    if (emailEl) emailEl.addEventListener('input', validateContact);
+
+    const meetingTypeRadios = document.querySelectorAll('input[name="meeting_type"]');
+    meetingTypeRadios.forEach(radio => radio.addEventListener('change', validateContact));
+
+    const submitBtn = document.getElementById('submit_contact');
+    if (submitBtn) submitBtn.addEventListener('click', submitContactUpdate);
+
+    validateContact();
+  });
 </script>

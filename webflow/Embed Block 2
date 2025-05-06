@@ -1,11 +1,17 @@
 <script>
   async function validateContact() {
-    const email = document.querySelector('#booking_email')?.value.trim();
-    const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+    const emailEl = document.querySelector('#booking_email');
+    const email = emailEl ? emailEl.value.trim() : '';
+    const meetingInput = document.querySelector('input[name="meeting_type"]:checked');
+    const meetingType = meetingInput ? meetingInput.value : '';
     console.log("📌 Vald mötestyp:", meetingType);
 
-    if (!email || !email.includes('@')) return;
-    if (!meetingType) return;
+    if (!email || !email.includes('@')) {
+      return;
+    }
+    if (!meetingType) {
+      return;
+    }
 
     const response = await fetch('https://macspotbackend.azurewebsites.net/api/validate_contact', {
       method: "POST",
@@ -15,6 +21,7 @@
 
     const result = await response.json();
     console.log("✅ API-svar:", result);
+    console.log("🧠 Backend-svar (debug):", JSON.stringify(result, null, 2));
 
     const submitButton = document.querySelector('#contact-update-button');
     const addressWrapper = document.querySelector('#autofilled-fields-at-client');
@@ -30,23 +37,53 @@
         input.classList.remove('needs-filling');
       }
     });
-    if (addressWrapper) addressWrapper.style.display = 'none';
-
-    if (submitButton) {
-      submitButton.style.display = 'none';
-    }
+    if (addressWrapper && result.status === "ok") addressWrapper.style.display = 'none';
+    if (submitButton) submitButton.style.display = 'none';
 
     if (result.status === "ok") {
-      // Removed call to window.triggerSlotSearch
+      const contact = result.contact || {};
+      const metadata = contact.metadata || {};
+      const combined = { ...contact, ...metadata };
+      const allFields = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+      allFields.forEach(field => {
+        const input = document.querySelector(`#${field}`);
+        if (input) {
+          if (combined[field]) {
+            input.value = combined[field];
+            input.style.display = 'none';
+            input.classList.remove('needs-filling');
+          } else {
+            input.value = '';
+            input.style.display = 'block';
+            input.classList.add('needs-filling');
+          }
+        }
+      });
+      return;
     } else if (result.status === "incomplete") {
       const addressFields = ['address', 'postal_code', 'city', 'country'];
       const filteredMissing = result.missing_fields.filter(field => {
-        return !addressFields.includes(field) || meetingType === 'atClient';
+        return !(addressFields.includes(field) && meetingType !== 'atClient');
       });
-      if (filteredMissing.length === 0) {
-        // Removed call to window.triggerSlotSearch
+      const onlyCountryMissing = filteredMissing.length === 1 && filteredMissing[0] === 'country';
+      if (onlyCountryMissing) {
+        const input = document.querySelector(`#country`);
+        if (input) {
+          input.style.display = 'block';
+          input.classList.add('needs-filling');
+        }
+        if (addressWrapper) addressWrapper.style.display = 'block';
+        if (submitButton) {
+          submitButton.style.display = 'block';
+          submitButton.value = 'Uppdatera land';
+        }
         return;
       }
+      console.log("🔍 Backend saknade fält:", result.missing_fields);
+      if (filteredMissing.length === 0) {
+        return;
+      }
+
       console.log("🎯 Filtrerade fält:", filteredMissing);
       result.missing_fields = filteredMissing;
       fields.forEach(field => {
@@ -58,7 +95,12 @@
       });
 
       if (meetingType !== 'atClient' && addressWrapper) {
-        addressWrapper.style.display = 'none';
+        const anyAddressMissing = filteredMissing.some(f => addressFields.includes(f));
+        if (anyAddressMissing) {
+          addressWrapper.style.display = 'block';
+        } else {
+          addressWrapper.style.display = 'none';
+        }
       }
 
       const needsFillingElements = document.querySelectorAll('.needs-filling');
@@ -70,7 +112,6 @@
           submitButton.value = 'Uppdatera uppgifter';
         } else {
           submitButton.style.display = 'none';
-          // Removed call to window.triggerSlotSearch
         }
       }
     } else if (result.status === "new_customer") {
@@ -83,7 +124,11 @@
       });
       if (meetingType === 'atClient') {
         if (addressWrapper) {
-          addressWrapper.style.display = 'block';
+          const allAddressFieldsFilled = ['address', 'postal_code', 'city', 'country'].every(field => {
+            const el = document.querySelector(`#${field}`);
+            return el && el.value.trim();
+          });
+          if (!allAddressFieldsFilled) addressWrapper.style.display = 'block';
           const addressFields = ['address', 'postal_code', 'city', 'country'];
           addressFields.forEach(field => {
             const input = document.querySelector(`#${field}`);
@@ -108,16 +153,24 @@
           submitButton.value = 'Skapa kontakt';
         } else {
           submitButton.style.display = 'none';
-          // Removed call to window.triggerSlotSearch
         }
+      }
+    }
+
+    if (result.status === 'ok') {
+      const visibleFields = document.querySelectorAll('.needs-filling');
+      if (visibleFields.length === 0 && submitButton) {
+        submitButton.style.display = 'none';
       }
     }
   }
 
   // --- NEW FUNCTION: submitContactUpdate ---
   async function submitContactUpdate() {
-    const email = document.querySelector('#booking_email')?.value.trim();
-    const meetingType = document.querySelector('input[name="meeting_type"]:checked')?.value;
+    const emailEl = document.querySelector('#booking_email');
+    const email = emailEl ? emailEl.value.trim() : '';
+    const meetingInput = document.querySelector('input[name="meeting_type"]:checked');
+    const meetingType = meetingInput ? meetingInput.value : '';
     const fields = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
 
     const payload = { email, meeting_type: meetingType };
@@ -139,7 +192,9 @@
       console.log('✅ Kontaktuppdatering svar:', result);
 
       if (result.status === 'success') {
-        window.triggerSlotSearch?.();
+        if (typeof window.triggerSlotSearch === 'function') {
+          window.triggerSlotSearch();
+        }
         const submitButton = document.querySelector('#contact-update-button');
         if (submitButton) {
           submitButton.style.display = 'none';
