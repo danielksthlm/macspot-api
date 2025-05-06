@@ -33,6 +33,7 @@ export default async function (context, req) {
   context.log('📥 Funktion getavailableslots anropad');
   const execStart = Date.now();
 
+  context.log('🔥 Funktion startar – req.body:', req.body);
   const { email, meeting_type } = req.body || {};
   let requestedLength = parseInt(req.body.meeting_length, 10);
   const booking_email = email; // Use booking_email for cache key and queries
