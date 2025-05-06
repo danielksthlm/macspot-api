@@ -1,4 +1,21 @@
 <script>
+  // === ID-Matris: Fält och deras start-synlighet (från Webflow/CSS) ===
+  // ID               | Start-synlighet
+  // -----------------|----------------
+  // booking_email    | visible
+  // meeting_type_group | visible (visas efter e-post)
+  // meeting_type_select | visible
+  // company          | display: none
+  // first_name       | display: none
+  // last_name        | display: none
+  // phone            | display: none
+  // address          | display: none
+  // postal_code      | display: none
+  // city             | display: none
+  // country          | display: none
+  // missing_fields_messages | visible
+  // contact_validation_loading | hidden (visas vid API-anrop)
+  // contact-update-button | hidden (visas vid ifyllda fält)
   async function loadMeetingTypes() {
     try {
       const res = await fetch('https://macspotbackend.azurewebsites.net/api/meeting_types');
@@ -83,7 +100,9 @@
     const meetingTypeEl = document.querySelector('input[name="meeting_type"]:checked');
     const meetingType = meetingTypeEl ? meetingTypeEl.value : '';
 
-    const customerFieldsGroup = document.getElementById('customer_fields_group');
+    const allFieldIds = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    const allFields = allFieldIds.map(id => document.getElementById(id)).filter(Boolean);
+
     const addressField = document.getElementById('address_field');
     const missingFieldsContainer = document.getElementById('missing_fields_messages');
     const submitButton = document.querySelector('button[type="submit"]');
@@ -93,18 +112,12 @@
     if (missingFieldsContainer) {
       missingFieldsContainer.innerHTML = '';
     }
-    if (customerFieldsGroup) {
-      const inputs = customerFieldsGroup.querySelectorAll('input, textarea, select');
-      inputs.forEach(input => input.classList.remove('needs-filling'));
-    }
+    allFields.forEach(input => {
+      input.classList.remove('needs-filling');
+    });
 
     if (!email || !meetingType) {
-      if (customerFieldsGroup) {
-        customerFieldsGroup.style.display = 'none';
-      }
-      if (addressField) {
-        addressField.style.display = 'none';
-      }
+      if (addressField) addressField.style.display = 'none';
       if (submitButton) {
         submitButton.style.display = 'none';
       }
@@ -130,59 +143,65 @@
 
       const data = await response.json();
       console.log('✅ API JSON:', data);
+      console.log('ℹ️ typeof missing_fields:', typeof data.missing_fields);
+      console.log('🔎 missing_fields:', data.missing_fields);
       if (!Array.isArray(data.missing_fields)) {
         console.warn('⚠️ missing_fields saknas eller inte en array');
       }
 
-      if (customerFieldsGroup) {
-        customerFieldsGroup.style.display = 'block';
-      }
 
       if (data.missing_fields && Array.isArray(data.missing_fields)) {
-        if (missingFieldsContainer) {
-          data.missing_fields.forEach(field => {
-            const p = document.createElement('p');
-            p.style.color = 'red';
-            p.textContent = `Saknat fält: ${field}`;
-            missingFieldsContainer.appendChild(p);
-            // Mark corresponding input fields with .needs-filling
-            if (customerFieldsGroup) {
-              const fieldInput = customerFieldsGroup.querySelector(`[name="${field}"]`);
-              if (fieldInput) {
-                fieldInput.classList.add('needs-filling');
-              }
+        let firstFocusable = null;
+        allFields.forEach(input => {
+          const fieldName = input.id;
+          console.log(`🧪 Kontroll: fieldName = '${fieldName}'`);
+          console.log(`🔍 Finns i missing_fields?`, data.missing_fields.includes(fieldName));
+          const isAddressField = ['address', 'postal_code', 'city', 'country'].includes(fieldName);
+          const shouldShow = data.missing_fields.includes(fieldName) && (!isAddressField || meetingType === 'atclient');
+          if (shouldShow) {
+            console.log("👁️ Visar fält:", fieldName);
+            console.log(`➡️ input.id = ${input.id}`);
+            console.log(`➡️ input.style.display = ${input.style.display}`);
+            input.style.display = 'block';
+            input.classList.add('needs-filling');
+            if (!input.value.trim() && !firstFocusable) {
+              firstFocusable = input;
             }
-          });
-        }
-      }
-
-      if (meetingType === 'atclient') {
-        if (addressField) {
-          addressField.style.display = 'block';
-        }
-      } else {
-        if (addressField) {
-          addressField.style.display = 'none';
-        }
-      }
-
-      // Show submit button only if at least one visible field is empty
-      let showSubmit = false;
-      if (customerFieldsGroup) {
-        const visibleInputs = Array.from(customerFieldsGroup.querySelectorAll('input, textarea, select')).filter(el => {
-          return el.offsetParent !== null; // visible
+            if (missingFieldsContainer) {
+              const p = document.createElement('p');
+              p.style.color = 'red';
+              p.textContent = `Saknat fält: ${fieldName}`;
+              missingFieldsContainer.appendChild(p);
+            }
+          } else {
+            input.style.display = 'none';
+          }
         });
-        showSubmit = visibleInputs.some(input => !input.value.trim());
+        if (firstFocusable) {
+          firstFocusable.focus();
+          firstFocusable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
+
+      if (addressField) {
+        addressField.style.display = (meetingType === 'atclient') ? 'block' : 'none';
+      }
+
+      // Show submit button only if all visible fields have content
+      let allVisibleFilled = true;
+      const visibleInputs = allFields.filter(el => {
+        return el.offsetParent !== null; // visible
+      });
+      allVisibleFilled = visibleInputs.every(input => input.value.trim());
       if (submitButton) {
-        submitButton.style.display = showSubmit ? 'block' : 'none';
+        submitButton.style.display = allVisibleFilled ? 'block' : 'none';
       }
 
     } catch (error) {
       console.error('Error validating contact:', error);
-      if (customerFieldsGroup) {
-        customerFieldsGroup.style.display = 'none';
-      }
+      allFields.forEach(input => {
+        input.style.display = 'none';
+      });
       if (addressField) {
         addressField.style.display = 'none';
       }
@@ -199,8 +218,6 @@
   document.addEventListener('DOMContentLoaded', async () => {
     const emailEl = document.querySelector('#booking_email');
     if (emailEl) emailEl.addEventListener('input', validateEmail);
-    const contactEl = document.querySelector('#booking_customer_contact');
-    if (contactEl) contactEl.addEventListener('input', validateAndRenderCustomerFields);
 
     // Also call validateAndRenderCustomerFields automatically if both fields are filled
     const meetingTypeEl = document.querySelector('input[name="meeting_type"]:checked');

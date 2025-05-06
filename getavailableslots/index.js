@@ -22,6 +22,7 @@ export default async function (context, req) {
   context.log('📥 Funktion getavailableslots anropad');
 
   const { email, meeting_type } = req.body || {};
+  let requestedLength = parseInt(req.body.meeting_length, 10);
   const booking_email = email; // Use booking_email for cache key and queries
   context.log('📧 Email:', booking_email, '📅 Mötestyp:', meeting_type);
   if (!booking_email || !meeting_type) {
@@ -63,7 +64,6 @@ export default async function (context, req) {
   await pruneExpiredSlotCache();
 
   let db;
-  let requestedLength;
   let lengths;
   try {
 
@@ -195,7 +195,6 @@ export default async function (context, req) {
             Teams: settings.default_meeting_length_digital
           };
 
-          requestedLength = parseInt(req.body.meeting_length, 10);
           if (!requestedLength || isNaN(requestedLength)) {
             context.res = {
               status: 400,
@@ -569,6 +568,7 @@ export default async function (context, req) {
             travelTimeMin
           ]);
           context.log(`🗃️ Slot cache tillagd i available_slots_cache: ${slotIso}`);
+          context.log(`🎯 Slot score som cachades: ${slotScore}`);
         }
         // ⛔ Avsluta tidigare om alla fm/em-tider har hittats
         if (Object.keys(slotGroupPicked).length >= maxDays * 2) {
@@ -616,6 +616,6 @@ export default async function (context, req) {
     };
     return;
   } finally {
-    // Lägg till återställning/loggning här vid behov
+    if (db) db.release();
   }
 }
