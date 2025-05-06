@@ -307,8 +307,8 @@ export default async function (context, req) {
     const bookingsByDay = {};
 
     for (let i = 1; i <= maxDays; i++) {
-      const day = new Date();
-      day.setDate(now.getDate() + i);
+      const day = new Date(now);
+      day.setUTCDate(now.getUTCDate() + i);
       // Steg 2: Endast bearbeta dagar i innevarande månad
       const processingPhase = isInCurrentMonth(day) ? 'initial' : 'deferred';
       if (processingPhase === 'deferred') continue; // Endast kör innevarande månad i detta steg
