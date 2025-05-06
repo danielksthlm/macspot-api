@@ -1,3 +1,5 @@
+
+
 // Global Apple Maps access token cache
 let appleMapsAccessToken = null;
 // Slot pattern frequency tracker
@@ -14,6 +16,7 @@ function isInCurrentMonth(date) {
     date.getUTCMonth() === now.getUTCMonth()
   );
 }
+
 export default async function (context, req) {
   let Pool, fetch, uuidv4;
   try {
