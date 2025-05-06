@@ -158,6 +158,79 @@ export default async function (context, req) {
       lengths = [requestedLength];
     }
 
+    // Förladdar restider med Apple Maps (kl 08:00 för varje dag i maxDays)
+    const preloadTravelTime = async () => {
+      context.log('🚚 Förladdar restider med Apple Maps...');
+      const fromAddress = meeting_type === 'atClient'
+        ? settings.default_office_address
+        : fullAddress || settings.default_home_address;
+      const toAddress = meeting_type === 'atClient'
+        ? fullAddress || settings.default_home_address
+        : settings.default_office_address;
+
+      const teamId = process.env.APPLE_MAPS_TEAM_ID;
+      const keyId = process.env.APPLE_MAPS_KEY_ID;
+      const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+
+      const token = jwt.sign({}, privateKey, {
+        algorithm: 'ES256',
+        issuer: teamId,
+        keyid: keyId,
+        expiresIn: '1h',
+        header: { alg: 'ES256', kid: keyId, typ: 'JWT' }
+      });
+
+      let accessToken;
+      try {
+        const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const tokenData = await tokenRes.json();
+        accessToken = tokenData.accessToken;
+        if (!accessToken) {
+          context.log('⚠️ Apple Maps-token saknas vid preload');
+          return;
+        }
+      } catch (err) {
+        context.log('⚠️ Misslyckades hämta Apple-token vid preload:', err.message);
+        return;
+      }
+
+      for (let i = 1; i <= maxDays; i++) {
+        const testDay = new Date();
+        testDay.setDate(now.getDate() + i);
+        testDay.setUTCHours(8, 0, 0, 0);
+        const slotIso = testDay.toISOString();
+        const travelKey = `${fromAddress}->${toAddress}`;
+        const hourKey = `${fromAddress}|${toAddress}|${testDay.getHours()}`;
+
+        if (travelTimeCache[hourKey] !== undefined) continue;
+
+        const url = new URL('https://maps-api.apple.com/v1/directions');
+        url.searchParams.append('origin', fromAddress);
+        url.searchParams.append('destination', toAddress);
+        url.searchParams.append('transportType', 'automobile');
+        url.searchParams.append('departureTime', slotIso);
+
+        try {
+          const res = await fetch(url.toString(), {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          const data = await res.json();
+          const durationSec = data.routes?.[0]?.durationSeconds;
+          const travelTimeMin = Math.round((durationSec || 0) / 60);
+          travelTimeCache[travelKey] = travelTimeMin;
+          travelTimeCache[hourKey] = travelTimeMin;
+          appleCache[slotIso] = travelTimeMin;
+          context.log(`📦 Förladdad restid för ${slotIso}: ${travelTimeMin} min`);
+        } catch (err) {
+          context.log('⚠️ Misslyckades hämta restid vid preload:', err.message);
+        }
+      }
+    };
+
+    await preloadTravelTime();
+
     // --- Cacha bokningar per dag ---
     const bookingsByDay = {};
 
