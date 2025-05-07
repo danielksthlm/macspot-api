@@ -449,6 +449,23 @@ export default async function (context, req) {
       body: { slots: chosen }
     };
     context.log('🚀 Svar skickas till klient');
+
+    // 🚀 Trigger bakgrunds-refresh om BACKGROUND_SLOT_REFRESH_URL är satt
+    try {
+      if (process.env.BACKGROUND_SLOT_REFRESH_URL) {
+        const triggerUrl = process.env.BACKGROUND_SLOT_REFRESH_URL;
+        const fetch = (await import('node-fetch')).default;
+        await fetch(triggerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: booking_email, meeting_type })
+        });
+        context.log('🚀 Startade bakgrunds-refresh via BACKGROUND_SLOT_REFRESH_URL');
+      }
+    } catch (err) {
+      context.log('⚠️ Kunde inte trigga bakgrunds-refresh:', err.message);
+    }
+
     // pool.end() tas bort, db.release() sköter kopplingen
     return;
   } catch (err) {
