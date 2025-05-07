@@ -1,265 +1,162 @@
+const fs = require('fs');
 const dayjs = require('dayjs');
 const isoWeek = require('dayjs/plugin/isoWeek');
 dayjs.extend(isoWeek);
 
 module.exports = async function (context, req) {
-  let Client, fetch, uuidv4, jwt, fs;
+  let Client, fetch, uuidv4, jwt;
   try {
     ({ Client } = await import('pg'));
     fetch = (await import('node-fetch')).default;
     ({ v4: uuidv4 } = await import('uuid'));
     jwt = await import('jsonwebtoken');
-    fs = require('fs');
   } catch (err) {
-    context.log.error('❌ Importfel:', err.message);
-    context.log.error('❌ Fullständig stacktrace:', err.stack);
     context.res = { status: 500, body: 'Importfel: ' + err.message };
     return;
   }
 
-  context.log('📥 Funktion refreshRemainingSlots anropad');
-
-  const email = req.body?.email;
-  const meetingType = req.body?.meeting_type;
-  const meetingLength = req.body?.meeting_length || 60;
-
-  if (!email || !meetingType) {
-    context.res = {
-      status: 400,
-      body: 'Missing email or meeting_type',
-    };
+  const { email, meeting_type } = req.body || {};
+  if (!email || !meeting_type) {
+    context.res = { status: 400, body: 'Email och mötestyp krävs.' };
     return;
   }
 
   const client = new Client({
-    connectionString: process.env.DATABASE_URL,
+    user: process.env.PGUSER,
+    host: process.env.PGHOST,
+    database: process.env.PGDATABASE,
+    password: process.env.PGPASSWORD,
+    port: parseInt(process.env.PGPORT || '5432', 10),
     ssl: { rejectUnauthorized: false }
   });
+  await client.connect();
 
   try {
-    await client.connect();
-    context.log('✅ Ansluten till databasen');
-
-    // Hämta kontakt
     const contactResult = await client.query(
       'SELECT * FROM contact WHERE booking_email = $1 LIMIT 1',
       [email]
     );
-    if (contactResult.rowCount === 0) {
-      context.res = {
-        status: 404,
-        body: 'Contact not found',
-      };
-      return;
-    }
     const contact = contactResult.rows[0];
-    context.log(`✅ Kontakt hittad: ${contact.email}`);
+    const metadata = contact?.metadata || {};
+    const fullAddress = [metadata.address, metadata.postal_code, metadata.city]
+      .filter(Boolean)
+      .join(', ');
 
-    // Hämta bokningsinställningar
-    const settingsResult = await client.query(
-      'SELECT * FROM booking_settings LIMIT 1'
-    );
-    if (settingsResult.rowCount === 0) {
-      throw new Error('Booking settings not found');
-    }
-    const settings = settingsResult.rows[0];
-    context.log('✅ Bokningsinställningar hämtade');
-
-    // Beräkna tidsfönster för tillgängliga slots efter innevarande månad
-    const now = dayjs();
-    const startAfter = now.endOf('month').add(1, 'minute');
-    const endWindow = startAfter.add(settings.slot_generation_days || 30, 'day');
-    context.log(`⏳ Genererar slots från ${startAfter.format()} till ${endWindow.format()}`);
-
-    // Hämta lunchperioder från inställningar (exempel: "12:00-13:00")
-    let lunchStart = null;
-    let lunchEnd = null;
-    if (settings.lunch_time) {
-      const parts = settings.lunch_time.split('-');
-      if (parts.length === 2) {
-        lunchStart = parts[0];
-        lunchEnd = parts[1];
+    const settingsRes = await client.query('SELECT key, value, value_type FROM booking_settings');
+    const settings = {};
+    for (const row of settingsRes.rows) {
+      if (row.value_type === 'json' || row.value_type === 'array') {
+        try {
+          settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
+        } catch (_) {}
+      } else if (row.value_type === 'int') {
+        settings[row.key] = parseInt(row.value);
+      } else if (row.value_type === 'bool') {
+        settings[row.key] = row.value === 'true';
+      } else {
+        settings[row.key] = row.value;
       }
     }
 
-    // Funktion för att kolla om tidpunkt är inom lunch
-    function isDuringLunch(date) {
-      if (!lunchStart || !lunchEnd) return false;
-      const time = date.format('HH:mm');
-      return time >= lunchStart && time < lunchEnd;
-    }
+    const maxDays = settings.max_days_in_advance || 60;
+    const today = dayjs();
+    const currentMonthEnd = today.endOf('month');
+    const startDay = currentMonthEnd.add(1, 'day');
 
-    // Veckokvot: max antal bokningar per vecka per kontakt
-    const weeklyQuota = settings.weekly_quota || 5;
+    let created = 0;
+    for (let i = 0; i <= (maxDays - today.date()); i++) {
+      const d = startDay.add(i, 'day');
+      const dayStr = d.format('YYYY-MM-DD');
+      const weekday = d.format('dddd').toLowerCase();
 
-    // Hämta redan bokade slots för kontakt per vecka för att kontrollera kvot
-    const bookingsResult = await client.query(
-      `SELECT date FROM bookings WHERE contact_id = $1 AND date >= $2 AND date <= $3`,
-      [contact.id, startAfter.toDate(), endWindow.toDate()]
-    );
-    const bookedDates = bookingsResult.rows.map(r => dayjs(r.date));
-    const bookingsPerWeek = {};
-    bookedDates.forEach(d => {
-      const week = d.isoWeek();
-      bookingsPerWeek[week] = (bookingsPerWeek[week] || 0) + 1;
-    });
-
-    // Funktion för att kontrollera om veckokvot är nådd för ett datum
-    function isWeeklyQuotaReached(date) {
-      const week = date.isoWeek();
-      return (bookingsPerWeek[week] || 0) >= weeklyQuota;
-    }
-
-    // Funktion för att beräkna restid via Apple Maps API
-    async function getTravelTime(from, to) {
-      try {
-        const keyId = process.env.APPLE_MAPS_KEY_ID;
-        const teamId = process.env.APPLE_MAPS_TEAM_ID;
-        const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY.replace(/\\n/g, '\n');
-        const url = 'https://maps-api.apple.com/v1/directions';
-
-        const token = jwt.sign({}, privateKey, {
-          algorithm: 'ES256',
-          expiresIn: '180s',
-          issuer: teamId,
-          header: {
-            alg: 'ES256',
-            kid: keyId,
-            typ: 'JWT'
-          }
-        });
-
-        const params = new URLSearchParams({
-          origin: from,
-          destination: to,
-          mode: 'walking'
-        });
-
-        const response = await fetch(`${url}?${params.toString()}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        if (!response.ok) {
-          context.log(`❌ Apple Maps API error: ${response.status} ${response.statusText}`);
-          return Number.MAX_SAFE_INTEGER;
-        }
-
-        const data = await response.json();
-        if (
-          data.routes &&
-          data.routes.length > 0 &&
-          data.routes[0].legs &&
-          data.routes[0].legs.length > 0 &&
-          typeof data.routes[0].legs[0].durationSeconds === 'number'
-        ) {
-          const travelTimeMin = Math.ceil(data.routes[0].legs[0].durationSeconds / 60);
-          return travelTimeMin;
-        } else {
-          context.log('❌ Apple Maps API response missing durationSeconds');
-          return Number.MAX_SAFE_INTEGER;
-        }
-      } catch (error) {
-        context.log.error('❌ Fel vid anrop till Apple Maps API:', error);
-        return Number.MAX_SAFE_INTEGER;
-      }
-    }
-
-    // Skapa slots med skårning och gruppering
-    const slots = [];
-    let current = startAfter.startOf('day').hour(settings.workday_start_hour || 8).minute(0);
-    const workdayEndHour = settings.workday_end_hour || 18;
-
-    while (current.isBefore(endWindow)) {
-      // Hoppa över helger om inställt
-      if (settings.exclude_weekends) {
-        const day = current.day();
-        if (day === 0 || day === 6) {
-          current = current.add(1, 'day').hour(settings.workday_start_hour || 8).minute(0);
-          continue;
-        }
-      }
-
-      // Kontrollera lunch
-      if (isDuringLunch(current)) {
-        current = current.add(1, 'minute');
+      if (settings.block_weekends && (weekday === 'saturday' || weekday === 'sunday')) continue;
+      if (
+        meeting_type === 'atClient' &&
+        settings.allowed_atClient_meeting_days &&
+        !settings.allowed_atClient_meeting_days.includes(weekday)
+      ) {
         continue;
       }
 
-      // Kontrollera veckokvot
-      if (isWeeklyQuotaReached(current)) {
-        current = current.add(1, 'minute');
-        continue;
+      const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
+      const closeHour = parseInt((settings.close_time || '16:00').split(':')[0], 10);
+      const lengths = settings[`default_meeting_length_${meeting_type}`] || [60];
+
+      for (let hour = openHour; hour < closeHour; hour++) {
+        for (const len of lengths) {
+          const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
+          const end = new Date(start.getTime() + len * 60000);
+          const slotIso = start.toISOString();
+          const slotPart = hour < 12 ? 'fm' : 'em';
+          const slotDay = slotIso.split('T')[0];
+
+          const accessToken = await getAppleMapsAccessToken(jwt, context);
+          const fromAddress = settings.default_office_address;
+          const toAddress = fullAddress;
+          const travelTimeMin = await getTravelTime(fromAddress, toAddress, start, accessToken, context);
+          if (travelTimeMin === Number.MAX_SAFE_INTEGER) continue;
+
+          await client.query(
+            `INSERT INTO available_slots_cache (
+              meeting_type, meeting_length, slot_day, slot_part, slot_iso, slot_score,
+              travel_time_min, generated_at, expires_at
+            ) VALUES ($1, $2, $3, $4, $5, 99999, $6, NOW(), NOW() + interval '${settings.cache_ttl_minutes || 1440} minutes')
+            ON CONFLICT DO NOTHING`,
+            [meeting_type, len, slotDay, slotPart, slotIso, travelTimeMin]
+          );
+          created++;
+        }
       }
-
-      // Kontrollera arbetstid
-      if (current.hour() < (settings.workday_start_hour || 8) || current.hour() >= workdayEndHour) {
-        current = current.add(1, 'day').hour(settings.workday_start_hour || 8).minute(0);
-        continue;
-      }
-
-      // Beräkna restid till mötesplats (antaget att contact har address)
-      const travelTime = await getTravelTime(contact.address, settings.meeting_location || '');
-      // Skapa skårning baserat på restid och starttid (exempel)
-      let score = 100;
-      if (travelTime > 30) score -= 30;
-      if (current.hour() < 10) score += 10;
-      if (current.hour() >= 16) score -= 10;
-
-      // Skapa slot-objekt
-      const slot = {
-        id: uuidv4(),
-        contact_id: contact.id,
-        meeting_type: meetingType,
-        start_time: current.toISOString(),
-        length_minutes: meetingLength,
-        score,
-        created_at: new Date(),
-      };
-
-      slots.push(slot);
-
-      // Stega fram till nästa slot starttid (t ex 15 min intervaller)
-      current = current.add(settings.slot_interval_minutes || 15, 'minute');
     }
 
-    context.log(`🔎 Genererade ${slots.length} slots, börjar cache:a...`);
-
-    // Cachar slots direkt i available_slots_cache tabellen
-    const insertQuery = `
-      INSERT INTO available_slots_cache
-      (id, contact_id, meeting_type, start_time, length_minutes, score, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (id) DO NOTHING
-    `;
-
-    for (const slot of slots) {
-      await client.query(insertQuery, [
-        slot.id,
-        slot.contact_id,
-        slot.meeting_type,
-        slot.start_time,
-        slot.length_minutes,
-        slot.score,
-        slot.created_at,
-      ]);
-    }
-
-    context.log(`✅ Cachade ${slots.length} slots i available_slots_cache`);
-
-    context.res = {
-      status: 200,
-      body: `${slots.length} slots skapades`,
-    };
-  } catch (error) {
-    context.log.error('❌ Fel vid refreshRemainingSlots:', error);
-    context.res = {
-      status: 500,
-      body: `Fel: ${error.message}`,
-    };
+    context.res = { status: 200, body: { status: 'ok', cached_slots: created } };
+  } catch (err) {
+    context.res = { status: 500, body: err.message };
   } finally {
     await client.end();
-    context.log('🔌 Databasanslutning stängd');
+  }
+};
+
+// Riktiga Apple Maps-anrop (identiskt med getavailableslots)
+async function getAppleMapsAccessToken(jwt, context) {
+  try {
+    const teamId = process.env.APPLE_MAPS_TEAM_ID;
+    const keyId = process.env.APPLE_MAPS_KEY_ID;
+    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+    const token = jwt.sign({}, privateKey, {
+      algorithm: 'ES256',
+      issuer: teamId,
+      keyid: keyId,
+      expiresIn: '1h',
+      header: { alg: 'ES256', kid: keyId, typ: 'JWT' }
+    });
+    const fetch = (await import('node-fetch')).default;
+    const res = await fetch('https://maps-api.apple.com/v1/token', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    return data.accessToken;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function getTravelTime(from, to, start, token, context) {
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const url = new URL('https://maps-api.apple.com/v1/directions');
+    url.searchParams.append('origin', from);
+    url.searchParams.append('destination', to);
+    url.searchParams.append('transportType', 'automobile');
+    url.searchParams.append('departureTime', start.toISOString());
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    const durationSec = data.routes?.[0]?.durationSeconds;
+    return Math.round((durationSec || 0) / 60);
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
   }
 }
