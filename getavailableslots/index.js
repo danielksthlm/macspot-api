@@ -108,9 +108,9 @@ export const run = async function (context, req) {
     context.log('🔎 Filtrerade rum (åtkomliga via Graph):', selectedRooms);
 
     // Använd valda rum istället för tidigare roomList
-    const roomList = selectedRooms;
+    // const roomList = selectedRooms;
 
-    if (roomList.length === 0) {
+    if (selectedRooms.length === 0) {
       context.res = {
         status: 404,
         body: { error: `Inga rum hittades för meeting_type '${meeting_type}' i booking_settings.` }
@@ -118,7 +118,8 @@ export const run = async function (context, req) {
       return;
     }
 
-    const testRoom = roomList[0];
+    const testRoom = 'daniel@klrab.se';
+    context.log(`📌 Testar tillgång mot rum: ${testRoom}`);
     const today = new Date().toISOString().split('T')[0];
     const body = {
       schedules: [testRoom],
