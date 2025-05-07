@@ -8,6 +8,7 @@ const { Pool } = pkg;
 export const run = async function (context, req) {
   context.log('🟢 getavailableslots index.js startar...');
   context.log('✅ Funktion getavailableslots anropad');
+  context.log('📥 Full request body:', JSON.stringify(req.body, null, 2));
 
   const findRooms = await fetchGraph('/me/findRooms');
   context.log('📦 /me/findRooms-resultat:', JSON.stringify(findRooms, null, 2));
