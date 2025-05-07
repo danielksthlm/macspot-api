@@ -4,7 +4,6 @@ let appleMapsAccessToken = null;
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 
-
 let jwt;
 
 console.log('📍 Definierar getGraphAccessToken...');
@@ -82,8 +81,7 @@ function logDuration(context, execStart) {
   context.log(`⏱️ Total exekveringstid: ${execEnd - execStart} ms`);
 }
 
-// ────────────── Förladda restider ──────────────
-async function preloadTravelTime(context, db, settings, fullAddress, meeting_type, fetchParam) {
+/* async function preloadTravelTime(context, db, settings, fullAddress, meeting_type, fetchParam) {
   context.log('🚚 Förladdar restider med Apple Maps...');
   const now = new Date();
   const maxDays = settings.max_days_in_advance || 14;
@@ -191,7 +189,7 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
       context.log('⚠️ Misslyckades hämta restid vid preload:', err.message);
     }
   }
-}
+} */
 
 
 // ────────────── HUVUDFUNKTION ──────────────
@@ -201,19 +199,24 @@ export default async function (context, req) {
   let lengths;
   context.log('🔍 Börjar köra funktionen – före import');
   try {
+    // Import: pg
     context.log('📦 Försöker importera pg...');
     ({ Pool } = await import('pg'));
-    context.log('✅ pg importerat');
+    context.log('✅ Import: pg klar');
 
+    // Import: node-fetch
     context.log('📦 Försöker importera node-fetch...');
     fetch = (await import('node-fetch')).default;
-    context.log('✅ node-fetch importerat');
+    context.log('✅ Import: node-fetch klar');
 
+    // Import: uuid
     context.log('📦 Försöker importera uuid...');
     ({ v4: uuidv4 } = await import('uuid'));
-    context.log('✅ uuid importerat');
+    context.log('✅ Import: uuid klar');
 
+    // Import: jsonwebtoken
     jwt = await import('jsonwebtoken');
+    context.log('✅ Import: jsonwebtoken klar');
   } catch (err) {
     context.log.error('❌ Import-fel:', err.message);
     context.res = {
@@ -223,6 +226,7 @@ export default async function (context, req) {
     return;
   }
 
+  context.log('📍 Efter imports – på väg in i req-check');
   context.log('📥 Funktion getavailableslots anropad');
   if (!req || !req.body) {
     context.log.error('❌ Ingen req.body – felaktigt API-anrop?');
@@ -232,6 +236,7 @@ export default async function (context, req) {
     };
     return;
   }
+  context.log('📍 req.body verkar OK');
   execStart = Date.now();
 
   context.log('🔥 Funktion startar – req.body:', req.body);
@@ -285,7 +290,10 @@ export default async function (context, req) {
     const graphHourlyCache = {}; // ny cache per dag+timme
 
     // ────────────── 1. INITIERA KONTAKT + INSTÄLLNINGAR ──────────────
-    if (!db) db = await pool.connect();
+    if (!db) {
+      db = await pool.connect();
+      context.log('📍 db.connect OK');
+    }
     // Hämta kontakt
     const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [booking_email]);
     contact = contactRes.rows[0];
@@ -294,12 +302,12 @@ export default async function (context, req) {
       .filter(Boolean)
       .join(', ');
     context.log('📍 Fullständig kundadress:', fullAddress);
-    context.log('👤 Kontakt hittad:', contact);
+    context.log('📍 Kontakt hittad:', contact);
     context.log('📍 Metadata-adress:', metadata?.address);
     // Hämta alla inställningar
     settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
     settings = parseSettings(settingsRes.rows);
-    context.log('⚙️ Inställningar laddade:', Object.keys(settings));
+    context.log('📍 Inställningar laddade:', Object.keys(settings));
     context.log(`🕓 Öppettider enligt inställningar: ${settings.open_time}–${settings.close_time}`);
     const requiredKeys = [
       'default_office_address',
@@ -339,7 +347,7 @@ export default async function (context, req) {
     }
 
     // ────────────── 2. FÖRLADDA RESTIDER ──────────────
-    await preloadTravelTime(context, db, settings, fullAddress, meeting_type, fetch);
+    // await preloadTravelTime(context, db, settings, fullAddress, meeting_type, fetch);
 
     // ────────────── 3. GENERERA TILLGÄNGLIGA SLOTS ──────────────
     // --- Cacha bokningar per dag ---
