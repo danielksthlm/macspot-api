@@ -82,13 +82,17 @@ export const run = async function (context, req) {
 
     const pool = new Pool(pgConfig);
     const allUsers = await fetchGraph('/users');
+    context.log(`🧪 Antal användare hämtade: ${allUsers.value?.length || 0}`);
     context.log('📋 Alla användare:', JSON.stringify(allUsers, null, 2));
     // Hämta room_priority från booking_settings
     const priorityResult = await pool.query("SELECT value FROM booking_settings WHERE key = 'room_priority'");
     const roomPriority = priorityResult.rows[0]?.value || {};
     const selectedRoomsRaw = roomPriority[meeting_type] || [];
     const usersResponse = await fetchGraph('/users');
-    const userEmails = (usersResponse.value || []).map(user => user.mail || user.userPrincipalName);
+    const userEmails = (usersResponse.value || []).map(user => {
+      context.log(`👤 Användare: ${user.displayName} | ${user.mail} | ${user.userPrincipalName}`);
+      return user.mail || user.userPrincipalName;
+    });
     const selectedRooms = selectedRoomsRaw.filter(email => userEmails.includes(email));
     context.log(`🏢 Valda rum för meeting_type ${meeting_type}:`, selectedRooms);
     context.log('🔎 Filtrerade rum (åtkomliga via Graph):', selectedRooms);
