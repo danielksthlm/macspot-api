@@ -11,7 +11,7 @@ export default async function (context, req) {
     try {
       context.log("📦 Miljövariabler:");
       context.log("GRAPH_CLIENT_ID", process.env.GRAPH_CLIENT_ID);
-      context.log("GRAPH_CLIENT_SECRET", process.env.GRAPH_CLIENT_SECRET ? "[hemlig]" : "❌ Saknas");
+      context.log("GRAPH_CLIENT_SECRET", process.env.GRAPH_CLIENT_SECRET ? "[hemlig]" : "❌ Saknass");
       context.log("GRAPH_TENANT_ID", process.env.GRAPH_TENANT_ID);
       context.log("GRAPH_USER_ID", process.env.GRAPH_USER_ID);
 
