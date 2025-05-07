@@ -46,7 +46,16 @@ export default async function (context, req) {
     for (const row of settingsRes.rows) {
       if (row.value_type === 'int') settings[row.key] = parseInt(row.value);
       else if (row.value_type === 'bool') settings[row.key] = row.value === 'true';
-      else if (row.value_type === 'json') settings[row.key] = JSON.parse(row.value);
+      else if (row.value_type === 'json') {
+        try {
+          settings[row.key] = typeof row.value === 'string'
+            ? JSON.parse(row.value)
+            : row.value;
+        } catch (e) {
+          context.log.warn(`⚠️ Kunde inte parsa settings-nyckel ${row.key}:`, row.value);
+          settings[row.key] = null;
+        }
+      }
       else settings[row.key] = row.value;
     }
 
