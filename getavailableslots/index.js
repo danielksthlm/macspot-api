@@ -33,7 +33,7 @@ module.exports = async function (context, req) {
       "konferensen@ettelva.se",
     ];
 
-    const result = await client.api("/users/daniel@klrab.se/calendar/getSchedule").post({
+    const result = await client.api("/me/calendar/getSchedule").post({
       schedules: roomEmails,
       startTime: {
         dateTime: start,
@@ -59,9 +59,10 @@ module.exports = async function (context, req) {
     if (!req.body) {
       context.log.warn("⚠️ Ingen body i requesten – använder standardvärden.");
     }
+    const meetingType = (req.body && req.body.meeting_type) || "atOffice";
     response = {
       success: true,
-      meeting_type: (req.body && req.body.meeting_type) || "atOffice",
+      meeting_type: meetingType,
       available_rooms: availableRooms.map(r => r.scheduleId),
       all_schedules: result.value,
     };
