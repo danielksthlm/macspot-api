@@ -118,56 +118,46 @@ export const run = async function (context, req) {
       return;
     }
 
-    const testRoom = 'daniel@klrab.se';
-    context.log(`📌 Testar tillgång mot rum: ${testRoom}`);
     const today = new Date().toISOString().split('T')[0];
-    const body = {
-      schedules: [testRoom],
-      startTime: { dateTime: `${today}T08:00:00`, timeZone: 'Europe/Stockholm' },
-      endTime: { dateTime: `${today}T17:00:00`, timeZone: 'Europe/Stockholm' },
-      availabilityViewInterval: 30
-    };
-
-    context.log(`📅 getSchedule-test via /me/calendar/getSchedule för ${testRoom}:`, JSON.stringify(body, null, 2));
-    const scheduleResponse = await fetchGraph(`/me/calendar/getSchedule`, 'POST', body);
-    context.log('🧾 Fullt svar från Graph getSchedule:', JSON.stringify(scheduleResponse, null, 2));
-
-    // Tolka availabilityView och hitta första luckan med minst 60 minuter ledigt (2 block)
-    const availability = scheduleResponse.value?.[0]?.availabilityView;
-    if (availability) {
-      context.log('🧩 availabilityView (hela vyn):', availability);
-      for (let i = 0; i < availability.length; i++) {
-        context.log(`🔹 Tidsblock ${i}: ${availability[i]}`);
-      }
-    } else {
-      context.log('⚠️ Ingen availabilityView tillgänglig i svar från Graph.');
-    }
     const blocksNeeded = 60 / 30;
+    const availableSlots = {};
 
-    let foundSlot = null;
-    if (availability) {
-      for (let i = 0; i <= availability.length - blocksNeeded; i++) {
-        const block = availability.slice(i, i + blocksNeeded);
-        if (block === '0'.repeat(blocksNeeded)) {
-          const startHour = 8 + Math.floor(i / 2);
-          const startMin = (i % 2) * 30;
-          const startTime = `${today}T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00`;
-          foundSlot = startTime;
-          break;
+    for (const room of selectedRooms) {
+      context.log(`📌 Kollar tillgång mot rum: ${room}`);
+      const body = {
+        schedules: [room],
+        startTime: { dateTime: `${today}T08:00:00`, timeZone: 'Europe/Stockholm' },
+        endTime: { dateTime: `${today}T17:00:00`, timeZone: 'Europe/Stockholm' },
+        availabilityViewInterval: 30
+      };
+
+      const scheduleResponse = await fetchGraph(`/users/${room}/calendar/getSchedule`, 'POST', body);
+      const availability = scheduleResponse.value?.[0]?.availabilityView;
+
+      let foundSlot = null;
+      if (availability) {
+        for (let i = 0; i <= availability.length - blocksNeeded; i++) {
+          const block = availability.slice(i, i + blocksNeeded);
+          if (block === '0'.repeat(blocksNeeded)) {
+            const startHour = 8 + Math.floor(i / 2);
+            const startMin = (i % 2) * 30;
+            foundSlot = `${today}T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00`;
+            break;
+          }
         }
       }
-    }
 
-    context.log('⏰ Första lediga slot (60 min):', foundSlot || 'Ingen ledig tid hittades');
+      availableSlots[room] = {
+        firstAvailableSlot: foundSlot,
+        availabilityView: availability
+      };
+    }
 
     context.res = {
       status: 200,
       body: {
-        message: 'Testad getSchedule',
-        room: testRoom,
-        firstAvailableSlot: foundSlot,
-        availabilityView: availability,
-        raw: scheduleResponse
+        message: 'Tillgänglighet kontrollerad för alla rum',
+        availableSlots
       }
     };
   } catch (err) {
