@@ -1,7 +1,7 @@
 const fetch = require("node-fetch");
 const { ClientSecretCredential } = require("@azure/identity");
 
-module.exports = async function (context, req) {
+async function main(context, req) {
   context.log("🟢 Funktion startar – enkel rumstest");
 
   const clientId = process.env.GRAPH_CLIENT_ID;
@@ -70,3 +70,5 @@ module.exports = async function (context, req) {
     };
   }
 };
+
+export default main;
