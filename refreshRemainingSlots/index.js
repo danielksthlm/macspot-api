@@ -1,11 +1,11 @@
-const { Client } = require('pg');
-const fetch = require('node-fetch');
-const { v4: uuidv4 } = require('uuid');
-const jwt = require('jsonwebtoken');
-const fs = require('fs');
+import { Client } from 'pg';
+import fetch from 'node-fetch';
+import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
+import fs from 'fs';
 const dayjs = require('dayjs');
 
-module.exports = async function (context, req) {
+export default async function (context, req) {
   context.log('📥 Funktion refreshRemainingSlots anropad');
 
   const email = req.body?.email;
@@ -251,4 +251,4 @@ module.exports = async function (context, req) {
     await client.end();
     context.log('🔌 Databasanslutning stängd');
   }
-};
+}
