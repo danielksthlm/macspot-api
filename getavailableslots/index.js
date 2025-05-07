@@ -34,52 +34,38 @@ export const run = async function (context, req) {
         ...(options.headers || {})
       }
     });
-    const data = await res.json();
-    return data;
+    return await res.json();
   }
 
   try {
-    context.log('🔍 Hämtar alla rum...');
-    const rooms = await fetchGraph('/places/microsoft.graph.room');
-    context.log('📦 Alla rum:', JSON.stringify(rooms, null, 2));
+    // 🏢 Steg 1 – Prova places med typ room
+    context.log('🔍 Hämtar /places/microsoft.graph.room...');
+    const roomsTyped = await fetchGraph('/places/microsoft.graph.room?$top=999');
+    context.log('📦 Resultat /places/microsoft.graph.room:', JSON.stringify(roomsTyped, null, 2));
 
-    context.log('\n🔍 Hämtar alla rumslistor...');
-    const roomLists = await fetchGraph('/places/microsoft.graph.roomlist');
-    context.log('🏢 Rumslistor:', JSON.stringify(roomLists, null, 2));
+    // 🌍 Steg 2 – Prova places generellt
+    context.log('\n🌍 Hämtar /places...');
+    const places = await fetchGraph('/places?$top=999');
+    context.log('🌍 Resultat /places:', JSON.stringify(places, null, 2));
 
-    const testRoomEmail = 'konferensen@ettelva.se';
-    context.log(`\n🔍 Hämtar platsinfo för ${testRoomEmail}...`);
-    const roomDetails = await fetchGraph(`/places/${encodeURIComponent(testRoomEmail)}`);
-    context.log('📍 Platsinfo:', JSON.stringify(roomDetails, null, 2));
+    // 👥 Steg 3 – Prova vanliga användare
+    context.log('\n👥 Hämtar /users...');
+    const users = await fetchGraph('/users?$top=50');
+    context.log('👥 Användare:', JSON.stringify(users, null, 2));
 
-    context.log(`\n🔎 Kontroll /users/${testRoomEmail}...`);
-    const userCheck = await fetchGraph(`/users/${encodeURIComponent(testRoomEmail)}`);
-    context.log('👤 /users-resultat:', JSON.stringify(userCheck, null, 2));
-
-    context.log(`\n🔎 Sök efter användare som börjar med 'konferensen@'...`);
-    const search = await fetchGraph(`/users?$filter=startswith(mail,'konferensen@')`);
-    context.log('🔍 Sökresultat:', JSON.stringify(search, null, 2));
-
-    context.log(`\n📅 Testar getSchedule för ${testRoomEmail}...`);
-    const scheduleData = await fetchGraph('/users/' + encodeURIComponent(testRoomEmail) + '/calendar/getSchedule', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        schedules: [testRoomEmail],
-        startTime: {
-          dateTime: new Date().toISOString(),
-          timeZone: 'Europe/Stockholm'
-        },
-        endTime: {
-          dateTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          timeZone: 'Europe/Stockholm'
-        },
-        availabilityViewInterval: 30
-      })
-    });
-    context.log('📆 getSchedule-svar:', JSON.stringify(scheduleData, null, 2));
+    // 🧪 Steg 4 – Testa hårdkodade rumsadresser
+    const potentialRooms = [
+      'konferensen@ettelva.se',
+      'lillarummet@ettelva.se',
+      'motesrummet@ettelva.se',
+      'audiensen@ettelva.se',
+      'mellanrummet@ettelva.se'
+    ];
+    for (const room of potentialRooms) {
+      context.log(`\n📡 Testar platsinfo: ${room}`);
+      const info = await fetchGraph(`/places/${encodeURIComponent(room)}`);
+      context.log(`📍 Platsinfo för ${room}:`, JSON.stringify(info, null, 2));
+    }
 
   } catch (err) {
     context.log.error('❌ Fel vid Graph-anrop:', err.message);
