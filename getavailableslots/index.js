@@ -2,7 +2,7 @@ const { Client } = require("@microsoft/microsoft-graph-client");
 const { ClientSecretCredential } = require("@azure/identity");
 require("isomorphic-fetch");
 
-module.exports = async function (context, req) {
+async function handler(context, req) {
   context.log("✅ Funktion getavailableslots anropad (med Graph)");
 
   if (!req || !req.body) {
@@ -102,4 +102,6 @@ module.exports = async function (context, req) {
     status: 200,
     body: response,
   };
-};
+}
+
+module.exports = handler;
