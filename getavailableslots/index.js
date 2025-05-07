@@ -49,15 +49,30 @@ export const run = async function (context, req) {
   }
 
   try {
+    // Extrahera meeting_type från req.body
+    const { meeting_type } = req.body;
+    if (!meeting_type) {
+      context.res = {
+        status: 400,
+        body: { error: 'meeting_type saknas i request body.' }
+      };
+      return;
+    }
+
     const pool = new Pool(pgConfig);
-    const result = await pool.query("SELECT value FROM booking_settings WHERE key = 'available_meeting_room'");
-    const roomList = result.rows[0]?.value || [];
-    context.log('🏢 Rum enligt booking_settings:', roomList);
+    // Hämta room_priority från booking_settings
+    const priorityResult = await pool.query("SELECT value FROM booking_settings WHERE key = 'room_priority'");
+    const roomPriority = priorityResult.rows[0]?.value || {};
+    const selectedRooms = roomPriority[meeting_type] || [];
+    context.log(`🏢 Valda rum för meeting_type ${meeting_type}:`, selectedRooms);
+
+    // Använd valda rum istället för tidigare roomList
+    const roomList = selectedRooms;
 
     if (roomList.length === 0) {
       context.res = {
         status: 404,
-        body: { error: 'Inga rum hittades i booking_settings.' }
+        body: { error: `Inga rum hittades för meeting_type '${meeting_type}' i booking_settings.` }
       };
       return;
     }
