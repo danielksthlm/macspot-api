@@ -124,6 +124,7 @@ export const run = async function (context, req) {
     };
 
     const scheduleResponse = await fetchGraph(`/users/${testRoom}/calendar/getSchedule`, 'POST', body);
+    context.log('🧾 Fullt svar från Graph getSchedule:', JSON.stringify(scheduleResponse, null, 2));
     context.log(`📅 getSchedule-test för ${testRoom}:`, JSON.stringify(scheduleResponse, null, 2));
 
     // Tolka availabilityView och hitta första luckan med minst 60 minuter ledigt (2 block)
