@@ -128,6 +128,14 @@ export const run = async function (context, req) {
 
     // Tolka availabilityView och hitta första luckan med minst 60 minuter ledigt (2 block)
     const availability = scheduleResponse.value?.[0]?.availabilityView;
+    if (availability) {
+      context.log('🧩 availabilityView (hela vyn):', availability);
+      for (let i = 0; i < availability.length; i++) {
+        context.log(`🔹 Tidsblock ${i}: ${availability[i]}`);
+      }
+    } else {
+      context.log('⚠️ Ingen availabilityView tillgänglig i svar från Graph.');
+    }
     const blocksNeeded = 60 / 30;
 
     let foundSlot = null;
