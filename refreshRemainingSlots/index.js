@@ -42,7 +42,7 @@ module.exports = async function (context, req) {
 
     // Hämta kontakt
     const contactResult = await client.query(
-      'SELECT * FROM contacts WHERE email = $1 LIMIT 1',
+      'SELECT * FROM contact WHERE booking_email = $1 LIMIT 1',
       [email]
     );
     if (contactResult.rowCount === 0) {
