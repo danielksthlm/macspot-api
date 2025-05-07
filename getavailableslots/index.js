@@ -1,3 +1,4 @@
+console.log('📍 Modul laddad');
 module.exports = async function (context, req) {
   context.log('✅ Funktion anropad');
 
@@ -10,6 +11,14 @@ module.exports = async function (context, req) {
   }
 
   const { email, meeting_type, meeting_length } = req.body;
+  const length = parseInt(meeting_length, 10);
+  if (isNaN(length) || length <= 0) {
+    context.res = {
+      status: 400,
+      body: { error: 'Ogiltig meeting_length' }
+    };
+    return;
+  }
   context.log('📥 Data mottagen:', { email, meeting_type, meeting_length });
 
   // Dynamisk import av pg
@@ -77,7 +86,7 @@ module.exports = async function (context, req) {
         const start = new Date(day);
         start.setUTCHours(hour, 0, 0, 0);
         const end = new Date(start);
-        end.setUTCMinutes(end.getUTCMinutes() + meeting_length);
+        end.setUTCMinutes(end.getUTCMinutes() + length);
 
         // 2. Lunchkoll
         if (hour >= lunchStartHour && hour < lunchEndHour) {
@@ -104,8 +113,8 @@ module.exports = async function (context, req) {
           [meeting_type, start.toISOString()]
         );
         const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
-        if (bookedMinutes + meeting_length > maxWeeklyMinutes) {
-          context.log(`⏭️ ${start.toISOString()} överskrider veckokvot (${bookedMinutes} + ${meeting_length} > ${maxWeeklyMinutes})`);
+        if (bookedMinutes + length > maxWeeklyMinutes) {
+          context.log(`⏭️ ${start.toISOString()} överskrider veckokvot (${bookedMinutes} + ${length} > ${maxWeeklyMinutes})`);
           continue;
         }
 
