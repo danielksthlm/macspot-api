@@ -1,4 +1,4 @@
-module.exports = async function (context, req) {
+export default async function (context, req) {
   context.log('✅ Funktion getavailableslots anropad');
 
   context.res = {
