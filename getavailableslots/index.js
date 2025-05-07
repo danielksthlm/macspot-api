@@ -71,4 +71,4 @@ async function main(context, req) {
   }
 };
 
-export default main;
+module.exports = main;
