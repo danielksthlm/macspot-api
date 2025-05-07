@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": [ "post" ],
-      "route": "refreshRemainingSlots"
+      "route": "refreshremainingslots"
     },
     {
       "type": "http",
@@ -14,5 +14,5 @@
       "name": "res"
     }
   ],
-  "scriptFile": "index.js"
+  "scriptFile": "index.js",
 }
