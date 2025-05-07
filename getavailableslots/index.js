@@ -5,6 +5,10 @@ require("isomorphic-fetch");
 module.exports = async function (context, req) {
   context.log("✅ Funktion getavailableslots anropad (med Graph)");
 
+  context.log("🧪 Kontrollpunkt startad.");
+  context.log("🧪 req-body typ:", typeof req.body);
+  context.log("🧪 req-body:", JSON.stringify(req.body, null, 2));
+
   const clientId = process.env.GRAPH_CLIENT_ID;
   const clientSecret = process.env.GRAPH_CLIENT_SECRET;
   const tenantId = process.env.GRAPH_TENANT_ID;
@@ -12,7 +16,18 @@ module.exports = async function (context, req) {
 
   const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
 
-  const token = await credential.getToken("https://graph.microsoft.com/.default");
+  let token;
+  try {
+    token = await credential.getToken("https://graph.microsoft.com/.default");
+    context.log("🟢 Token hämtad.");
+  } catch (authError) {
+    context.log.error("❌ Fel vid tokenhämtning:", authError);
+    context.res = {
+      status: 500,
+      body: { error: "Misslyckades att hämta token", details: authError.message }
+    };
+    return;
+  }
 
   const client = Client.init({
     authProvider: (done) => {
