@@ -2,7 +2,7 @@ const { Client } = require("@microsoft/microsoft-graph-client");
 const { ClientSecretCredential } = require("@azure/identity");
 require("isomorphic-fetch");
 
-module.exports = async function (context, req) {
+export default async function (context, req) {
   context.log("🚨 Kontroll: Filen laddades korrekt!");
   context.log("🔧 Kontroll: Funktion startar – om du ser detta loggas det INNAN något annat.");
   try {
