@@ -5,6 +5,15 @@ require("isomorphic-fetch");
 module.exports = async function (context, req) {
   context.log("✅ Funktion getavailableslots anropad (med Graph)");
 
+  if (!req || !req.body) {
+    context.log.error("❌ req eller req.body är undefined!");
+    context.res = {
+      status: 400,
+      body: { error: "Missing request body" }
+    };
+    return;
+  }
+
   context.log("🧪 Kontrollpunkt startad.");
   context.log("🧪 req-body typ:", typeof req.body);
   context.log("🧪 req-body:", JSON.stringify(req.body, null, 2));
