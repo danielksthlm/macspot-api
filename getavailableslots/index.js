@@ -123,6 +123,60 @@ export default async function (context, req) {
 
             if (hour >= lunchStartHour && hour < lunchEndHour) return;
 
+            const windowStart = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
+            const windowEnd = parseInt((settings.travel_time_window_end || '23:00').split(':')[0], 10);
+            if (hour < windowStart || hour >= windowEnd) return;
+
+            const groupKey = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+            if (slotGroupPicked[groupKey]) return;
+
+            // Infoga logik för room_priority beroende på meeting_type
+            if (settings.room_priority && settings.room_priority[meeting_type]) {
+              const rooms = settings.room_priority[meeting_type];
+              if (!Array.isArray(rooms) || rooms.length === 0) return;
+
+              const fetch = (await import('node-fetch')).default;
+              const tokenRes = await fetch(`https://login.microsoftonline.com/${process.env.GRAPH_TENANT_ID}/oauth2/v2.0/token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  client_id: process.env.GRAPH_CLIENT_ID,
+                  client_secret: process.env.GRAPH_CLIENT_SECRET,
+                  scope: 'https://graph.microsoft.com/.default',
+                  grant_type: 'client_credentials'
+                })
+              });
+              const tokenData = await tokenRes.json();
+              const accessToken = tokenData.access_token;
+
+              const res = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  schedules: rooms,
+                  startTime: {
+                    dateTime: start.toISOString(),
+                    timeZone: settings.timezone || 'Europe/Stockholm'
+                  },
+                  endTime: {
+                    dateTime: end.toISOString(),
+                    timeZone: settings.timezone || 'Europe/Stockholm'
+                  },
+                  availabilityViewInterval: 30
+                })
+              });
+              const data = await res.json();
+              const anyRoomFree = Array.isArray(data.value)
+                ? data.value.some(r => !r.availabilityView.includes('1'))
+                : false;
+              if (!anyRoomFree) return;
+            }
+
+            slotGroupPicked[groupKey] = true;
+
             const conflict = await client.query(
               `SELECT 1 FROM bookings WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
               [start.toISOString(), end.toISOString()]
@@ -139,6 +193,10 @@ export default async function (context, req) {
             const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
             if (bookedMinutes + length > maxWeeklyMinutes) return;
 
+            // Fragmenteringskoll: sloten måste ligga minst min_gap_minutes från början och slutet av bokningsfönstret
+            const minGapMinutes = settings.min_gap_minutes || 30;
+            if (hour < openHour + Math.ceil(minGapMinutes / 60) || hour > closeHour - Math.ceil(minGapMinutes / 60) - Math.ceil(length / 60)) return;
+
             const bufferMs = bufferMin * 60 * 1000;
             const slotStart = start.getTime();
             const slotEnd = end.getTime();
@@ -153,10 +211,6 @@ export default async function (context, req) {
             }
             if (!isolated) return;
 
-            const groupKey = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
-            if (slotGroupPicked[groupKey]) return;
-            slotGroupPicked[groupKey] = true;
-
             const hourKey = `${fromAddress}|${toAddress}|${hour}`;
             const travelTimeRes = await client.query(
               `SELECT travel_minutes FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3`,
@@ -170,14 +224,6 @@ export default async function (context, req) {
               travelTimeMin = fallback;
             }
             if (travelTimeMin > fallback) return;
-
-            // Infoga logik för room_priority per meeting_type
-            if (meeting_type === 'atOffice' && settings.room_priority && settings.room_priority.atOffice) {
-              const rooms = settings.room_priority.atOffice;
-              if (!Array.isArray(rooms) || rooms.length === 0) return;
-
-              // Här kan du lägga till Graph-anrop senare för att kolla rumsledighet.
-            }
 
             chosen.push(start.toISOString());
           })
