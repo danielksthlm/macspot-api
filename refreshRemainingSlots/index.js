@@ -10,6 +10,7 @@ module.exports = async function (context, req) {
     fs = await import('fs');
   } catch (err) {
     context.log.error('❌ Importfel:', err.message);
+    context.log.error('❌ Fullständig stacktrace:', err.stack);
     context.res = { status: 500, body: 'Importfel: ' + err.message };
     return;
   }
