@@ -8,23 +8,6 @@ const { Pool } = pkg;
 export const run = async function (context, req) {
   context.log('🟢 getavailableslots index.js startar...');
   context.log('✅ Funktion getavailableslots anropad');
-  if (!req.body) {
-    context.log('⚠️ req.body är undefined – kontrollera att Content-Type är application/json');
-    context.res = {
-      status: 400,
-      body: { error: 'Ingen request body hittades. Kontrollera att Content-Type är application/json.' }
-    };
-    return;
-  }
-  context.log('🧪 typeof req.body:', typeof req.body);
-  context.log('🧪 req.body keys:', Object.keys(req.body));
-  context.log('📥 Full request body:', JSON.stringify(req.body, null, 2));
-
-  const findRooms = await fetchGraph('/me/findRooms');
-  context.log('📦 /me/findRooms-resultat:', JSON.stringify(findRooms, null, 2));
-
-  const allPlaces = await fetchGraph('/places/microsoft.graph.room');
-  context.log('📦 /places/microsoft.graph.room-resultat:', JSON.stringify(allPlaces, null, 2));
 
   const tenantId = process.env.GRAPH_TENANT_ID;
   const clientId = process.env.GRAPH_CLIENT_ID;
@@ -93,13 +76,6 @@ export const run = async function (context, req) {
   try {
     // Extrahera meeting_type från req.body
     const { meeting_type } = req.body;
-    if (!req.body.email || !req.body.meeting_length) {
-      context.res = {
-        status: 400,
-        body: { error: 'email och meeting_length måste anges i request body.' }
-      };
-      return;
-    }
     if (!meeting_type) {
       context.res = {
         status: 400,
@@ -142,62 +118,58 @@ export const run = async function (context, req) {
       return;
     }
 
-    const testRooms = [
-      'lillarummet@ettelva.se',
-      'motesrummet@ettelva.se',
-      'audiensen@ettelva.se',
-      'mellanrummet@ettelva.se',
-      'konferensen@ettelva.se'
-    ];
+    const testRoom = 'daniel@klrab.se';
+    context.log(`📌 Testar tillgång mot rum: ${testRoom}`);
     const today = new Date().toISOString().split('T')[0];
+    const body = {
+      schedules: [testRoom],
+      startTime: { dateTime: `${today}T08:00:00`, timeZone: 'Europe/Stockholm' },
+      endTime: { dateTime: `${today}T17:00:00`, timeZone: 'Europe/Stockholm' },
+      availabilityViewInterval: 30
+    };
+
+    context.log(`📅 getSchedule-test via /me/calendar/getSchedule för ${testRoom}:`, JSON.stringify(body, null, 2));
+    const scheduleResponse = await fetchGraph(`/me/calendar/getSchedule`, 'POST', body);
+    context.log('🧾 Fullt svar från Graph getSchedule:', JSON.stringify(scheduleResponse, null, 2));
+
+    // Tolka availabilityView och hitta första luckan med minst 60 minuter ledigt (2 block)
+    const availability = scheduleResponse.value?.[0]?.availabilityView;
+    if (availability) {
+      context.log('🧩 availabilityView (hela vyn):', availability);
+      for (let i = 0; i < availability.length; i++) {
+        context.log(`🔹 Tidsblock ${i}: ${availability[i]}`);
+      }
+    } else {
+      context.log('⚠️ Ingen availabilityView tillgänglig i svar från Graph.');
+    }
     const blocksNeeded = 60 / 30;
 
-    const testResults = [];
-
-    for (const testRoom of testRooms) {
-      context.log(`📌 Testar tillgång mot rum: ${testRoom}`);
-      const roomBody = {
-        schedules: [testRoom],
-        startTime: { dateTime: `${today}T08:00:00`, timeZone: 'Europe/Stockholm' },
-        endTime: { dateTime: `${today}T17:00:00`, timeZone: 'Europe/Stockholm' },
-        availabilityViewInterval: 30
-      };
-      context.log(`📅 getSchedule-test via /me/calendar/getSchedule för ${testRoom}:`, JSON.stringify(roomBody, null, 2));
-      const roomResponse = await fetchGraph(`/me/calendar/getSchedule`, 'POST', roomBody);
-      context.log('🧾 Fullt svar från Graph getSchedule:', JSON.stringify(roomResponse, null, 2));
-
-      const availability = roomResponse.value?.[0]?.availabilityView;
-      let firstSlot = null;
-      if (availability && availability.includes('0'.repeat(blocksNeeded))) {
-        for (let i = 0; i <= availability.length - blocksNeeded; i++) {
-          const block = availability.slice(i, i + blocksNeeded);
-          if (block === '0'.repeat(blocksNeeded)) {
-            const startHour = 8 + Math.floor(i / 2);
-            const startMin = (i % 2) * 30;
-            firstSlot = `${today}T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00`;
-            break;
-          }
+    let foundSlot = null;
+    if (availability) {
+      for (let i = 0; i <= availability.length - blocksNeeded; i++) {
+        const block = availability.slice(i, i + blocksNeeded);
+        if (block === '0'.repeat(blocksNeeded)) {
+          const startHour = 8 + Math.floor(i / 2);
+          const startMin = (i % 2) * 30;
+          const startTime = `${today}T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00`;
+          foundSlot = startTime;
+          break;
         }
       }
-      testResults.push({
-        room: testRoom,
-        valid: !!availability,
-        firstAvailableSlot: firstSlot,
-        availabilityView: availability || null
-      });
     }
+
+    context.log('⏰ Första lediga slot (60 min):', foundSlot || 'Ingen ledig tid hittades');
 
     context.res = {
       status: 200,
       body: {
-        message: 'Testresultat för rum',
-        roomsFromFindRooms: findRooms,
-        roomsFromPlaces: allPlaces,
-        results: testResults
+        message: 'Testad getSchedule',
+        room: testRoom,
+        firstAvailableSlot: foundSlot,
+        availabilityView: availability,
+        raw: scheduleResponse
       }
     };
-    return;
-
   } catch (err) {
     context.log.error('❌ Fel:', err.message);
     context.res = {
