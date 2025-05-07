@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 
 export const run = async function (context, req) {
+  context.log('🟢 getavailableslots index.js startar...');
   context.log('✅ Funktion getavailableslots anropad');
 
   const tenantId = process.env.GRAPH_TENANT_ID;
@@ -79,5 +80,3 @@ export const run = async function (context, req) {
 };
 
 export default run;
-
-context.log('🟢 getavailableslots index.js startar...');
