@@ -149,7 +149,7 @@ export default async function (context, req) {
               const tokenData = await tokenRes.json();
               const accessToken = tokenData.access_token;
 
-              const res = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
+              const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(rooms[0])}/calendar/getSchedule`, {
                 method: 'POST',
                 headers: {
                   Authorization: `Bearer ${accessToken}`,
