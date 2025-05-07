@@ -111,7 +111,12 @@ async function preloadTravelTime(context, db, settings, fullAddress, meeting_typ
     const teamId = process.env.APPLE_MAPS_TEAM_ID;
     const keyId = process.env.APPLE_MAPS_KEY_ID;
     const fs = await import('fs');
-    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+    let privateKey;
+    if (process.env.APPLE_MAPS_PRIVATE_KEY) {
+      privateKey = process.env.APPLE_MAPS_PRIVATE_KEY.replace(/\\n/g, '\n');
+    } else {
+      privateKey = fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+    }
     const token = jwt.sign({}, privateKey, {
       algorithm: 'ES256',
       issuer: teamId,
