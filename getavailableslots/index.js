@@ -21,46 +21,28 @@ export const run = async function (context, req) {
     ssl: { rejectUnauthorized: false }
   };
 
-  async function getAccessTokenDelegated() {
-    const res = await fetch(`https://login.microsoftonline.com/common/oauth2/v2.0/devicecode`, {
+  async function getAccessTokenApp() {
+    const res = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: clientId,
-        scope: 'https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/User.Read'
+        client_secret: clientSecret,
+        scope: 'https://graph.microsoft.com/.default',
+        grant_type: 'client_credentials'
       })
     });
 
     const data = await res.json();
-    context.log(`📲 Besök ${data.verification_uri} och ange koden: ${data.user_code}`);
-
-    return new Promise((resolve, reject) => {
-      const interval = setInterval(async () => {
-        const tokenRes = await fetch(`https://login.microsoftonline.com/common/oauth2/v2.0/token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-            client_id: clientId,
-            device_code: data.device_code
-          })
-        });
-
-        const tokenData = await tokenRes.json();
-        if (tokenData.access_token) {
-          clearInterval(interval);
-          resolve(tokenData.access_token);
-        } else if (tokenData.error !== 'authorization_pending') {
-          clearInterval(interval);
-          reject(new Error(`❌ Fel vid tokenhämtning: ${tokenData.error}`));
-        }
-      }, data.interval * 1000);
-    });
+    if (!data.access_token) {
+      throw new Error(`❌ Kunde inte hämta application access token: ${JSON.stringify(data)}`);
+    }
+    return data.access_token;
   }
 
   async function fetchGraph(endpoint, method = 'GET', body = null) {
     if (!delegatedAccessToken) {
-      delegatedAccessToken = await getAccessTokenDelegated();
+      delegatedAccessToken = await getAccessTokenApp();
     }
     const res = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
       method,
