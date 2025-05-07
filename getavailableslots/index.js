@@ -93,6 +93,13 @@ export const run = async function (context, req) {
   try {
     // Extrahera meeting_type från req.body
     const { meeting_type } = req.body;
+    if (!req.body.email || !req.body.meeting_length) {
+      context.res = {
+        status: 400,
+        body: { error: 'email och meeting_length måste anges i request body.' }
+      };
+      return;
+    }
     if (!meeting_type) {
       context.res = {
         status: 400,
