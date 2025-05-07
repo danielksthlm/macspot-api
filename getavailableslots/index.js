@@ -2,7 +2,21 @@ const { Client } = require("@microsoft/microsoft-graph-client");
 const { ClientSecretCredential } = require("@azure/identity");
 require("isomorphic-fetch");
 
-async function handler(context, req) {
+module.exports = async function (context, req) {
+  context.log("🟢 Funktion startar");
+
+  try {
+    context.log("📦 Miljövariabler:");
+    context.log("GRAPH_CLIENT_ID", process.env.GRAPH_CLIENT_ID);
+    context.log("GRAPH_CLIENT_SECRET", process.env.GRAPH_CLIENT_SECRET ? "[hemlig]" : "❌ Saknas");
+    context.log("GRAPH_TENANT_ID", process.env.GRAPH_TENANT_ID);
+    context.log("GRAPH_USER_ID", process.env.GRAPH_USER_ID);
+
+    context.log("📨 Request-objekt:", JSON.stringify(req || {}, null, 2));
+  } catch (fatalErr) {
+    context.log.error("❌ Kunde inte ens logga variabler:", fatalErr);
+  }
+
   context.log("✅ Funktion getavailableslots anropad (med Graph)");
 
   if (!req || !req.body) {
@@ -80,9 +94,6 @@ async function handler(context, req) {
     context.log("✅ Lediga rum:");
     context.log(JSON.stringify(availableRooms.map(r => r.scheduleId), null, 2));
 
-    if (!req.body) {
-      context.log.warn("⚠️ Ingen body i requesten – använder standardvärden.");
-    }
     const meetingType = (req.body && req.body.meeting_type) || "atOffice";
     response = {
       success: true,
@@ -102,6 +113,4 @@ async function handler(context, req) {
     status: 200,
     body: response,
   };
-}
-
-module.exports = handler;
+};
