@@ -52,6 +52,14 @@ export const run = async function (context, req) {
     const roomDetails = await fetchGraph(`/places/${encodeURIComponent(testRoomEmail)}`);
     context.log('📍 Platsinfo:', JSON.stringify(roomDetails, null, 2));
 
+    context.log(`\n🔎 Kontroll /users/${testRoomEmail}...`);
+    const userCheck = await fetchGraph(`/users/${encodeURIComponent(testRoomEmail)}`);
+    context.log('👤 /users-resultat:', JSON.stringify(userCheck, null, 2));
+
+    context.log(`\n🔎 Sök efter användare som börjar med 'konferensen@'...`);
+    const search = await fetchGraph(`/users?$filter=startswith(mail,'konferensen@')`);
+    context.log('🔍 Sökresultat:', JSON.stringify(search, null, 2));
+
     context.log(`\n📅 Testar getSchedule för ${testRoomEmail}...`);
     const scheduleData = await fetchGraph('/users/' + encodeURIComponent(testRoomEmail) + '/calendar/getSchedule', {
       method: 'POST',
