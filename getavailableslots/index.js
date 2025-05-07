@@ -53,7 +53,7 @@ export const run = async function (context, req) {
     context.log('📍 Platsinfo:', JSON.stringify(roomDetails, null, 2));
 
     context.log(`\n📅 Testar getSchedule för ${testRoomEmail}...`);
-    const scheduleResponse = await fetchGraph('/users/' + encodeURIComponent(testRoomEmail) + '/calendar/getSchedule', {
+    const scheduleData = await fetchGraph('/users/' + encodeURIComponent(testRoomEmail) + '/calendar/getSchedule', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -71,7 +71,6 @@ export const run = async function (context, req) {
         availabilityViewInterval: 30
       })
     });
-    const scheduleData = await scheduleResponse.json();
     context.log('📆 getSchedule-svar:', JSON.stringify(scheduleData, null, 2));
 
   } catch (err) {
