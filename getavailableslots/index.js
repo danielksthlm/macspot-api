@@ -149,9 +149,10 @@ export default async function (context, req) {
       body: { slots: chosen }
     };
   } catch (err) {
+    context.log.error('❌ Fel i getavailableslots:', err);
     context.res = {
       status: 500,
-      body: { error: err.message }
+      body: { error: err.message || JSON.stringify(err) }
     };
   } finally {
     client.release();
