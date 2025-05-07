@@ -172,6 +172,10 @@ export default async function (context, req) {
               const anyRoomFree = Array.isArray(data.value)
                 ? data.value.some(r => !r.availabilityView.includes('1'))
                 : false;
+              context.log(`🏢 Rumsledighetskontroll för ${dayStr} ${hour}:`, data.value?.map(r => ({
+                room: r.scheduleId,
+                view: r.availabilityView
+              })));
               if (!anyRoomFree) return;
             }
 
