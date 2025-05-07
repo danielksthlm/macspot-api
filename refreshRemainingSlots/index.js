@@ -7,7 +7,7 @@ module.exports = async function (context, req) {
     fetch = (await import('node-fetch')).default;
     ({ v4: uuidv4 } = await import('uuid'));
     jwt = await import('jsonwebtoken');
-    fs = await import('fs');
+    fs = require('fs');
   } catch (err) {
     context.log.error('❌ Importfel:', err.message);
     context.log.error('❌ Fullständig stacktrace:', err.stack);
