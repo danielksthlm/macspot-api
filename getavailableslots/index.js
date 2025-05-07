@@ -59,6 +59,11 @@ export default async function (context, req) {
       else settings[row.key] = row.value;
     }
 
+    // Lägg till room_priority per meeting_type från inställningar
+    if (!settings.room_priority) {
+      settings.room_priority = {};
+    }
+
     const maxDays = settings.max_days_in_advance || 14;
     context.log(`📆 max_days_in_advance (tolkad): ${maxDays}`);
     const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
@@ -78,13 +83,24 @@ export default async function (context, req) {
     const chosen = [];
     const now = new Date();
 
+    const allowedDays = Array.isArray(settings.allowed_atClient_meeting_days)
+      ? settings.allowed_atClient_meeting_days.map((d) => d.toLowerCase())
+      : null;
+
     for (let i = 1; i <= maxDays; i++) {
       const day = new Date();
       day.setUTCDate(now.getUTCDate() + i);
       const wd = day.getUTCDay();
-      if (wd === 0 || wd === 6) continue;
 
       const dayStr = day.toISOString().split('T')[0];
+      const dayName = day.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }).toLowerCase();
+      if (meeting_type === 'atClient' && allowedDays && !allowedDays.includes(dayName)) {
+        context.log(`⏭️ Dag ${dayStr} är ej tillåten för atClient (${dayName})`);
+        continue;
+      }
+
+      if (wd === 0 || wd === 6) continue;
+
       const existingRes = await client.query(
         `SELECT start_time, end_time FROM bookings WHERE start_time::date = $1`,
         [dayStr]
@@ -154,6 +170,14 @@ export default async function (context, req) {
               travelTimeMin = fallback;
             }
             if (travelTimeMin > fallback) return;
+
+            // Infoga logik för room_priority per meeting_type
+            if (meeting_type === 'atOffice' && settings.room_priority && settings.room_priority.atOffice) {
+              const rooms = settings.room_priority.atOffice;
+              if (!Array.isArray(rooms) || rooms.length === 0) return;
+
+              // Här kan du lägga till Graph-anrop senare för att kolla rumsledighet.
+            }
 
             chosen.push(start.toISOString());
           })
