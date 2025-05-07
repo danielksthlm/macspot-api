@@ -87,7 +87,7 @@ export const run = async function (context, req) {
     // Hämta room_priority från booking_settings
     const priorityResult = await pool.query("SELECT value FROM booking_settings WHERE key = 'room_priority'");
     const roomPriority = priorityResult.rows[0]?.value || {};
-    const selectedRoomsRaw = roomPriority[meeting_type] || [];
+    const selectedRoomsRaw = ['daniel@klrab.se']; // Tillfälligt hårdkodat testkonto
     const usersResponse = await fetchGraph('/users');
     const userEmails = (usersResponse.value || []).map(user => {
       context.log(`👤 Användare: ${user.displayName} | ${user.mail} | ${user.userPrincipalName}`);
