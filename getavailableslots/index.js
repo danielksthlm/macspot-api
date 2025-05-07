@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-console.log('🟢 getavailableslots index.js startar...');
+context.log('🟢 getavailableslots index.js startar...');
 
 const tenantId = process.env.GRAPH_TENANT_ID;
 const clientId = process.env.GRAPH_CLIENT_ID;
@@ -40,20 +40,20 @@ export default async function (context, req) {
   context.log('✅ Funktion getavailableslots anropad');
 
   try {
-    console.log('🔍 Hämtar alla rum...');
+    context.log('🔍 Hämtar alla rum...');
     const rooms = await fetchGraph('/places/microsoft.graph.room');
-    console.log('📦 Alla rum:', JSON.stringify(rooms, null, 2));
+    context.log('📦 Alla rum:', JSON.stringify(rooms, null, 2));
 
-    console.log('\n🔍 Hämtar alla rumslistor...');
+    context.log('\n🔍 Hämtar alla rumslistor...');
     const roomLists = await fetchGraph('/places/microsoft.graph.roomlist');
-    console.log('🏢 Rumslistor:', JSON.stringify(roomLists, null, 2));
+    context.log('🏢 Rumslistor:', JSON.stringify(roomLists, null, 2));
 
     const testRoomEmail = 'konferensen@ettelva.se';
-    console.log(`\n🔍 Hämtar platsinfo för ${testRoomEmail}...`);
+    context.log(`\n🔍 Hämtar platsinfo för ${testRoomEmail}...`);
     const roomDetails = await fetchGraph(`/places/${encodeURIComponent(testRoomEmail)}`);
-    console.log('📍 Platsinfo:', JSON.stringify(roomDetails, null, 2));
+    context.log('📍 Platsinfo:', JSON.stringify(roomDetails, null, 2));
 
-    console.log(`\n📅 Testar getSchedule för ${testRoomEmail}...`);
+    context.log(`\n📅 Testar getSchedule för ${testRoomEmail}...`);
     const scheduleResponse = await fetchGraph('/users/' + encodeURIComponent(testRoomEmail) + '/calendar/getSchedule', {
       method: 'POST',
       headers: {
@@ -73,9 +73,9 @@ export default async function (context, req) {
       })
     });
     const scheduleData = await scheduleResponse.json();
-    console.log('📆 getSchedule-svar:', JSON.stringify(scheduleData, null, 2));
+    context.log('📆 getSchedule-svar:', JSON.stringify(scheduleData, null, 2));
 
   } catch (err) {
-    console.error('❌ Fel vid Graph-anrop:', err.message);
+    context.log.error('❌ Fel vid Graph-anrop:', err.message);
   }
 }
