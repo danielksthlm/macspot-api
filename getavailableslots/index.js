@@ -60,6 +60,7 @@ export default async function (context, req) {
     }
 
     const maxDays = settings.max_days_in_advance || 14;
+    context.log(`📆 max_days_in_advance (tolkad): ${maxDays}`);
     const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
     const closeHour = parseInt((settings.close_time || '16:00').split(':')[0], 10);
     const lunchStart = settings.lunch_start || '12:00';
