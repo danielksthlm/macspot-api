@@ -8,6 +8,16 @@ const { Pool } = pkg;
 export const run = async function (context, req) {
   context.log('🟢 getavailableslots index.js startar...');
   context.log('✅ Funktion getavailableslots anropad');
+  if (!req.body) {
+    context.log('⚠️ req.body är undefined – kontrollera att Content-Type är application/json');
+    context.res = {
+      status: 400,
+      body: { error: 'Ingen request body hittades. Kontrollera att Content-Type är application/json.' }
+    };
+    return;
+  }
+  context.log('🧪 typeof req.body:', typeof req.body);
+  context.log('🧪 req.body keys:', Object.keys(req.body));
   context.log('📥 Full request body:', JSON.stringify(req.body, null, 2));
 
   const findRooms = await fetchGraph('/me/findRooms');
