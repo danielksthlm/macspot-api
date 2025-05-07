@@ -115,6 +115,7 @@ export const run = async function (context, req) {
 
       const scheduleResponse = await fetchGraph(`/users/${room}/calendar/getSchedule`, 'POST', body);
       const availability = scheduleResponse.value?.[0]?.availabilityView;
+      context.log(`📊 availabilityView för ${room}:`, availability);
 
       let foundSlot = null;
       if (availability) {
