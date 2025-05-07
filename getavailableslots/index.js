@@ -4,6 +4,7 @@ require("isomorphic-fetch");
 
 module.exports = async function (context, req) {
   context.log("🚨 Kontroll: Filen laddades korrekt!");
+  context.log("🔧 Kontroll: Funktion startar – om du ser detta loggas det INNAN något annat.");
   try {
     context.log("🟢 Funktion startar");
 
@@ -21,14 +22,7 @@ module.exports = async function (context, req) {
 
     context.log("✅ Funktion getavailableslots anropad (med Graph)");
 
-    if (!req || !req.body) {
-      context.log.error("❌ req eller req.body är undefined!");
-      context.res = {
-        status: 400,
-        body: { error: "Missing request body" }
-      };
-      return;
-    }
+    const meetingType = (req && req.body && req.body.meeting_type) || "atOffice";
 
     context.log("🧪 Kontrollpunkt startad.");
     context.log("🧪 req-body typ:", typeof req.body);
@@ -73,7 +67,7 @@ module.exports = async function (context, req) {
         "konferensen@ettelva.se",
       ];
 
-      const result = await client.api("/me/calendar/getSchedule").post({
+      const result = await client.api(`/users/${userId}/calendar/getSchedule`).post({
         schedules: roomEmails,
         startTime: {
           dateTime: start,
@@ -96,7 +90,7 @@ module.exports = async function (context, req) {
       context.log("✅ Lediga rum:");
       context.log(JSON.stringify(availableRooms.map(r => r.scheduleId), null, 2));
 
-      const meetingType = (req.body && req.body.meeting_type) || "atOffice";
+    // meetingType redan definierad ovan
       response = {
         success: true,
         meeting_type: meetingType,
