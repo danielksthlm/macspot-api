@@ -1,3 +1,5 @@
+let delegatedAccessToken = null;
+
 import fetch from 'node-fetch';
 import pkg from 'pg';
 import readline from 'readline';
@@ -57,11 +59,13 @@ export const run = async function (context, req) {
   }
 
   async function fetchGraph(endpoint, method = 'GET', body = null) {
-    const token = await getAccessTokenDelegated();
+    if (!delegatedAccessToken) {
+      delegatedAccessToken = await getAccessTokenDelegated();
+    }
     const res = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
       method,
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${delegatedAccessToken}`,
         'Content-Type': 'application/json'
       },
       body: body ? JSON.stringify(body) : undefined
@@ -81,9 +85,9 @@ export const run = async function (context, req) {
     }
 
     const pool = new Pool(pgConfig);
-    const allUsers = await fetchGraph('/users');
-    context.log(`🧪 Antal användare hämtade: ${allUsers.value?.length || 0}`);
-    context.log('📋 Alla användare:', JSON.stringify(allUsers, null, 2));
+    // const allUsers = await fetchGraph('/users');
+    // context.log(`🧪 Antal användare hämtade: ${allUsers.value?.length || 0}`);
+    // context.log('📋 Alla användare:', JSON.stringify(allUsers, null, 2));
     // Hämta room_priority från booking_settings
     const priorityResult = await pool.query("SELECT value FROM booking_settings WHERE key = 'room_priority'");
     const roomPriority = priorityResult.rows[0]?.value || {};
@@ -94,12 +98,12 @@ export const run = async function (context, req) {
       'mellanrummet@ettelva.se',
       'konferensen@ettelva.se'
     ];
-    const usersResponse = await fetchGraph('/users');
-    const userEmails = (usersResponse.value || []).map(user => {
-      context.log(`👤 Användare: ${user.displayName} | ${user.mail} | ${user.userPrincipalName}`);
-      return user.mail || user.userPrincipalName;
-    });
-    const selectedRooms = selectedRoomsRaw.filter(email => userEmails.includes(email));
+    // const usersResponse = await fetchGraph('/users');
+    // const userEmails = (usersResponse.value || []).map(user => {
+    //   context.log(`👤 Användare: ${user.displayName} | ${user.mail} | ${user.userPrincipalName}`);
+    //   return user.mail || user.userPrincipalName;
+    // });
+    const selectedRooms = selectedRoomsRaw;
     context.log(`🏢 Valda rum för meeting_type ${meeting_type}:`, selectedRooms);
     context.log('🔎 Filtrerade rum (åtkomliga via Graph):', selectedRooms);
 
