@@ -84,75 +84,82 @@ export default async function (context, req) {
       if (wd === 0 || wd === 6) continue;
 
       const dayStr = day.toISOString().split('T')[0];
+      const existingRes = await client.query(
+        `SELECT start_time, end_time FROM bookings WHERE start_time::date = $1`,
+        [dayStr]
+      );
+      const existingBookings = existingRes.rows.map(r => ({
+        start: new Date(r.start_time).getTime(),
+        end: new Date(r.end_time).getTime()
+      }));
+
       const lunchStartHour = parseInt(lunchStart.split(':')[0], 10);
       const lunchEndHour = parseInt(lunchEnd.split(':')[0], 10);
 
-      for (let hour = openHour; hour <= closeHour - Math.ceil(length / 60); hour++) {
-        const start = new Date(day);
-        start.setUTCHours(hour, 0, 0, 0);
-        const end = new Date(start);
-        end.setUTCMinutes(end.getUTCMinutes() + length);
+      await Promise.all(
+        Array.from({ length: closeHour - openHour - Math.ceil(length / 60) + 1 }, (_, offset) => openHour + offset)
+          .map(async (hour) => {
+            const start = new Date(day);
+            start.setUTCHours(hour, 0, 0, 0);
+            const end = new Date(start);
+            end.setUTCMinutes(end.getUTCMinutes() + length);
 
-        if (hour >= lunchStartHour && hour < lunchEndHour) continue;
+            if (hour >= lunchStartHour && hour < lunchEndHour) return;
 
-        const conflict = await client.query(
-          `SELECT 1 FROM bookings WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
-          [start.toISOString(), end.toISOString()]
-        );
-        if (conflict.rowCount > 0) continue;
+            const conflict = await client.query(
+              `SELECT 1 FROM bookings WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
+              [start.toISOString(), end.toISOString()]
+            );
+            if (conflict.rowCount > 0) return;
 
-        const weekRes = await client.query(
-          `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
-           FROM bookings WHERE meeting_type = $1
-           AND start_time >= $2::date
-           AND start_time < ($2::date + interval '7 days')`,
-          [meeting_type, start.toISOString()]
-        );
-        const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
-        if (bookedMinutes + length > maxWeeklyMinutes) continue;
+            const weekRes = await client.query(
+              `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
+               FROM bookings WHERE meeting_type = $1
+               AND start_time >= $2::date
+               AND start_time < ($2::date + interval '7 days')`,
+              [meeting_type, start.toISOString()]
+            );
+            const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
+            if (bookedMinutes + length > maxWeeklyMinutes) return;
 
-        const existingRes = await client.query(
-          `SELECT start_time, end_time FROM bookings WHERE start_time::date = $1`,
-          [dayStr]
-        );
-        const bufferMs = bufferMin * 60 * 1000;
-        const slotStart = start.getTime();
-        const slotEnd = end.getTime();
-        let isolated = true;
-        for (const r of existingRes.rows) {
-          const s = new Date(r.start_time).getTime();
-          const e = new Date(r.end_time).getTime();
-          if ((Math.abs(slotStart - e) < bufferMs) ||
-              (Math.abs(slotEnd - s) < bufferMs) ||
-              (slotStart < e && slotEnd > s)) {
-            isolated = false;
-            break;
-          }
-        }
-        if (!isolated) continue;
+            const bufferMs = bufferMin * 60 * 1000;
+            const slotStart = start.getTime();
+            const slotEnd = end.getTime();
+            let isolated = true;
+            for (const { start: s, end: e } of existingBookings) {
+              if ((Math.abs(slotStart - e) < bufferMs) ||
+                  (Math.abs(slotEnd - s) < bufferMs) ||
+                  (slotStart < e && slotEnd > s)) {
+                isolated = false;
+                break;
+              }
+            }
+            if (!isolated) return;
 
-        const groupKey = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
-        if (slotGroupPicked[groupKey]) continue;
-        slotGroupPicked[groupKey] = true;
+            const groupKey = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+            if (slotGroupPicked[groupKey]) return;
+            slotGroupPicked[groupKey] = true;
 
-        const hourKey = `${fromAddress}|${toAddress}|${hour}`;
-        const travelTimeRes = await client.query(
-          `SELECT travel_minutes FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3`,
-          [fromAddress, toAddress, hour]
-        );
+            const hourKey = `${fromAddress}|${toAddress}|${hour}`;
+            const travelTimeRes = await client.query(
+              `SELECT travel_minutes FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3`,
+              [fromAddress, toAddress, hour]
+            );
 
-        let travelTimeMin;
-        if (travelTimeRes.rows.length > 0) {
-          travelTimeMin = travelTimeRes.rows[0].travel_minutes;
-        } else {
-          travelTimeMin = fallback;
-        }
-        if (travelTimeMin > fallback) continue;
+            let travelTimeMin;
+            if (travelTimeRes.rows.length > 0) {
+              travelTimeMin = travelTimeRes.rows[0].travel_minutes;
+            } else {
+              travelTimeMin = fallback;
+            }
+            if (travelTimeMin > fallback) return;
 
-        chosen.push(start.toISOString());
-      }
+            chosen.push(start.toISOString());
+          })
+      );
     }
 
+    context.log(`📊 Antal godkända slots: ${chosen.length}`);
     context.res = {
       status: 200,
       body: { slots: chosen }
