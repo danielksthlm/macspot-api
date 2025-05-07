@@ -86,8 +86,12 @@ export const run = async function (context, req) {
     // Hämta room_priority från booking_settings
     const priorityResult = await pool.query("SELECT value FROM booking_settings WHERE key = 'room_priority'");
     const roomPriority = priorityResult.rows[0]?.value || {};
-    const selectedRooms = roomPriority[meeting_type] || [];
+    const selectedRoomsRaw = roomPriority[meeting_type] || [];
+    const usersResponse = await fetchGraph('/users');
+    const userEmails = (usersResponse.value || []).map(user => user.mail || user.userPrincipalName);
+    const selectedRooms = selectedRoomsRaw.filter(email => userEmails.includes(email));
     context.log(`🏢 Valda rum för meeting_type ${meeting_type}:`, selectedRooms);
+    context.log('🔎 Filtrerade rum (åtkomliga via Graph):', selectedRooms);
 
     // Använd valda rum istället för tidigare roomList
     const roomList = selectedRooms;
