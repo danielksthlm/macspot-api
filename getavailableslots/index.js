@@ -1,5 +1,7 @@
 import fetch from 'node-fetch';
 
+console.log('🟢 getavailableslots index.js startar...');
+
 const tenantId = process.env.GRAPH_TENANT_ID;
 const clientId = process.env.GRAPH_CLIENT_ID;
 const clientSecret = process.env.GRAPH_CLIENT_SECRET;
@@ -34,7 +36,9 @@ async function fetchGraph(endpoint, options = {}) {
   return data;
 }
 
-(async () => {
+export default async function (context, req) {
+  context.log('✅ Funktion getavailableslots anropad');
+
   try {
     console.log('🔍 Hämtar alla rum...');
     const rooms = await fetchGraph('/places/microsoft.graph.room');
@@ -74,4 +78,4 @@ async function fetchGraph(endpoint, options = {}) {
   } catch (err) {
     console.error('❌ Fel vid Graph-anrop:', err.message);
   }
-})();
+}
