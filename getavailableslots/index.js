@@ -1,43 +1,41 @@
 import fetch from 'node-fetch';
 
-context.log('🟢 getavailableslots index.js startar...');
-
-const tenantId = process.env.GRAPH_TENANT_ID;
-const clientId = process.env.GRAPH_CLIENT_ID;
-const clientSecret = process.env.GRAPH_CLIENT_SECRET;
-
-async function getAccessToken() {
-  const res = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      scope: 'https://graph.microsoft.com/.default',
-      grant_type: 'client_credentials',
-    })
-  });
-
-  const data = await res.json();
-  if (!data.access_token) throw new Error('❌ Kunde inte hämta access token');
-  return data.access_token;
-}
-
-async function fetchGraph(endpoint, options = {}) {
-  const token = await getAccessToken();
-  const res = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {})
-    }
-  });
-  const data = await res.json();
-  return data;
-}
-
-export default async function (context, req) {
+export const run = async function (context, req) {
   context.log('✅ Funktion getavailableslots anropad');
+
+  const tenantId = process.env.GRAPH_TENANT_ID;
+  const clientId = process.env.GRAPH_CLIENT_ID;
+  const clientSecret = process.env.GRAPH_CLIENT_SECRET;
+
+  async function getAccessToken() {
+    const res = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: 'https://graph.microsoft.com/.default',
+        grant_type: 'client_credentials',
+      })
+    });
+
+    const data = await res.json();
+    if (!data.access_token) throw new Error('❌ Kunde inte hämta access token');
+    return data.access_token;
+  }
+
+  async function fetchGraph(endpoint, options = {}) {
+    const token = await getAccessToken();
+    const res = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {})
+      }
+    });
+    const data = await res.json();
+    return data;
+  }
 
   try {
     context.log('🔍 Hämtar alla rum...');
@@ -78,4 +76,8 @@ export default async function (context, req) {
   } catch (err) {
     context.log.error('❌ Fel vid Graph-anrop:', err.message);
   }
-}
+};
+
+export default run;
+
+context.log('🟢 getavailableslots index.js startar...');
