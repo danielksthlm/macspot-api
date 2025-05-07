@@ -122,7 +122,14 @@ async function getAppleMapsAccessToken(jwt, context) {
   try {
     const teamId = process.env.APPLE_MAPS_TEAM_ID;
     const keyId = process.env.APPLE_MAPS_KEY_ID;
-    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') || fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+    let privateKey;
+    if (process.env.APPLE_MAPS_PRIVATE_KEY) {
+      privateKey = process.env.APPLE_MAPS_PRIVATE_KEY.replace(/\\n/g, '\n');
+    } else if (process.env.APPLE_MAPS_KEY_PATH) {
+      privateKey = fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+    } else {
+      throw new Error('Ingen Apple Maps-nyckel tillgänglig (varken APPLE_MAPS_PRIVATE_KEY eller APPLE_MAPS_KEY_PATH)');
+    }
     const token = jwt.sign({}, privateKey, {
       algorithm: 'ES256',
       issuer: teamId,
