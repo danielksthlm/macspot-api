@@ -136,6 +136,7 @@ export default async function (context, req) {
               if (!Array.isArray(rooms) || rooms.length === 0) return;
 
               const fetch = (await import('node-fetch')).default;
+              context.log(`📡 Anropar Graph för rum:`, rooms);
               const tokenRes = await fetch(`https://login.microsoftonline.com/${process.env.GRAPH_TENANT_ID}/oauth2/v2.0/token`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
