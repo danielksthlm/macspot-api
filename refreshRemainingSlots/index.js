@@ -3,7 +3,7 @@ const dayjs = require('dayjs');
 const isoWeek = require('dayjs/plugin/isoWeek');
 dayjs.extend(isoWeek);
 
-export default async function (context, req) {
+module.exports = async function (context, req) {
   let Client, fetch, uuidv4, jwt;
   try {
     ({ Client } = await import('pg'));
