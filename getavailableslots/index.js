@@ -60,6 +60,8 @@ export const run = async function (context, req) {
     }
 
     const pool = new Pool(pgConfig);
+    const allUsers = await fetchGraph('/users');
+    context.log('📋 Alla användare:', JSON.stringify(allUsers, null, 2));
     // Hämta room_priority från booking_settings
     const priorityResult = await pool.query("SELECT value FROM booking_settings WHERE key = 'room_priority'");
     const roomPriority = priorityResult.rows[0]?.value || {};
