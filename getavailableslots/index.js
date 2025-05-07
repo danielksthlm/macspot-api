@@ -56,9 +56,12 @@ module.exports = async function (context, req) {
     context.log("✅ Lediga rum:");
     context.log(JSON.stringify(availableRooms.map(r => r.scheduleId), null, 2));
 
+    if (!req.body) {
+      context.log.warn("⚠️ Ingen body i requesten – använder standardvärden.");
+    }
     response = {
       success: true,
-      meeting_type: req.body?.meeting_type || "atOffice",
+      meeting_type: (req.body && req.body.meeting_type) || "atOffice",
       available_rooms: availableRooms.map(r => r.scheduleId),
       all_schedules: result.value,
     };
