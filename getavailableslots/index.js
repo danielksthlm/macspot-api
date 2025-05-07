@@ -4,7 +4,10 @@ let appleMapsAccessToken = null;
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 
+
 let jwt;
+
+console.log('📍 Definierar getGraphAccessToken...');
 
 // ────────────── Microsoft Graph Access Token Helper ──────────────
 async function getGraphAccessToken(fetch) {
