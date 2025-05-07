@@ -9,6 +9,12 @@ export const run = async function (context, req) {
   context.log('🟢 getavailableslots index.js startar...');
   context.log('✅ Funktion getavailableslots anropad');
 
+  const findRooms = await fetchGraph('/me/findRooms');
+  context.log('📦 /me/findRooms-resultat:', JSON.stringify(findRooms, null, 2));
+
+  const allPlaces = await fetchGraph('/places/microsoft.graph.room');
+  context.log('📦 /places/microsoft.graph.room-resultat:', JSON.stringify(allPlaces, null, 2));
+
   const tenantId = process.env.GRAPH_TENANT_ID;
   const clientId = process.env.GRAPH_CLIENT_ID;
   const clientSecret = process.env.GRAPH_CLIENT_SECRET;
@@ -166,7 +172,9 @@ export const run = async function (context, req) {
     context.res = {
       status: 200,
       body: {
-        message: 'Testad getSchedule på alla rum',
+        message: 'Testresultat för rum',
+        roomsFromFindRooms: findRooms,
+        roomsFromPlaces: allPlaces,
         results: testResults
       }
     };
