@@ -1,11 +1,19 @@
-import { Client } from 'pg';
-import fetch from 'node-fetch';
-import { v4 as uuidv4 } from 'uuid';
-import jwt from 'jsonwebtoken';
-import fs from 'fs';
 const dayjs = require('dayjs');
 
-export default async function (context, req) {
+module.exports = async function (context, req) {
+  let Client, fetch, uuidv4, jwt, fs;
+  try {
+    ({ Client } = await import('pg'));
+    fetch = (await import('node-fetch')).default;
+    ({ v4: uuidv4 } = await import('uuid'));
+    jwt = await import('jsonwebtoken');
+    fs = await import('fs');
+  } catch (err) {
+    context.log.error('❌ Importfel:', err.message);
+    context.res = { status: 500, body: 'Importfel: ' + err.message };
+    return;
+  }
+
   context.log('📥 Funktion refreshRemainingSlots anropad');
 
   const email = req.body?.email;
