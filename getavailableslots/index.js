@@ -20,6 +20,12 @@ module.exports = async function (context, req) {
     return;
   }
   context.log('📥 Data mottagen:', { email, meeting_type, meeting_length });
+  context.log('🌍 Miljövariabler:', {
+    PGUSER: process.env.PGUSER,
+    PGHOST: process.env.PGHOST,
+    PGDATABASE: process.env.PGDATABASE,
+    PGPORT: process.env.PGPORT
+  });
 
   // Dynamisk import av pg
   const { Pool } = await import('pg');
