@@ -28,7 +28,8 @@ module.exports = async function (context, req) {
   });
 
   // Dynamisk import av pg
-  const { Pool } = await import('pg');
+  const pg = await import('pg');
+  const { Pool } = pg;
 
   // Skapa pool och anslutning
   const pool = new Pool({
@@ -161,6 +162,28 @@ module.exports = async function (context, req) {
         const toAddress = (meeting_type === 'atClient' ? fullAddress : settings.default_office_address).trim().toLowerCase();
         const hourKey = `${fromAddress}|${toAddress}|${hour}`;
         context.log('🧭 hourKey för slot:', hourKey);
+
+        // Kontroll av restid innan slot läggs till
+        const travelTimeRes = await client.query(
+          `SELECT travel_minutes FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3`,
+          [fromAddress, toAddress, hour]
+        );
+
+        let travelTimeMin;
+        if (travelTimeRes.rows.length > 0) {
+          travelTimeMin = travelTimeRes.rows[0].travel_minutes;
+          context.log(`🗃️ Cached restid för ${hourKey}: ${travelTimeMin} min`);
+        } else {
+          travelTimeMin = settings.fallback_travel_time_minutes || 90;
+          context.log(`🕐 Ingen cache – använder fallback för ${hourKey}: ${travelTimeMin} min`);
+        }
+
+        const fallback = settings.fallback_travel_time_minutes || 60;
+        if (travelTimeMin > fallback) {
+          context.log(`⏭️ Slot ${start.toISOString()} avvisad – restid ${travelTimeMin} > fallback ${fallback}`);
+          continue;
+        }
+
         chosen.push(start.toISOString());
         context.log(`✅ Slot tillagd: ${start.toISOString()}`);
       }
