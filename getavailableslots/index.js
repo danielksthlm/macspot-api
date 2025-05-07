@@ -1,4 +1,5 @@
 export default async function (context, req) {
+  const execStart = Date.now();
   context.log('✅ Funktion getavailableslots anropad');
 
   if (!req || !req.body) {
@@ -154,5 +155,7 @@ export default async function (context, req) {
     };
   } finally {
     client.release();
+    const execEnd = Date.now();
+    context.log(`⏱️ Exekveringstid: ${execEnd - execStart} ms`);
   }
 }
