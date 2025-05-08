@@ -1,4 +1,4 @@
-// Slot pattern frequency tracker
+// Slot pattern frequency tracker - test 2
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 const slotGroupPicked = {}; // flyttad hit så den behåller status över alla timmar och dagar
@@ -251,12 +251,14 @@ export default async function (context, req) {
           // Se till att hour EJ påverkas av dayOffset i onödan (ingen hour = dayOffset + hour etc)
           // Korrigera loggutskrifter så de visar rätt hour
           await Promise.all(lengths.map(async (len) => {
+            context.log(`🔍 Validerar slot: ${start.toISOString()} → ${end.toISOString()}`);
             const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
             // Kontroll innan slotprövning
             context.log(`⏳ Kontroll innan slotprövning – slotGroupPicked[${key}] = ${slotGroupPicked[key]}`);
             // Hoppa om slot redan vald för denna grupp
             if (slotGroupPicked[key]) {
               context.log(`⏩ Skippar ${key} – redan vald slot`);
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
             const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
@@ -267,6 +269,7 @@ export default async function (context, req) {
               const wd = start.getDay();
               if (wd === 0 || wd === 6) {
                 context.log(`❌ Avvisad pga helg (${wd})`);
+                context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
                 return;
               }
             }
@@ -274,6 +277,7 @@ export default async function (context, req) {
             const weekdayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][wd];
             if (meeting_type === 'atClient' && Array.isArray(settings.allowed_atClient_meeting_days) && !settings.allowed_atClient_meeting_days.includes(weekdayName)) {
               context.log(`❌ Avvisad pga otillåten veckodag för atClient: ${weekdayName}`);
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
@@ -300,6 +304,7 @@ export default async function (context, req) {
             const validToNext = await validateTravelToNextMeeting(end, next, accessToken, settings, context, db);
             if (!validToNext) {
               context.log('❌ Avvisad pga för lång restid till nästa möte');
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
@@ -322,6 +327,7 @@ export default async function (context, req) {
                 const arrivalTime = new Date(previous.end + returnTravelTime * 60000);
                 if (arrivalTime > start) {
                   context.log(`❌ Avvisad pga för lång retur från tidigare möte (${arrivalTime.toISOString()} > ${start.toISOString()})`);
+                  context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
                   return;
                 }
               }
@@ -345,6 +351,7 @@ export default async function (context, req) {
             const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
             if (bookedMinutes + len > (settings.max_weekly_booking_minutes || 99999)) {
               context.log(`❌ Avvisad pga veckokvot överskrids (${bookedMinutes} + ${len} > ${settings.max_weekly_booking_minutes})`);
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
@@ -355,12 +362,14 @@ export default async function (context, req) {
             const lunchEndDate = new Date(start.toISOString().split('T')[0] + 'T' + lunchEnd + ':00');
             if (start < lunchEndDate && end > lunchStartDate) {
               context.log(`❌ Avvisad pga överlappar lunch (${start.toISOString()} - ${end.toISOString()})`);
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
             // ⛔ Krockar (förenklad mock – riktig logik kan ersättas senare)
             if (conflictRes.rowCount > 0) {
               context.log('❌ Avvisad pga kalenderkrock');
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
@@ -387,6 +396,7 @@ export default async function (context, req) {
             }
             if (!isIsolated) {
               context.log('❌ Avvisad pga ligger för nära annan bokning (buffer)');
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
@@ -415,11 +425,15 @@ export default async function (context, req) {
             // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback (cache per slot)
             const slotIso = start.toISOString();
             // Undvik dubbel restidshämtning om redan uträknad
-            if (appleCache[slotIso] !== undefined) return;
+            if (appleCache[slotIso] !== undefined) {
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
+              return;
+            }
             try {
               const accessToken = await getAppleMapsAccessToken(context);
               if (!accessToken) {
                 context.log('⚠️ Ingen Apple Maps accessToken – hoppar över slot');
+                context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
                 appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
                 return;
               }
@@ -445,6 +459,7 @@ export default async function (context, req) {
             const travelTime = appleCache[slotIso];
             if (travelTime === Number.MAX_SAFE_INTEGER && fallback > 0) {
               context.log(`❌ Avvisad pga restid okänd och fallback överstigen`);
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
@@ -453,6 +468,7 @@ export default async function (context, req) {
             context.log(`📍 Ankomsttid enligt restid: ${arrivalTime.toLocaleString('sv-SE', { timeZone: settings.timezone || 'Europe/Stockholm' })}`);
             if (arrivalTime >= lunchStartDate && arrivalTime < lunchEndDate) {
               context.log(`❌ Avvisad pga restid skär i lunch (${arrivalTime.toISOString()})`);
+              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
 
@@ -469,6 +485,7 @@ export default async function (context, req) {
             if (travelHour < windowStart || travelHour > windowEnd) {
               if (!requiresApproval.includes(true)) {
                 context.log(`❌ Avvisad pga restid utanför tillåtet fönster (${travelHour}:00)`);
+                context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
                 return;
               }
             }
@@ -734,6 +751,9 @@ async function validateTravelToNextMeeting(end, next, accessToken, settings, con
   const arrivalAtNext = end.getTime() + travelTimeAfter * 60000;
   if (arrivalAtNext > next.start) {
     context.log(`⛔ Slot avvisad: restid till nästa möte för lång (${arrivalAtNext} > ${next.start})`);
+    if (context && context.log) {
+      context.log(`⚠️ Avvisad slot ${end.toISOString()} → ${new Date(next.start).toISOString()} av orsak ovan.`);
+    }
     return false;
   }
   return true;
