@@ -158,12 +158,12 @@ export default async function (context, req) {
     }
     context.log('📐 Möteslängd vald av kund:', requestedLength);
     if (meeting_type === 'atClient' && Array.isArray(settings.default_meeting_length_atClient)) {
-      lengths = settings.default_meeting_length_atClient;
+      lengths = settings.default_meeting_length_atClient.map(Number);
     } else {
       lengths = [requestedLength];
     }
-    // Filtrera bort onödiga möteslängder – endast den begärda längden
-    lengths = lengths.map(Number).filter(l => l === requestedLength);
+    lengths = lengths.filter(l => l === requestedLength);
+    context.log('📏 lengths innan kontroll:', lengths);
 
     // --- Cacha bokningar per dag ---
     const bookingsByDay = {};
