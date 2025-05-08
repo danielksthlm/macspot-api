@@ -249,37 +249,75 @@ module.exports = async function (context, req) {
           context.log(`⚠️ Slot ${slotTime.toISOString()} markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
         }
 
-        const accessToken = await getAppleMapsAccessToken(context);
-        if (!accessToken) {
-          context.log(`⚠️ Apple Maps-token saknas – använder fallback restid ${travelTimeMin} min`);
-        } else {
-          const fetch = require('node-fetch');
-          const origin = meeting_type === 'atClient' ? settings.default_office_address : contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city;
-          const destination = meeting_type === 'atClient' ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city : settings.default_office_address;
-
-          const url = new URL('https://maps-api.apple.com/v1/directions');
-          url.searchParams.append('origin', origin);
-          url.searchParams.append('destination', destination);
-          url.searchParams.append('transportType', 'automobile');
-          url.searchParams.append('departureTime', slotTime.toISOString());
-
-          try {
-            const res = await fetch(url.toString(), {
-              headers: { Authorization: `Bearer ${accessToken}` }
-            });
-            const data = await res.json();
-
-            const travelSeconds = data.routes?.[0]?.durationSeconds;
-            if (!travelSeconds) {
-              context.log(`⚠️ Apple Maps kunde inte hitta restid – använder fallback`);
-            } else {
-              travelTimeMin = Math.round(travelSeconds / 60);
-              context.log(`🗺️ Restid Apple Maps: ${travelTimeMin} min (${origin} → ${destination})`);
+        // --- CACHE: Kontrollera om restiden redan finns i databasen ---
+        let cacheHit = false;
+        const origin = meeting_type === 'atClient'
+          ? settings.default_office_address
+          : contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city;
+        const destination = meeting_type === 'atClient'
+          ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city
+          : settings.default_office_address;
+        try {
+          const hourKey = slotTime.getUTCHours();
+          const cacheRes = await db.query(
+            `SELECT travel_minutes FROM travel_time_cache
+             WHERE from_address = $1 AND to_address = $2 AND hour = $3
+             LIMIT 1`,
+            [origin, destination, hourKey]
+          );
+          if (cacheRes.rows.length > 0) {
+            travelTimeMin = cacheRes.rows[0].travel_minutes;
+            cacheHit = true;
+            context.log(`📦 Restid återanvänd från cache: ${travelTimeMin} min (${origin} → ${destination})`);
+          }
+        } catch (err) {
+          context.log(`⚠️ Kunde inte läsa från restidscache: ${err.message}`);
+        }
+        // --- SLUT CACHE ---
+        if (!cacheHit) {
+          const accessToken = await getAppleMapsAccessToken(context);
+          if (!accessToken) {
+            context.log(`⚠️ Apple Maps-token saknas – använder fallback restid ${travelTimeMin} min`);
+          } else {
+            const fetch = require('node-fetch');
+            const url = new URL('https://maps-api.apple.com/v1/directions');
+            url.searchParams.append('origin', origin);
+            url.searchParams.append('destination', destination);
+            url.searchParams.append('transportType', 'automobile');
+            url.searchParams.append('departureTime', slotTime.toISOString());
+            try {
+              const res = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${accessToken}` }
+              });
+              const data = await res.json();
+              const travelSeconds = data.routes?.[0]?.durationSeconds;
+              if (!travelSeconds) {
+                context.log(`⚠️ Apple Maps kunde inte hitta restid – använder fallback`);
+              } else {
+                travelTimeMin = Math.round(travelSeconds / 60);
+                context.log(`🗺️ Restid Apple Maps: ${travelTimeMin} min (${origin} → ${destination})`);
+              }
+            } catch (err) {
+              context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
             }
-          } catch (err) {
-            context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
           }
         }
+        // --- CACHE: Spara restid om vi just hämtade från Apple Maps ---
+        if (!cacheHit && travelTimeMin < Number.MAX_SAFE_INTEGER) {
+          try {
+            const hour = slotTime.getUTCHours();
+            await db.query(`
+              INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, NOW(), NOW())
+              ON CONFLICT (from_address, to_address, hour)
+              DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+            `, [origin, destination, hour, travelTimeMin]);
+            context.log(`💾 Restid sparad i cache: ${travelTimeMin} min (${origin} → ${destination} @ ${hour}:00)`);
+          } catch (err) {
+            context.log(`⚠️ Kunde inte spara restid till cache: ${err.message}`);
+          }
+        }
+        // --- SLUT CACHE ---
 
         // Kontrollera om restiden möjliggör ankomst i tid
         const travelBufferMs = travelTimeMin * 60000;
@@ -325,6 +363,21 @@ module.exports = async function (context, req) {
               const data = await res.json();
               const returnMinutes = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
               const arrivalTime = new Date(prevEnd.getTime() + returnMinutes * 60000);
+
+              // --- Cacha returrestid ---
+              try {
+                const hour = prevEnd.getUTCHours();
+                await db.query(`
+                  INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
+                  VALUES ($1, $2, $3, $4, NOW(), NOW())
+                  ON CONFLICT (from_address, to_address, hour)
+                  DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+                `, [from, to, hour, returnMinutes]);
+                context.log(`💾 Returrestid sparad i cache: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
+              } catch (err) {
+                context.log(`⚠️ Kunde inte spara returrestid till cache: ${err.message}`);
+              }
+              // --- Slut cache returrestid ---
 
               if (arrivalTime > slotTime) {
                 context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
