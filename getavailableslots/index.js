@@ -237,7 +237,7 @@ export default async function (context, req) {
         if (
           meeting_type === 'atClient' &&
           Array.isArray(settings.allowed_atClient_meeting_days) &&
-          !settings.allowed_atClient_meeting_days.includes(weekdayName)
+          !settings.allowed_atClient_meeting_days.map(d => d.toLowerCase()).includes(weekdayName)
         ) {
           context.log(`⏩ Skipped ${dayStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
           return;
