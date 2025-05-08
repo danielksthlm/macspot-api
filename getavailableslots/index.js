@@ -504,21 +504,6 @@ export default async function (context, req) {
       }));
     }
           }));
-          // ⏹️ Klar timme-logg
-          context.log(`⏹️ Klar timme ${hour}:00 (${Date.now() - hourStart} ms)`);
-          // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
-          // OBS: Kontroll-loggen ska dyka EFTER att slotGroupPicked[key] satts!
-          if (DEBUG) {
-            context.log(`🧷 Debug-status innan kontroll:`);
-            context.log(`  slotGroupPicked keys:`, Object.keys(slotGroupPicked));
-            context.log(`  slotGroupPicked[${dayStr}_fm] =`, slotGroupPicked[`${dayStr}_fm`]);
-            context.log(`  slotGroupPicked[${dayStr}_em] =`, slotGroupPicked[`${dayStr}_em`]);
-            context.log(`🔁 Kontroll: fm = ${slotGroupPicked[`${dayStr}_fm`]}; em = ${slotGroupPicked[`${dayStr}_em`]}`);
-          }
-          if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
-            context.log(`✅ ${dayStr} har fm och em – avbryter dagens bearbetning`);
-            return;
-          }
         }
         context.log(`✅ Klar med dag ${dayStr} på ${Date.now() - dayStart} ms`);
       }));
