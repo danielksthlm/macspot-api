@@ -200,6 +200,7 @@ export default async function (context, req) {
         if (lengths) {
           lastAllowedStartHour = closeHour - Math.max(...lengths) / 60;
         }
+        // Byt ut eventuell map/Array.from för timmar mot en explicit for-loop
         for (let hour = openHour; hour <= lastAllowedStartHour; hour++) {
           const hourStart = Date.now();
           context.log(`⏳ Bearbetar timme ${hour}:00 för dag ${dayStr}`);
@@ -242,6 +243,8 @@ export default async function (context, req) {
           const startTime = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':00:00');
           const endTime = new Date(startTime.getTime() + Math.max(...lengths) * 60000);
 
+          // Se till att hour EJ påverkas av dayOffset i onödan (ingen hour = dayOffset + hour etc)
+          // Korrigera loggutskrifter så de visar rätt hour
           await Promise.all(lengths.map(async (len) => {
             const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
             // Hoppa om slot redan vald för denna grupp
