@@ -47,10 +47,11 @@ module.exports = async function (context, req) {
 
     context.res = {
       status: 200,
-      body: {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         types: meetingTypes,
         lengths
-      }
+      })
     };
   } catch (error) {
     context.log.error('Database query failed:', error);

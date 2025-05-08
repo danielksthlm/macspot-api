@@ -421,10 +421,9 @@
       const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
       // Corrected startOffset calculation for week starting on Monday:
-      const jsDay = firstDay.getDay(); // JS: söndag = 0
-      const startOffset = (jsDay === 0 ? 7 : jsDay); // söndag = 7, måndag = 1, osv
-      if (startOffset !== 1) {
-        for (let i = 1; i < startOffset; i++) {
+      const startOffset = (firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1);
+      if (startOffset !== 0) {
+        for (let i = 0; i < startOffset; i++) {
           const placeholder = document.createElement('div');
           grid.appendChild(placeholder);
         }
@@ -438,13 +437,6 @@
         const dayEl = document.createElement('div');
         dayEl.className = 'calendar-day';
         dayEl.textContent = day;
-
-        // Position first day of month correctly in grid (fix for Monday start)
-        if (day === 1) {
-          const jsDay = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-          const startOffset = (jsDay === 0 ? 7 : jsDay); // söndag = 7, måndag = 1, osv
-          dayEl.style.gridColumnStart = startOffset; // gridColumnStart is 1-indexed
-        }
 
         // Block previous dates (before today)
         const todayMidnight = new Date();
@@ -555,7 +547,7 @@
       }
       .calendar-grid {
         display: grid;
-        grid-template-columns: repeat(7, 1fr);
+        grid-template-columns: repeat(7, 1fr); /* Monday to Sunday */
         gap: 4px;
       }
       .calendar-day {
