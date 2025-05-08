@@ -373,10 +373,13 @@ export default async function (context, req) {
             if (!slotMap[key]) slotMap[key] = [];
 
             const minDist = Math.min(...existing.map(e => Math.abs(slotStart - e.end)));
+            context.log(`🆕 Förbereder att lägga till slot i slotMap[${key}]`);
+            context.log(`🔍 slotMap-data: ISO=${start.toISOString()}, score=${isFinite(minDist) ? minDist : 99999}`);
             slotMap[key].push({
               iso: start.toISOString(),
               score: isFinite(minDist) ? minDist : 99999
             });
+            context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()}`);
             context.log(`⭐️ Slot score (isolation): ${isFinite(minDist) ? minDist : 99999}`);
 
             // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback (cache per slot)
