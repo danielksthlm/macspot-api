@@ -1,6 +1,7 @@
 // Slot pattern frequency tracker
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
+const slotGroupPicked = {}; // flyttad hit så den behåller status över alla timmar och dagar
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 export default async function (context, req) {
@@ -83,7 +84,6 @@ export default async function (context, req) {
     // const slots = [];
     // const lengths = ... (old declaration removed, see above)
     const slotMap = {}; // dag_fm/em → [{ iso, score }]
-    const slotGroupPicked = {}; // nyckel: dag_fm/em, värde: true om en slot redan valts
 
     const graphCache = {}; // key = dayStr_fm/em, value = Graph schedule data
     const appleCache = {}; // key = slot ISO, value = travel time (minutes)
