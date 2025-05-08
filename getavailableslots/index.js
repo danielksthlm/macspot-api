@@ -29,6 +29,11 @@ function verifyBookingSettings(settings, context) {
     const val = settings[key];
     if (val === undefined) {
       issues.push(`❌ Saknar inställning: ${key}`);
+    } else if (key === 'allowed_atClient_meeting_days') {
+      // Accept both array of strings (regardless of case) and object (for backward compatibility)
+      if (!Array.isArray(val) || !val.every(v => typeof v === 'string')) {
+        issues.push(`⚠️ Typfel för ${key}: ska vara array av strängar`);
+      }
     } else if (typeof val !== type) {
       issues.push(`⚠️ Typfel för ${key}: har ${typeof val}, förväntade ${type}`);
     }
@@ -147,14 +152,20 @@ export default async function (context, req) {
     settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
     settings = {};
     for (const row of settingsRes.rows) {
-      if (row.value_type === 'json' || row.value_type === 'array') {
+      if (
+        row.value_type === 'json' ||
+        row.value_type === 'array' ||
+        (typeof row.value_type === 'string' && /\[\]$/.test(row.value_type))
+      ) {
         try {
           settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
         } catch (_) {}
       } else if (row.value_type === 'int') {
         settings[row.key] = parseInt(row.value);
       } else if (row.value_type === 'bool') {
-        settings[row.key] = row.value === 'true';
+        settings[row.key] = row.value === 'true' || row.value === true;
+      } else if (row.value_type === 'string') {
+        settings[row.key] = String(row.value).replace(/^"(.*)"$/, '$1');
       } else {
         settings[row.key] = row.value;
       }
@@ -237,7 +248,7 @@ export default async function (context, req) {
         if (
           meeting_type === 'atClient' &&
           Array.isArray(settings.allowed_atClient_meeting_days) &&
-          !settings.allowed_atClient_meeting_days.map(d => d.toLowerCase()).includes(weekdayName)
+          !settings.allowed_atClient_meeting_days.map(d => d.toLowerCase()).includes(weekdayName.toLowerCase())
         ) {
           context.log(`⏩ Skipped ${dayStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
           return;
@@ -340,7 +351,7 @@ export default async function (context, req) {
             }
             const wd = start.getDay();
             const weekdayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][wd];
-            if (meeting_type === 'atClient' && Array.isArray(settings.allowed_atClient_meeting_days) && !settings.allowed_atClient_meeting_days.includes(weekdayName)) {
+            if (meeting_type === 'atClient' && Array.isArray(settings.allowed_atClient_meeting_days) && !settings.allowed_atClient_meeting_days.map(d => d.toLowerCase()).includes(weekdayName.toLowerCase())) {
               context.log(`❌ Avvisad pga otillåten veckodag för atClient: ${weekdayName}`);
               context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
@@ -787,14 +798,20 @@ async function loadBookingSettings(db) {
   const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
   const settings = {};
   for (const row of settingsRes.rows) {
-    if (row.value_type === 'json' || row.value_type === 'array') {
+    if (
+      row.value_type === 'json' ||
+      row.value_type === 'array' ||
+      (typeof row.value_type === 'string' && /\[\]$/.test(row.value_type))
+    ) {
       try {
         settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
       } catch (_) {}
     } else if (row.value_type === 'int') {
       settings[row.key] = parseInt(row.value);
     } else if (row.value_type === 'bool') {
-      settings[row.key] = row.value === 'true';
+      settings[row.key] = row.value === 'true' || row.value === true;
+    } else if (row.value_type === 'string') {
+      settings[row.key] = String(row.value).replace(/^"(.*)"$/, '$1');
     } else {
       settings[row.key] = row.value;
     }
