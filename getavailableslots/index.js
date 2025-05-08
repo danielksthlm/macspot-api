@@ -1,4 +1,4 @@
-// Kontrollfunktion för booking_settings - verstion3
+// Kontrollfunktion för booking_settings - förbättrad version 4
 function verifyBookingSettings(settings, context) {
   const expected = {
     default_office_address: 'string',
@@ -16,7 +16,7 @@ function verifyBookingSettings(settings, context) {
     lunch_end: 'string',
     travel_time_window_start: 'string',
     travel_time_window_end: 'string',
-    require_approval: 'object',
+    require_approval: 'boolean',
     max_days_in_advance: 'number',
     max_weekly_booking_minutes: 'number',
     cache_ttl_minutes: 'number',
@@ -30,9 +30,13 @@ function verifyBookingSettings(settings, context) {
     if (val === undefined) {
       issues.push(`❌ Saknar inställning: ${key}`);
     } else if (key === 'allowed_atClient_meeting_days') {
-      // Accept both array of strings (regardless of case) and object (for backward compatibility)
       if (!Array.isArray(val) || !val.every(v => typeof v === 'string')) {
         issues.push(`⚠️ Typfel för ${key}: ska vara array av strängar`);
+      }
+    } else if (key === 'require_approval') {
+      // Tillåt require_approval att vara boolean (eller hantera legacy array)
+      if (typeof val !== 'boolean') {
+        issues.push(`⚠️ Typfel för ${key}: ska vara boolean`);
       }
     } else if (typeof val !== type) {
       issues.push(`⚠️ Typfel för ${key}: har ${typeof val}, förväntade ${type}`);
