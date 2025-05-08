@@ -1,7 +1,7 @@
 console.log('🚀 Funktion initierad');
 const DEBUG = (process.env.DEBUG_MODE || '').toLowerCase() === 'true';
 console.log('📛 DEBUG_MODE:', process.env.DEBUG_MODE);
-// Kontrollfunktion för booking_settings - förbättrad version 5
+// Kontrollfunktion för booking_settings - förbättrad version 6
 function verifyBookingSettings(settings, context) {
   const expected = {
     default_office_address: 'string',

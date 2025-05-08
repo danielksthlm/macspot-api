@@ -3,18 +3,12 @@ const dayjs = require('dayjs');
 const isoWeek = require('dayjs/plugin/isoWeek');
 dayjs.extend(isoWeek);
 
-module.exports = async function (context, req) {
-  let Client, fetch, uuidv4, jwt;
-  try {
-    ({ Client } = await import('pg'));
-    fetch = (await import('node-fetch')).default;
-    ({ v4: uuidv4 } = await import('uuid'));
-    jwt = await import('jsonwebtoken');
-  } catch (err) {
-    context.res = { status: 500, body: 'Importfel: ' + err.message };
-    return;
-  }
+const { Client } = require('pg');
+const fetch = require('node-fetch');
+const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
 
+module.exports = async function (context, req) {
   const { email, meeting_type } = req.body || {};
   if (!email || !meeting_type) {
     context.res = { status: 400, body: 'Email och mötestyp krävs.' };
@@ -90,10 +84,10 @@ module.exports = async function (context, req) {
           const slotPart = hour < 12 ? 'fm' : 'em';
           const slotDay = slotIso.split('T')[0];
 
-          const accessToken = await getAppleMapsAccessToken(jwt, context);
+          const accessToken = await getAppleMapsAccessToken();
           const fromAddress = settings.default_office_address;
           const toAddress = fullAddress;
-          const travelTimeMin = await getTravelTime(fromAddress, toAddress, start, accessToken, context);
+          const travelTimeMin = await getTravelTime(fromAddress, toAddress, start, accessToken);
           if (travelTimeMin === Number.MAX_SAFE_INTEGER) continue;
 
           await client.query(
@@ -118,7 +112,7 @@ module.exports = async function (context, req) {
 };
 
 // Riktiga Apple Maps-anrop (identiskt med getavailableslots)
-async function getAppleMapsAccessToken(jwt, context) {
+async function getAppleMapsAccessToken() {
   try {
     const teamId = process.env.APPLE_MAPS_TEAM_ID;
     const keyId = process.env.APPLE_MAPS_KEY_ID;
@@ -137,7 +131,6 @@ async function getAppleMapsAccessToken(jwt, context) {
       expiresIn: '1h',
       header: { alg: 'ES256', kid: keyId, typ: 'JWT' }
     });
-    const fetch = (await import('node-fetch')).default;
     const res = await fetch('https://maps-api.apple.com/v1/token', {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -148,9 +141,8 @@ async function getAppleMapsAccessToken(jwt, context) {
   }
 }
 
-async function getTravelTime(from, to, start, token, context) {
+async function getTravelTime(from, to, start, token) {
   try {
-    const fetch = (await import('node-fetch')).default;
     const url = new URL('https://maps-api.apple.com/v1/directions');
     url.searchParams.append('origin', from);
     url.searchParams.append('destination', to);
