@@ -163,7 +163,7 @@ export default async function (context, req) {
       lengths = [requestedLength];
     }
     // Filtrera bort onödiga möteslängder – endast den begärda längden
-    lengths = lengths.filter(l => l === requestedLength);
+    lengths = lengths.map(Number).filter(l => l === requestedLength);
 
     // --- Cacha bokningar per dag ---
     const bookingsByDay = {};
