@@ -382,6 +382,8 @@ export default async function (context, req) {
               iso: start.toISOString(),
               score: isFinite(minDist) ? minDist : 99999
             });
+            slotGroupPicked[key] = true;
+            context.log(`🧷 slotGroupPicked[${key}] satt till true`);
             context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
             context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
             context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()}`);
