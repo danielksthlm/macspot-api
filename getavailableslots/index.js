@@ -131,7 +131,11 @@ module.exports = async function (context, req) {
 
     const maxDays = settings.max_days_in_advance || 14;
     const today = new Date();
-    const days = Array.from({ length: maxDays }, (_, i) => {
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + maxDays);
+    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); // sista dagen i månaden
+    const totalDays = Math.ceil((endMonth - today) / (1000 * 60 * 60 * 24)) + 1;
+    const days = Array.from({ length: totalDays }, (_, i) => {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
       return date;
