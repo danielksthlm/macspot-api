@@ -77,7 +77,7 @@ export default async function (context, req) {
 
     context.log('📥 Funktion getavailableslots anropad');
     console.log('📛 DEBUG_MODE:', process.env.DEBUG_MODE);
-    const DEBUG = process.env.DEBUG_MODE === 'true';
+    const DEBUG = (process.env.DEBUG_MODE || '').toLowerCase() === 'true';
     if (!process.env.DEBUG_MODE) {
       context.log('⚠️ DEBUG_MODE är inte satt – standard är false');
     }
