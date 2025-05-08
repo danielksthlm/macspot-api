@@ -1,4 +1,4 @@
- // Version 4
+ // Version 5
  
  async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -15,7 +15,13 @@
   }
 
   try {
-    const { email, meeting_type, meeting_length } = req.body || {};
+    let body = {};
+    try {
+      body = JSON.parse(req.rawBody);
+    } catch (err) {
+      console.error('Kunde inte parsa body:', err.message);
+    }
+    const { email, meeting_type, meeting_length } = body;
 
     if (!email || !meeting_type || !meeting_length) {
       res.status(400).json({ error: 'Missing one or more required fields: email, meeting_type, meeting_length' });
