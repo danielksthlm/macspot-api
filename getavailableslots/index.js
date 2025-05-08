@@ -48,6 +48,7 @@ const slotGroupPicked = {}; // flyttad hit så den behåller status över alla t
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 export default async function (context, req) {
+  context.log('📥 Request body:', req.body);
   const startTimeMs = Date.now();
   let Pool, fetch, uuidv4;
   let db;
@@ -64,9 +65,16 @@ export default async function (context, req) {
     };
     return;
   }
-
-  const { email, meeting_type } = req.body || {};
-  let requestedLength = parseInt(req.body.meeting_length, 10);
+  const body = req.body;
+  if (!body || typeof body !== 'object') {
+    context.res = {
+      status: 400,
+      body: { error: 'Body saknas eller är ogiltig.' }
+    };
+    return;
+  }
+  const { email, meeting_type } = body;
+  let requestedLength = parseInt(body.meeting_length, 10);
   const booking_email = email; // Use booking_email for cache key and queries
   // context.log('📧 Email:', booking_email, '📅 Mötestyp:', meeting_type);
   if (!booking_email || !meeting_type) {
