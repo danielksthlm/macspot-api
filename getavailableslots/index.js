@@ -235,26 +235,16 @@ export default async function (context, req) {
 
     // Flytta Apple Maps-tokenhämtning till början av hour-loopen
     let accessToken;
-    // Parallell chunkning på dag-nivå
-    const allDayOffsets = Array.from({ length: daysToGenerate }, (_, i) => i + 1);
-    const chunkSize = 7;
-    // Hämta Apple Maps-token en gång per batch (kan återanvändas)
-    let accessToken;
-    for (let chunkStart = 0; chunkStart < allDayOffsets.length; chunkStart += chunkSize) {
-      const chunk = allDayOffsets.slice(chunkStart, chunkStart + chunkSize);
-      // Parallellisera dag-bearbetning inom chunk
+    for (let i = 1; i <= daysToGenerate; i += 7) {
+      // Skapa chunk med max 7 dagar
+      const chunk = Array.from({ length: 7 }, (_, offset) => i + offset).filter(d => d <= daysToGenerate);
       await Promise.all(chunk.map(async (dayOffset) => {
         const dayStart = Date.now();
         const day = new Date(now);
         day.setDate(day.getDate() + dayOffset);
         const dayStr = day.toISOString().split('T')[0];
-        const weekdayName = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][day.getDay()];
-        // Tidig avbrytning om båda fm/em redan finns i cache
-        if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
-          context.log(`⏩ Skippar dag ${dayStr} – både fm och em redan i cache/valda`);
-          return;
-        }
         // Kontrollera veckodagstillåtelse för atClient innan timloopen
+        const weekdayName = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][day.getDay()];
         if (
           meeting_type === 'atClient' &&
           Array.isArray(settings.allowed_atClient_meeting_days) &&
@@ -264,7 +254,15 @@ export default async function (context, req) {
           return;
         }
         context.log(`🕒 Startar bearbetning för dag ${dayStr}`);
-        // Apple Maps-token hämtas först när den behövs (se restidskontroll)
+        if (!accessToken) {
+          accessToken = await getAppleMapsAccessToken(context);
+          if (!accessToken) {
+            context.log('⚠️ Apple Maps-token saknas – avbryter dagsloop');
+            return;
+          }
+        }
+        // const dayStr = day.toISOString().split('T')[0];
+
         const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
         const closeHour = parseInt((settings.close_time || '16:00').split(':')[0], 10);
         let lastAllowedStartHour = closeHour;
@@ -276,23 +274,17 @@ export default async function (context, req) {
           context.log.warn('⚠️ Ogiltiga möteslängder. Avbryter generation av timmar.');
           return;
         }
-        // Precache mode: endast en slot per dagdel genereras, bryt timloopen direkt efter en godkänd slot
-        const precacheMode = req.body?.precache_mode === true;
-        // Håll koll på om vi redan valt slot för fm/em denna dag (för precache/brytning)
-        let dayPartSlotFound = { fm: false, em: false };
-        // Timme-loop (ej Promise.all, men brytbar)
+        // Byt ut eventuell map/Array.from för timmar mot en explicit for-loop
         for (let hour = openHour; hour <= closeHour && hour <= 23; hour++) {
           const hourStart = Date.now();
           context.log(`⏳ Bearbetar timme ${hour}:00 för dag ${dayStr}`);
           const slotDay = dayStr;
           const slotPart = hour < 12 ? 'fm' : 'em';
-          // Tidig avbrytning om redan vald i slotGroupPicked
           if (slotGroupPicked[`${dayStr}_${slotPart}`]) {
             context.log(`⏩ Skippar ${dayStr}_${slotPart} – slot redan vald`);
-            if (precacheMode) dayPartSlotFound[slotPart] = true;
             continue;
           }
-          // Kontrollera cache för denna slot direkt
+          // Gör db.connect() först efter att vi vet att ingen cached slot finns (redan ansluten ovan)
           let cachedSlot;
           try {
             cachedSlot = await db.query(`
@@ -312,193 +304,27 @@ export default async function (context, req) {
           if (cachedSlot?.rows.length > 0) {
             const iso = cachedSlot.rows[0].slot_iso;
             if (!slotMap[`${slotDay}_${slotPart}`]) slotMap[`${slotDay}_${slotPart}`] = [];
-            slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 });
+            slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
             const key = `${slotDay}_${slotPart}`;
-            if (DEBUG) context.log(`🧷 (cached slot) Markering: slotGroupPicked[${key}] = true`);
-            slotGroupPicked[key] = true;
-            if (DEBUG) context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
-            if (DEBUG) context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
-            if (DEBUG) context.log(`🧷 (efter cached set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
-            context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
-            if (precacheMode) dayPartSlotFound[slotPart] = true;
+          if (DEBUG) context.log(`🧷 (cached slot) Markering: slotGroupPicked[${key}] = true`);
+          slotGroupPicked[key] = true;
+          if (DEBUG) context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
+          if (DEBUG) context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
+          if (DEBUG) context.log(`🧷 (efter cached set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
+          context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
+            // Skip expensive processing if cached slot exists
             continue;
           }
-          // För varje möteslängd (oftast bara en)
-          let slotAccepted = false;
-          for (const len of lengths) {
-            const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
-            const end = new Date(start.getTime() + len * 60000);
-            const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
-            const slotDay = dayStr;
-            const slotPart = hour < 12 ? 'fm' : 'em';
-            // Kontroll innan slotprövning
-            context.log(`⏳ Kontroll innan slotprövning – slotGroupPicked[${key}] = ${slotGroupPicked[key]}`);
-            if (slotGroupPicked[key]) {
-              context.log(`⏩ Skippar ${key} – redan vald slot`);
-              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-              continue;
-            }
-            // 🚫 Kolla helg
-            if (settings.block_weekends) {
-              const wd = start.getDay();
-              if (wd === 0 || wd === 6) {
-                context.log(`❌ Avvisad pga helg (${wd})`);
-                context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-                continue;
-              }
-            }
-            const wd = start.getDay();
-            const weekdayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][wd];
-            if (meeting_type === 'atClient' && Array.isArray(settings.allowed_atClient_meeting_days) && !settings.allowed_atClient_meeting_days.map(d => d.toLowerCase()).includes(weekdayName.toLowerCase())) {
-              context.log(`❌ Avvisad pga otillåten veckodag för atClient: ${weekdayName}`);
-              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-              continue;
-            }
-            if (!bookingsByDay[dayStr]) {
-              const existingRes = await db.query(
-                `SELECT start_time, end_time, metadata FROM bookings WHERE start_time::date = $1`,
-                [dayStr]
-              );
-              bookingsByDay[dayStr] = existingRes.rows.map(r => ({
-                start: new Date(r.start_time).getTime(),
-                end: new Date(r.end_time).getTime(),
-                metadata: r.metadata
-              }));
-            }
-            const existing = bookingsByDay[dayStr];
-            // Kontrollera restid till nästa möte – men först efter slotvalet (optimering)
-            // Kontrollera returresa från tidigare möte före denna slot
-            const previous = existing
-              .filter(e => e.end < start.getTime())
-              .sort((a, b) => b.end - a.end)[0];
-            if (previous?.metadata?.address) {
-              if (!accessToken) accessToken = await getAppleMapsAccessToken(context);
-              if (accessToken) {
-                const returnTravelTime = await getTravelTime(
-                  previous.metadata.address,
-                  settings.default_office_address,
-                  new Date(previous.end),
-                  accessToken,
-                  context,
-                  db
-                );
-                const arrivalTime = new Date(previous.end + returnTravelTime * 60000);
-                if (arrivalTime > start) {
-                  context.log(`❌ Avvisad pga för lång retur från tidigare möte (${arrivalTime.toISOString()} > ${start.toISOString()})`);
-                  context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-                  continue;
-                }
-              }
-            }
-            // De övriga queries körs som vanligt
-            const [weekRes, conflictRes] = await Promise.all([
-              db.query(
-                `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
-                 FROM bookings WHERE meeting_type = $1
-                 AND start_time >= $2::date
-                 AND start_time < ($2::date + interval '7 days')`,
-                [meeting_type, start.toISOString()]
-              ),
-              db.query(
-                `SELECT 1 FROM bookings
-                 WHERE ($1, $2) OVERLAPS (start_time, end_time)`,
-                [start.toISOString(), end.toISOString()]
-              )
-            ]);
-            const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
-            if (bookedMinutes + len > (settings.max_weekly_booking_minutes || 99999)) {
-              context.log(`❌ Avvisad pga veckokvot överskrids (${bookedMinutes} + ${len} > ${settings.max_weekly_booking_minutes})`);
-              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-              continue;
-            }
-            // 🍽️ Uteslut slot som helt eller delvis överlappar lunch
-            const lunchStart = settings.lunch_start || '11:45';
-            const lunchEnd = settings.lunch_end || '13:15';
-            const lunchStartDate = new Date(start.toISOString().split('T')[0] + 'T' + lunchStart + ':00');
-            const lunchEndDate = new Date(start.toISOString().split('T')[0] + 'T' + lunchEnd + ':00');
-            if (start < lunchEndDate && end > lunchStartDate) {
-              context.log(`❌ Avvisad pga överlappar lunch (${start.toISOString()} - ${end.toISOString()})`);
-              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-              continue;
-            }
-            // ⛔ Krockar (förenklad mock – riktig logik kan ersättas senare)
-            if (conflictRes.rowCount > 0) {
-              context.log('❌ Avvisad pga kalenderkrock');
-              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-              continue;
-            }
-            context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
-            context.log('📄 Slotdata:', { start: start.toISOString(), end: end.toISOString(), len });
-            const slotStart = start.getTime();
-            const slotEnd = end.getTime();
-            const hourSlot = start.getHours();
-            const bufferMin = settings.buffer_between_meetings || 15;
-            const bufferMs = bufferMin * 60 * 1000;
-            // Avvisa om sloten ligger för nära annan bokning
-            let isIsolated = true;
-            for (const e of existing) {
-              if (
-                (Math.abs(slotStart - e.end) < bufferMs) ||
-                (Math.abs(slotEnd - e.start) < bufferMs) ||
-                (slotStart < e.end && slotEnd > e.start)
-              ) {
-                isIsolated = false;
-                break;
-              }
-            }
-            if (!isIsolated) {
-              context.log('❌ Avvisad pga ligger för nära annan bokning (buffer)');
-              context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-              continue;
-            }
-            // key redan beräknad ovan
-            if (DEBUG) context.log(`🕵️‍♀️ Slotgruppsnyckel: ${key}`);
-            if (!slotMap[key]) slotMap[key] = [];
-            const minDist = Math.min(...existing.map(e => Math.abs(slotStart - e.end)));
-            if (DEBUG) context.log(`🆕 Förbereder att lägga till slot i slotMap[${key}]`);
-            if (DEBUG) context.log(`🔍 slotMap-data: ISO=${start.toISOString()}, score=${isFinite(minDist) ? minDist : 99999}`);
-            if (DEBUG) context.log(`📎 Före push – key: ${key}, iso: ${start.toISOString()}, score: ${isFinite(minDist) ? minDist : 99999}`);
-            slotMap[key].push({
-              iso: start.toISOString(),
-              score: isFinite(minDist) ? minDist : 99999
-            });
-            if (DEBUG) context.log(`🧷 (ny slot) Markering: slotGroupPicked[${key}] = true`);
-            slotGroupPicked[key] = true;
-            if (DEBUG) context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
-            if (DEBUG) context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
-            if (DEBUG) context.log(`🧷 (efter set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
-            if (DEBUG) context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
-            if (DEBUG) context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
-            if (DEBUG) context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()}`);
-            if (DEBUG) context.log(`⭐️ Slot score (isolation): ${isFinite(minDist) ? minDist : 99999}`);
-            // Precache mode: bryt timloop direkt efter första godkända slot per dagdel
-            slotAccepted = true;
-            if (precacheMode) {
-              dayPartSlotFound[slotPart] = true;
-              break;
-            }
-          }
-          // ⏹️ Klar timme-logg
-          context.log(`⏹️ Klar timme ${hour}:00 (${Date.now() - hourStart} ms)`);
-          // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
-          if (DEBUG) {
-            context.log(`🧷 Debug-status innan kontroll:`);
-            context.log(`  slotGroupPicked keys:`, Object.keys(slotGroupPicked));
-            context.log(`  slotGroupPicked[${dayStr}_fm] =`, slotGroupPicked[`${dayStr}_fm`]);
-            context.log(`  slotGroupPicked[${dayStr}_em] =`, slotGroupPicked[`${dayStr}_em`]);
-            context.log(`🔁 Kontroll: fm = ${slotGroupPicked[`${dayStr}_fm`]}; em = ${slotGroupPicked[`${dayStr}_em`]}`);
-          }
-          if (
-            (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) ||
-            (precacheMode && dayPartSlotFound.fm && dayPartSlotFound.em)
-          ) {
-            context.log(`✅ ${dayStr} har fm och em – avbryter dagens bearbetning`);
-            break;
-          }
-        }
-        context.log(`✅ Klar med dag ${dayStr} på ${Date.now() - dayStart} ms`);
-      }));
-    }
+          // (slotCacheKey och graphKey borttaget, ej längre behövs här)
+          // Nyckel för caching per timme, dag och mötestyp
+          // const graphHourKey = `${dayStr}_${hour}_${meeting_type}`;
+          // Flytta ut startTime och endTime så de kan återanvändas
+          const startTime = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':00:00');
+          const endTime = new Date(startTime.getTime() + Math.max(...lengths) * 60000);
+
+          // Se till att hour EJ påverkas av dayOffset i onödan (ingen hour = dayOffset + hour etc)
+          // Korrigera loggutskrifter så de visar rätt hour
+          await Promise.all(lengths.map(async (len) => {
             const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
             const end = new Date(start.getTime() + len * 60000);
             context.log(`🔍 Validerar slot: ${start.toISOString()} → ${end.toISOString()}`);
@@ -793,67 +619,20 @@ export default async function (context, req) {
 
     const chosen = [];
     if (DEBUG) context.log('🧮 Börjar välja bästa slot per grupp...');
-    // Efter att alla slot-kandidater samlats per dagdel: välj bästa och gör restidskontroll först nu (optimering)
-    for (const [key, candidates] of Object.entries(slotMap)) {
+    Object.entries(slotMap).forEach(([key, candidates]) => {
       if (DEBUG) context.log(`📊 Slotgrupp ${key} innehåller ${candidates.length} kandidater`);
       if (DEBUG) candidates.forEach(c => context.log(`  - Kandidat: ${c.iso}, score: ${c.score}`));
       if (DEBUG) context.log(`📅 Utvärderar slotgrupp ${key} med ${candidates.length} kandidater`);
-      // Sortera högst score först (mest isolerad)
       const best = candidates.sort((a, b) => b.score - a.score)[0];
-      if (!best) continue;
-      // Gör restidskontroll och Apple Maps-tokenhämtning enbart för slutgiltigt vald slot
-      const slotIso = best.iso;
-      // Undvik om redan gjort
-      if (appleCache[slotIso] === undefined) {
-        if (!accessToken) accessToken = await getAppleMapsAccessToken(context);
-        let travelTimeMin = 0;
-        try {
-          const fromAddress = meeting_type === 'atClient'
-            ? settings.default_office_address
-            : fullAddress || settings.default_home_address;
-          const toAddress = meeting_type === 'atClient'
-            ? fullAddress || settings.default_home_address
-            : settings.default_office_address;
-          const start = new Date(slotIso);
-          travelTimeMin = await getTravelTime(fromAddress, toAddress, start, accessToken, context, db);
-          appleCache[slotIso] = travelTimeMin;
-        } catch (err) {
-          context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
-          appleCache[slotIso] = 0;
-        }
-        const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
-        if (travelTimeMin === Number.MAX_SAFE_INTEGER && fallback > 0) {
-          context.log(`❌ Avvisad pga restid okänd och fallback överstigen`);
-          continue;
-        }
-        // 🍽️ Undvik restid mitt i lunch
-        const lunchStart = settings.lunch_start || '11:45';
-        const lunchEnd = settings.lunch_end || '13:15';
-        const lunchStartDate = new Date(slotIso.split('T')[0] + 'T' + lunchStart + ':00');
-        const lunchEndDate = new Date(slotIso.split('T')[0] + 'T' + lunchEnd + ':00');
-        const arrivalTime = new Date(new Date(slotIso).getTime() - travelTimeMin * 60000);
-        if (arrivalTime >= lunchStartDate && arrivalTime < lunchEndDate) {
-          context.log(`❌ Avvisad pga restid skär i lunch (${arrivalTime.toISOString()})`);
-          continue;
-        }
-        // ⏰ Kontrollera travel_time_window_start/end
-        const travelHour = arrivalTime.getHours();
-        const windowStart = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
-        const windowEnd = parseInt((settings.travel_time_window_end || '23:00').split(':')[0], 10);
-        const requiresApproval = settings.require_approval || [];
-        if (travelHour < windowStart || travelHour > windowEnd) {
-          if (!requiresApproval.includes(true)) {
-            context.log(`❌ Avvisad pga restid utanför tillåtet fönster (${travelHour}:00)`);
-            continue;
-          }
-        }
+      if (DEBUG) context.log(`🏁 Bästa kandidat för ${key}:`, best);
+      if (best) {
+        context.log(`✅ Valde slot ${best.iso} för grupp ${key}`);
+        if (DEBUG) context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
+        if (DEBUG) context.log(`🏆 Vald slot för ${key}: ${best.iso} (score: ${best.score})`);
+        chosen.push(best.iso);
+        slotGroupPicked[key] = true; // markera att gruppen har fått en vald slot
       }
-      context.log(`✅ Valde slot ${best.iso} för grupp ${key}`);
-      if (DEBUG) context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
-      if (DEBUG) context.log(`🏆 Vald slot för ${key}: ${best.iso} (score: ${best.score})`);
-      chosen.push(best.iso);
-      slotGroupPicked[key] = true;
-    }
+    });
 
     // Log frequency map of slot patterns
     // (slotPatternFrequency statistik borttaget)
