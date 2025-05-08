@@ -1,4 +1,4 @@
-// Kontrollfunktion för booking_settings
+// Kontrollfunktion för booking_settings - verstion3
 function verifyBookingSettings(settings, context) {
   const expected = {
     default_office_address: 'string',
@@ -303,6 +303,8 @@ export default async function (context, req) {
           // Se till att hour EJ påverkas av dayOffset i onödan (ingen hour = dayOffset + hour etc)
           // Korrigera loggutskrifter så de visar rätt hour
           await Promise.all(lengths.map(async (len) => {
+            const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
+            const end = new Date(start.getTime() + len * 60000);
             context.log(`🔍 Validerar slot: ${start.toISOString()} → ${end.toISOString()}`);
             const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
             // Kontroll innan slotprövning
@@ -313,8 +315,6 @@ export default async function (context, req) {
               context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
               return;
             }
-            const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
-            const end = new Date(start.getTime() + len * 60000);
 
             // 🚫 Kolla helg
             if (settings.block_weekends) {
