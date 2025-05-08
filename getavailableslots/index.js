@@ -486,8 +486,11 @@ export default async function (context, req) {
     const chosen = [];
     context.log('🧮 Börjar välja bästa slot per grupp...');
     Object.entries(slotMap).forEach(([key, candidates]) => {
+      context.log(`📊 Slotgrupp ${key} innehåller ${candidates.length} kandidater`);
+      candidates.forEach(c => context.log(`  - Kandidat: ${c.iso}, score: ${c.score}`));
       context.log(`📅 Utvärderar slotgrupp ${key} med ${candidates.length} kandidater`);
       const best = candidates.sort((a, b) => b.score - a.score)[0];
+      context.log(`🏁 Bästa kandidat för ${key}:`, best);
       if (best) {
         context.log(`✅ Valde slot ${best.iso} för grupp ${key}`);
         context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
