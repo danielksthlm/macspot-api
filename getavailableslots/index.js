@@ -201,7 +201,8 @@ export default async function (context, req) {
           lastAllowedStartHour = closeHour - Math.max(...lengths) / 60;
         }
         // Byt ut eventuell map/Array.from för timmar mot en explicit for-loop
-        for (let hour = openHour; hour <= lastAllowedStartHour; hour++) {
+        for (let hour = openHour; hour <= closeHour; hour++) {
+          if (hour > 23) break;
           const hourStart = Date.now();
           context.log(`⏳ Bearbetar timme ${hour}:00 för dag ${dayStr}`);
           const slotDay = dayStr;
