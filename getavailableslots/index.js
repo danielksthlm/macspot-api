@@ -125,6 +125,18 @@ module.exports = async function (context, req) {
     context.log('⚙️ Inställningar laddade:', Object.keys(settings));
     verifyBookingSettings(settings, context);
 
+    const bookingsByDay = {};
+    const slotGroupPicked = {};
+    const chosen = [];
+
+    const maxDays = settings.max_days_in_advance || 14;
+    const today = new Date();
+    const days = Array.from({ length: maxDays }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      return date;
+    });
+
     if (!email || !meeting_type || !meeting_length) {
       context.res = {
         status: 400,
@@ -133,28 +145,117 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const chosen = [];
-
-    const slotIso = new Date().toISOString(); // Exempel-slot just nu
     const travelTimeMin = settings.fallback_travel_time_minutes || 0;
     const returnTravelTimeMin = travelTimeMin;
 
     const windowStartHour = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
     const windowEndHour = parseInt((settings.travel_time_window_end || '23:00').split(':')[0], 10);
 
-    const travelStart = new Date(new Date(slotIso).getTime() - travelTimeMin * 60000);
-    const travelEnd = new Date(new Date(slotIso).getTime() + meeting_length * 60000 + returnTravelTimeMin * 60000);
+    for (const day of days) {
+      const dateStr = day.toISOString().split('T')[0];
+      const weekdayName = day.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
 
-    let requireApprovalForThisSlot = false;
-    if (travelStart.getHours() < windowStartHour || travelEnd.getHours() > windowEndHour) {
-      requireApprovalForThisSlot = true;
-      context.log(`⚠️ Slot markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
+      if (settings.block_weekends && (day.getDay() === 0 || day.getDay() === 6)) {
+        context.log(`⏭️ Skipper ${dateStr} (helg)`);
+        continue;
+      }
+
+      if (
+        meeting_type === 'atClient' &&
+        Array.isArray(settings.allowed_atClient_meeting_days) &&
+        !settings.allowed_atClient_meeting_days.includes(weekdayName)
+      ) {
+        context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
+        continue;
+      }
+
+      for (const hour of [10, 14]) {
+        const slotTime = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:00:00Z`);
+
+        const lunchStart = new Date(`${dateStr}T${settings.lunch_start || '11:45'}:00Z`);
+        const lunchEnd = new Date(`${dateStr}T${settings.lunch_end || '13:15'}:00Z`);
+        const slotEndTime = new Date(slotTime.getTime() + meeting_length * 60000);
+
+        if (slotTime < lunchEnd && slotEndTime > lunchStart) {
+          context.log(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
+          continue;
+        }
+
+        if (!bookingsByDay[dateStr]) {
+          const bookingsRes = await db.query(
+            'SELECT start_time, end_time FROM bookings WHERE start_time::date = $1',
+            [dateStr]
+          );
+          bookingsByDay[dateStr] = bookingsRes.rows.map(b => ({
+            start: new Date(b.start_time).getTime(),
+            end: new Date(b.end_time).getTime()
+          }));
+        }
+
+        const bufferMs = (settings.buffer_between_meetings || 15) * 60 * 1000;
+        const slotStart = slotTime.getTime();
+        const slotEnd = slotStart + meeting_length * 60000;
+
+        let isTooClose = false;
+        for (const b of bookingsByDay[dateStr]) {
+          if (
+            Math.abs(slotStart - b.end) < bufferMs ||
+            Math.abs(slotEnd - b.start) < bufferMs ||
+            (slotStart < b.end && slotEnd > b.start)
+          ) {
+            isTooClose = true;
+            break;
+          }
+        }
+
+        if (isTooClose) {
+          context.log(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
+          continue;
+        }
+
+        const weekStart = new Date(slotTime);
+        weekStart.setUTCHours(0, 0, 0, 0);
+        weekStart.setUTCDate(slotTime.getUTCDate() - slotTime.getUTCDay()); // söndag
+        const weekEnd = new Date(weekStart);
+        weekEnd.setUTCDate(weekStart.getUTCDate() + 7);
+
+        const weekRes = await db.query(
+          `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
+           FROM bookings
+           WHERE meeting_type = $1 AND start_time >= $2 AND start_time < $3`,
+          [meeting_type, weekStart.toISOString(), weekEnd.toISOString()]
+        );
+
+        const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
+        const maxMinutes = settings.max_weekly_booking_minutes || 99999;
+
+        if (bookedMinutes + meeting_length > maxMinutes) {
+          context.log(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids (${bookedMinutes} + ${meeting_length} > ${maxMinutes})`);
+          continue;
+        }
+
+        const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
+        const travelEnd = new Date(slotTime.getTime() + meeting_length * 60000 + returnTravelTimeMin * 60000);
+
+        let requireApprovalForThisSlot = false;
+        if (travelStart.getHours() < windowStartHour || travelEnd.getHours() > windowEndHour) {
+          requireApprovalForThisSlot = true;
+          context.log(`⚠️ Slot ${slotTime.toISOString()} markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
+        }
+
+        const key = `${dateStr}_${hour < 12 ? 'fm' : 'em'}`;
+        if (slotGroupPicked[key]) {
+          context.log(`⏩ Skippar ${key} – redan vald`);
+          continue;
+        }
+
+        chosen.push({
+          slot_iso: slotTime.toISOString(),
+          require_approval: requireApprovalForThisSlot
+        });
+        slotGroupPicked[key] = true;
+      }
     }
-
-    chosen.push({
-      slot_iso: slotIso,
-      require_approval: requireApprovalForThisSlot
-    });
 
     const elapsedMs = Date.now() - startTimeMs;
     context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
