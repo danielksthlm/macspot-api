@@ -1,7 +1,8 @@
-export default async function (context, req) {
+const { Pool } = require('pg');
+
+module.exports = async function (context, req) {
   let pool;
   try {
-    const { Pool } = await import('pg');
 
     const email = req.body?.email || req.query?.email;
     const meeting_type = req.body?.meeting_type || req.query?.meeting_type;

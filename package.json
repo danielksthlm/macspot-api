@@ -1,7 +1,6 @@
 {
   "name": "macspot-api",
   "version": "1.0.0",
-  "type": "module",
   "description": "Azure Functions backend för MacSpot CRM/ERP",
   "scripts": {
     "start": "func start",

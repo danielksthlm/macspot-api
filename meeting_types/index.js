@@ -1,4 +1,6 @@
-export default async function (context, req) {
+const { Pool } = require('pg');
+
+module.exports = async function (context, req) {
   let pool;
   try {
     context.log.info('📥 Function triggered: meeting_types');
@@ -12,8 +14,6 @@ export default async function (context, req) {
     }
 
     context.log.info('🔐 Environment variables verified');
-
-    const { Pool } = await import('pg');
 
     pool = new Pool({
       user: process.env.PGUSER,

@@ -1,4 +1,5 @@
 console.log('🚀 Funktion initierad');
+const DEBUG = (process.env.DEBUG_MODE || '').toLowerCase() === 'true';
 console.log('📛 DEBUG_MODE:', process.env.DEBUG_MODE);
 // Kontrollfunktion för booking_settings - förbättrad version 5
 function verifyBookingSettings(settings, context) {
@@ -57,27 +58,16 @@ function verifyBookingSettings(settings, context) {
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
 const slotGroupPicked = {}; // flyttad hit så den behåller status över alla timmar och dagar
-import jwt from 'jsonwebtoken';
-import fs from 'fs';
-export default async function (context, req) {
-  let Pool, fetch, uuidv4;
-  try {
-    ({ Pool } = await import('pg'));
-    fetch = (await import('node-fetch')).default;
-    ({ v4: uuidv4 } = await import('uuid'));
-    context.log('📦 Imports lyckades');
-  } catch (err) {
-    context.log.error('❌ Import-fel:', err);
-    context.res = {
-      status: 500,
-      body: { error: 'Import misslyckades', detail: err.message }
-    };
-    return;
-  }
+const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const { Pool } = require('pg');
+const fetch = require('node-fetch');
+const { v4: uuidv4 } = require('uuid');
+
+module.exports = async function(context, req) {
 
     context.log('📥 Funktion getavailableslots anropad');
     console.log('📛 DEBUG_MODE:', process.env.DEBUG_MODE);
-    const DEBUG = (process.env.DEBUG_MODE || '').toLowerCase() === 'true';
     if (!process.env.DEBUG_MODE) {
       context.log('⚠️ DEBUG_MODE är inte satt – standard är false');
     }
@@ -605,7 +595,6 @@ export default async function (context, req) {
     try {
       if (process.env.BACKGROUND_SLOT_REFRESH_URL) {
         const triggerUrl = process.env.BACKGROUND_SLOT_REFRESH_URL;
-        const fetch = (await import('node-fetch')).default;
         await fetch(triggerUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -648,7 +637,6 @@ async function getAppleMapsAccessToken(context) {
         typ: 'JWT'
       }
     });
-    const fetch = (await import('node-fetch')).default;
     const tokenRes = await fetch('https://maps-api.apple.com/v1/token', {
       headers: {
         Authorization: `Bearer ${token}`
@@ -707,7 +695,6 @@ async function getTravelTime(fromAddress, toAddress, start, accessToken, context
     url.searchParams.append('departureTime', start.toISOString());
     context?.log?.('📡 Maps request URL:', url.toString());
 
-    const fetch = (await import('node-fetch')).default;
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
