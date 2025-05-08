@@ -200,9 +200,13 @@ export default async function (context, req) {
         if (lengths) {
           lastAllowedStartHour = closeHour - Math.max(...lengths) / 60;
         }
+        // Defensiv kontroll för längder innan timloop
+        if (!Array.isArray(lengths) || lengths.length === 0 || lengths.some(l => isNaN(l))) {
+          context.log.warn('⚠️ Ogiltiga möteslängder. Avbryter generation av timmar.');
+          return;
+        }
         // Byt ut eventuell map/Array.from för timmar mot en explicit for-loop
-        for (let hour = openHour; hour <= closeHour; hour++) {
-          if (hour > 23) break;
+        for (let hour = openHour; hour <= closeHour && hour <= 23; hour++) {
           const hourStart = Date.now();
           context.log(`⏳ Bearbetar timme ${hour}:00 för dag ${dayStr}`);
           const slotDay = dayStr;
