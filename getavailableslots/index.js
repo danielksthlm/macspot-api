@@ -94,9 +94,7 @@ export default async function (context, req) {
     const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [booking_email]);
     contact = contactRes.rows[0];
     metadata = contact?.metadata || {};
-    fullAddress = [metadata.address, metadata.postal_number, metadata.city]
-      .filter(Boolean)
-      .join(', ');
+    fullAddress = `${metadata.address || ''} ${metadata.postal_number || ''} ${metadata.city || ''}`.trim();
     context.log('📍 Fullständig kundadress:', fullAddress);
     context.log('👤 Kontakt hittad:', contact);
     context.log('📍 Metadata-adress:', metadata?.address);
