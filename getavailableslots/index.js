@@ -286,7 +286,6 @@ export default async function (context, req) {
           await Promise.all(lengths.map(async (len) => {
             const start = new Date(`${dayStr}T${String(hour).padStart(2, '0')}:00:00`);
             const end = new Date(start.getTime() + len * 60000);
-            // context.log(`🔍 Validerar slot: ${start.toISOString()} → ${end.toISOString()}`);
             const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
             const slotDay = dayStr;
             const slotPart = hour < 12 ? 'fm' : 'em';
@@ -387,8 +386,6 @@ export default async function (context, req) {
             if (conflictRes.rowCount > 0) {
               return;
             }
-            // context.log(`🕐 Testar slot ${start.toISOString()} - ${end.toISOString()} (${len} min)`);
-            // context.log('📄 Slotdata:', { start: start.toISOString(), end: end.toISOString(), len });
 
             const slotStart = start.getTime();
             const slotEnd = end.getTime();
@@ -460,8 +457,6 @@ export default async function (context, req) {
 
             if (travelHour < windowStart || travelHour > windowEnd) {
               if (!requiresApproval.includes(true)) {
-                // context.log(`❌ Avvisad pga restid utanför tillåtet fönster (${travelHour}:00)`);
-                // context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
                 return;
               }
             }
@@ -493,12 +488,11 @@ export default async function (context, req) {
             ]);
           }));
           // ⏹️ Klar timme-logg
-          context.log(`⏹️ Klar timme ${hour}:00 (${Date.now() - hourStart} ms)`);
           if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
             return;
           }
         }
-        context.log(`✅ Klar med dag ${dayStr} på ${Date.now() - dayStart} ms`);
+        // context.log(`✅ Klar med dag ${dayStr} på ${Date.now() - dayStart} ms`);
       }));
     }
 
@@ -571,7 +565,7 @@ async function getAppleMapsAccessToken(context) {
     const tokenData = await tokenRes.json();
     return tokenData.accessToken;
   } catch (err) {
-    if (context && context.log) context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
+    // if (context && context.log) context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
     return null;
   }
 }
@@ -606,7 +600,6 @@ async function getTravelTime(fromAddress, toAddress, start, accessToken, context
       return mins;
     }
   } catch (err) {
-    // context?.log?.('⚠️ Kunde inte läsa från travel_time_cache:', err.message);
   }
 
   try {
@@ -615,14 +608,12 @@ async function getTravelTime(fromAddress, toAddress, start, accessToken, context
     url.searchParams.append('destination', toAddress);
     url.searchParams.append('transportType', 'automobile');
     url.searchParams.append('departureTime', start.toISOString());
-    // context?.log?.('📡 Maps request URL:', url.toString());
 
     const fetch = (await import('node-fetch')).default;
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const data = await res.json();
-    context?.log?.(`⏱️ Apple Maps-respons på ${Date.now() - t0} ms`);
     const travelMin = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
     travelTimeCache[travelKey] = travelMin;
     travelTimeCache[hourKey] = travelMin;
