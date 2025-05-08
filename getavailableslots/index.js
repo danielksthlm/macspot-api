@@ -45,8 +45,6 @@ function verifyBookingSettings(settings, context) {
     const message = '🛑 Problem med booking_settings:\n' + issues.join('\n');
     context.log.warn(message);
     throw new Error(message);
-  } else {
-    context.log('✅ Alla booking_settings har rätt typ och finns definierade.');
   }
 }
 
@@ -84,7 +82,7 @@ module.exports = async function (context, req) {
         throw new Error(`Missing environment variable: ${key}`);
       }
     }
-    context.log('🔐 Environment variables verified');
+    // context.log('🔐 Environment variables verified');
 
     const pool = new Pool({
       user: process.env.PGUSER,
@@ -94,7 +92,7 @@ module.exports = async function (context, req) {
       port: parseInt(process.env.PGPORT || '5432', 10),
       ssl: { rejectUnauthorized: false }
     });
-    context.log('✅ PostgreSQL pool created');
+    // context.log('✅ PostgreSQL pool created');
 
     const { email, meeting_type, meeting_length } = req.body || {};
 
@@ -102,7 +100,7 @@ module.exports = async function (context, req) {
 
     const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
-    context.log('👤 Kontakt hittad:', contact);
+    // context.log('👤 Kontakt hittad:', contact);
 
     const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
     const settings = {};
@@ -125,7 +123,7 @@ module.exports = async function (context, req) {
         settings[row.key] = row.value;
       }
     }
-    context.log('⚙️ Inställningar laddade:', Object.keys(settings));
+    // context.log('⚙️ Inställningar laddade:', Object.keys(settings));
     verifyBookingSettings(settings, context);
 
     const bookingsByDay = {};
@@ -171,7 +169,7 @@ module.exports = async function (context, req) {
           const weekdayName = day.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
 
           if (settings.block_weekends && (day.getDay() === 0 || day.getDay() === 6)) {
-            context.log(`⏭️ Skipper ${dateStr} (helg)`);
+            // context.log(`⏭️ Skipper ${dateStr} (helg)`);
             return;
           }
 
@@ -180,7 +178,7 @@ module.exports = async function (context, req) {
             Array.isArray(settings.allowed_atClient_meeting_days) &&
             !settings.allowed_atClient_meeting_days.includes(weekdayName)
           ) {
-            context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
+            // context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
             return;
           }
 
@@ -192,7 +190,7 @@ module.exports = async function (context, req) {
             const slotEndTime = new Date(slotTime.getTime() + meeting_length * 60000);
 
             if (slotTime < lunchEnd && slotEndTime > lunchStart) {
-              context.log(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
+              // context.log(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
               continue;
             }
 
@@ -224,7 +222,7 @@ module.exports = async function (context, req) {
             }
 
             if (isTooClose) {
-              context.log(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
+              // context.log(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
               continue;
             }
 
@@ -245,7 +243,7 @@ module.exports = async function (context, req) {
             const maxMinutes = settings.max_weekly_booking_minutes || 99999;
 
             if (bookedMinutes + meeting_length > maxMinutes) {
-              context.log(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids (${bookedMinutes} + ${meeting_length} > ${maxMinutes})`);
+              // context.log(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids (${bookedMinutes} + ${meeting_length} > ${maxMinutes})`);
               continue;
             }
 
@@ -255,7 +253,7 @@ module.exports = async function (context, req) {
             let requireApprovalForThisSlot = false;
             if (travelStart.getHours() < windowStartHour || travelEnd.getHours() > windowEndHour) {
               requireApprovalForThisSlot = true;
-              context.log(`⚠️ Slot ${slotTime.toISOString()} markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
+              // context.log(`⚠️ Slot ${slotTime.toISOString()} markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
             }
 
             // --- CACHE: Kontrollera om restiden redan finns i databasen ---
@@ -277,7 +275,7 @@ module.exports = async function (context, req) {
               if (cacheRes.rows.length > 0) {
                 travelTimeMin = cacheRes.rows[0].travel_minutes;
                 cacheHit = true;
-                context.log(`📦 Restid återanvänd från cache: ${travelTimeMin} min (${origin} → ${destination})`);
+                // Behåll ej info-logg av cache-hit
               }
             } catch (err) {
               context.log(`⚠️ Kunde inte läsa från restidscache: ${err.message}`);
@@ -302,7 +300,7 @@ module.exports = async function (context, req) {
                     context.log(`⚠️ Apple Maps kunde inte hitta restid – använder fallback`);
                   } else {
                     travelTimeMin = Math.round(travelSeconds / 60);
-                    context.log(`🗺️ Restid Apple Maps: ${travelTimeMin} min (${origin} → ${destination})`);
+                    // context.log(`🗺️ Restid Apple Maps: ${travelTimeMin} min (${origin} → ${destination})`);
                   }
                 } catch (err) {
                   context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
@@ -319,7 +317,7 @@ module.exports = async function (context, req) {
                   ON CONFLICT (from_address, to_address, hour)
                   DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
                 `, [origin, destination, hour, travelTimeMin]);
-                context.log(`💾 Restid sparad i cache: ${travelTimeMin} min (${origin} → ${destination} @ ${hour}:00)`);
+                // context.log(`💾 Restid sparad i cache: ${travelTimeMin} min (${origin} → ${destination} @ ${hour}:00)`);
               } catch (err) {
                 context.log(`⚠️ Kunde inte spara restid till cache: ${err.message}`);
               }
@@ -329,7 +327,7 @@ module.exports = async function (context, req) {
             // Kontrollera om restiden möjliggör ankomst i tid
             const travelBufferMs = travelTimeMin * 60000;
             if (slotStart - Date.now() < travelBufferMs) {
-              context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – restid (${travelTimeMin} min) möjliggör inte ankomst i tid`);
+              // context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – restid (${travelTimeMin} min) möjliggör inte ankomst i tid`);
               continue;
             }
 
@@ -378,14 +376,14 @@ module.exports = async function (context, req) {
                       ON CONFLICT (from_address, to_address, hour)
                       DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
                     `, [from, to, hour, returnMinutes]);
-                    context.log(`💾 Returrestid sparad i cache: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
+                    // context.log(`💾 Returrestid sparad i cache: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
                   } catch (err) {
                     context.log(`⚠️ Kunde inte spara returrestid till cache: ${err.message}`);
                   }
                   // --- Slut cache returrestid ---
 
                   if (arrivalTime > slotTime) {
-                    context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
+                    // context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
                     continue;
                   }
                 } catch (err) {
@@ -408,12 +406,12 @@ module.exports = async function (context, req) {
     for (const [key, candidates] of Object.entries(slotMap)) {
       if (candidates.length === 0) continue;
       const best = candidates.sort((a, b) => b.score - a.score)[0];
-      context.log(`🏆 Bästa slot för ${key}: ${best.slot_iso} (score ${best.score})`);
+      // context.log(`🏆 Bästa slot för ${key}: ${best.slot_iso} (score ${best.score})`);
       chosen.push(best);
     }
 
-    const elapsedMs = Date.now() - startTimeMs;
-    context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
+    // const elapsedMs = Date.now() - startTimeMs;
+    // context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
 
     context.res = {
       status: 200,
