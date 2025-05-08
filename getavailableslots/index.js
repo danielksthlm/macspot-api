@@ -307,6 +307,8 @@ export default async function (context, req) {
             const end = new Date(start.getTime() + len * 60000);
             context.log(`🔍 Validerar slot: ${start.toISOString()} → ${end.toISOString()}`);
             const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+            const slotDay = dayStr;
+            const slotPart = hour < 12 ? 'fm' : 'em';
             // Kontroll innan slotprövning
             context.log(`⏳ Kontroll innan slotprövning – slotGroupPicked[${key}] = ${slotGroupPicked[key]}`);
             // Hoppa om slot redan vald för denna grupp
@@ -545,8 +547,6 @@ export default async function (context, req) {
             context.log(`✅ Slot godkänd: ${start.toLocaleString('sv-SE', { timeZone: settings.timezone || 'Europe/Stockholm' })}`);
             context.log(`✅ Slot godkänd: ${slotIso} för dag ${slotDay}, del: ${slotPart}`);
             // --- Cache slot in available_slots_cache ---
-            const slotDay = start.toISOString().split('T')[0];
-            const slotPart = hour < 12 ? 'fm' : 'em';
             const slotScore = isFinite(minDist) ? minDist : 99999;
             const travelTimeMin = appleCache[slotIso] ?? null;
 
