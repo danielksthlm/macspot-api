@@ -42,14 +42,15 @@ function verifyBookingSettings(settings, context) {
     context.log('✅ Alla booking_settings har rätt typ och finns definierade.');
   }
 }
-// Slot pattern frequency tracker - test 2
-const slotPatternFrequency = {}; // key = hour + meeting_length → count
+// Slot group picked tracker
 const travelTimeCache = {}; // key = fromAddress->toAddress
 const slotGroupPicked = {}; // flyttad hit så den behåller status över alla timmar och dagar
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 export default async function (context, req) {
+  const startTimeMs = Date.now();
   let Pool, fetch, uuidv4;
+  let db;
   try {
     ({ Pool } = await import('pg'));
     fetch = (await import('node-fetch')).default;
@@ -63,9 +64,6 @@ export default async function (context, req) {
     };
     return;
   }
-
-    // context.log('📥 Funktion getavailableslots anropad');
-    const startTimeMs = Date.now();
 
   const { email, meeting_type } = req.body || {};
   let requestedLength = parseInt(req.body.meeting_length, 10);
@@ -129,7 +127,7 @@ export default async function (context, req) {
     // const lengths = ... (old declaration removed, see above)
     const slotMap = {}; // dag_fm/em → [{ iso, score }]
 
-    const graphCache = {}; // key = dayStr_fm/em, value = Graph schedule data
+    // const graphCache = {}; // (borttagen, ej använd)
     const appleCache = {}; // key = slot ISO, value = travel time (minutes)
 
     // --- Ladda kontakt, metadata, settings, fullAddress --- (en gång innan slot-loopen)
@@ -221,22 +219,22 @@ export default async function (context, req) {
     const endMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); // sista dagen i den månaden
     const daysToGenerate = Math.ceil((endMonth - now) / (1000 * 60 * 60 * 24));
 
-    // Flytta Apple Maps-tokenhämtning till början av hour-loopen
-    let accessToken;
+    // Hämta Apple Maps-token endast en gång för hela funktionen
+    let accessToken = await getAppleMapsAccessToken(context);
+    if (!accessToken) {
+      context.log('⚠️ Apple Maps-token saknas – avbryter funktion');
+      context.res = {
+        status: 500,
+        body: { error: 'Apple Maps-token saknas' }
+      };
+      return;
+    }
     for (let i = 1; i <= daysToGenerate; i += 7) {
       // Skapa chunk med max 7 dagar
       const chunk = Array.from({ length: 7 }, (_, offset) => i + offset).filter(d => d <= daysToGenerate);
       await Promise.all(chunk.map(async (dayOffset) => {
         const dayStart = Date.now();
         const dayStr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset).toISOString().split('T')[0];
-        // context.log(`🕒 Startar bearbetning för dag ${dayStr}`);
-        if (!accessToken) {
-          accessToken = await getAppleMapsAccessToken(context);
-          if (!accessToken) {
-            context.log('⚠️ Apple Maps-token saknas – avbryter dagsloop');
-            return;
-          }
-        }
         const day = new Date(now);
         day.setDate(day.getDate() + dayOffset);
         // const dayStr = day.toISOString().split('T')[0];
@@ -368,22 +366,17 @@ export default async function (context, req) {
               .sort((a, b) => b.end - a.end)[0];
 
             if (previous?.metadata?.address) {
-              const accessToken = await getAppleMapsAccessToken(context);
-              if (accessToken) {
-                const returnTravelTime = await getTravelTime(
-                  previous.metadata.address,
-                  settings.default_office_address,
-                  new Date(previous.end),
-                  accessToken,
-                  context,
-                  db
-                );
-                const arrivalTime = new Date(previous.end + returnTravelTime * 60000);
-                if (arrivalTime > start) {
-                  // context.log(`❌ Avvisad pga för lång retur från tidigare möte (${arrivalTime.toISOString()} > ${start.toISOString()})`);
-                  // context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-                  return;
-                }
+              const returnTravelTime = await getTravelTime(
+                previous.metadata.address,
+                settings.default_office_address,
+                new Date(previous.end),
+                accessToken,
+                context,
+                db
+              );
+              const arrivalTime = new Date(previous.end + returnTravelTime * 60000);
+              if (arrivalTime > start) {
+                return;
               }
             }
 
@@ -481,14 +474,6 @@ export default async function (context, req) {
               return;
             }
             try {
-              const accessToken = await getAppleMapsAccessToken(context);
-              if (!accessToken) {
-                // context.log('⚠️ Ingen Apple Maps accessToken – hoppar över slot');
-                // context.log(`⚠️ Avvisad slot ${start.toISOString()} → ${end.toISOString()} av orsak ovan.`);
-                appleCache[slotIso] = Number.MAX_SAFE_INTEGER;
-                return;
-              }
-
               const fromAddress = meeting_type === 'atClient'
                 ? settings.default_office_address
                 : fullAddress || settings.default_home_address;
@@ -496,13 +481,9 @@ export default async function (context, req) {
               const toAddress = meeting_type === 'atClient'
                 ? fullAddress || settings.default_home_address
                 : settings.default_office_address;
-
-              // context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
-
               const travelTimeMin = await getTravelTime(fromAddress, toAddress, start, accessToken, context, db);
               appleCache[slotIso] = travelTimeMin;
             } catch (err) {
-              // context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
               appleCache[slotIso] = 0; // tillåt ändå slot
             }
             const fallback = parseInt(settings.fallback_travel_time_minutes || '90', 10);
@@ -615,8 +596,6 @@ export default async function (context, req) {
     // Object.entries(slotGroupPicked).forEach(([k, v]) => {
     //   context.log(`  ${k} = ${v}`);
     // });
-    const elapsedMs = Date.now() - startTimeMs;
-    context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
     context.res = {
       status: 200,
       body: { slots: chosen }
@@ -642,7 +621,6 @@ export default async function (context, req) {
     // pool.end() tas bort, db.release() sköter kopplingen
     return;
   } catch (err) {
-    // context.log('❌ Fel i getavailableslots:', err.message);
     context.res = {
       status: 500,
       body: { error: err.message }
@@ -650,6 +628,8 @@ export default async function (context, req) {
     return;
   } finally {
     if (db) db.release();
+    const elapsedMs = Date.now() - startTimeMs;
+    context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
   }
 }
 
