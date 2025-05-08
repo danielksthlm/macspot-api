@@ -101,6 +101,16 @@
     const meetingType = meetingTypeEl ? meetingTypeEl.value : '';
 
     const allFieldIds = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    const fieldLabels = {
+      first_name: 'Förnamn',
+      last_name: 'Efternamn',
+      phone: 'Telefonnummer',
+      company: 'Företag',
+      address: 'Gatuadress',
+      postal_code: 'Postnummer',
+      city: 'Stad',
+      country: 'Land'
+    };
     const allFields = allFieldIds.map(id => document.getElementById(id)).filter(Boolean);
 
     const addressField = document.getElementById('address_field');
@@ -143,8 +153,8 @@
 
       const data = await response.json();
       console.log('✅ API JSON:', data);
-      console.log('ℹ️ typeof missing_fields:', typeof data.missing_fields);
-      console.log('🔎 missing_fields:', data.missing_fields);
+      // console.log('ℹ️ typeof missing_fields:', typeof data.missing_fields);
+      // console.log('🔎 missing_fields:', data.missing_fields);
       if (!Array.isArray(data.missing_fields)) {
         console.warn('⚠️ missing_fields saknas eller inte en array');
       }
@@ -154,14 +164,14 @@
         let firstFocusable = null;
         allFields.forEach(input => {
           const fieldName = input.id;
-          console.log(`🧪 Kontroll: fieldName = '${fieldName}'`);
-          console.log(`🔍 Finns i missing_fields?`, data.missing_fields.includes(fieldName));
+          // console.log(`🧪 Kontroll: fieldName = '${fieldName}'`);
+          // console.log(`🔍 Finns i missing_fields?`, data.missing_fields.includes(fieldName));
           const isAddressField = ['address', 'postal_code', 'city', 'country'].includes(fieldName);
           const shouldShow = data.missing_fields.includes(fieldName) && (!isAddressField || meetingType === 'atclient');
           if (shouldShow) {
-            console.log("👁️ Visar fält:", fieldName);
-            console.log(`➡️ input.id = ${input.id}`);
-            console.log(`➡️ input.style.display = ${input.style.display}`);
+            // console.log("👁️ Visar fält:", fieldName);
+            // console.log(`➡️ input.id = ${input.id}`);
+            // console.log(`➡️ input.style.display = ${input.style.display}`);
             input.style.display = 'block';
             input.classList.add('needs-filling');
             if (!input.value.trim() && !firstFocusable) {
@@ -170,7 +180,8 @@
             if (missingFieldsContainer) {
               const p = document.createElement('p');
               p.style.color = 'red';
-              p.textContent = `Saknat fält: ${fieldName}`;
+              const label = fieldLabels[fieldName] || fieldName;
+              p.textContent = `Saknat fält: ${label}`;
               missingFieldsContainer.appendChild(p);
             }
           } else {
