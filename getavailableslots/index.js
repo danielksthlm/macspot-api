@@ -383,6 +383,7 @@ export default async function (context, req) {
               score: isFinite(minDist) ? minDist : 99999
             });
             slotGroupPicked[key] = true;
+            // Säkerställ att slotGroupPicked[key] markeras även när en ny slot genereras
             context.log(`🧷 slotGroupPicked[${key}] satt till true`);
             context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
             context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
