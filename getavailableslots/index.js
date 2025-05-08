@@ -1,7 +1,6 @@
-const { connectToDatabase } = require('../../lib/mongodb');
-const { getSettings } = require('../../lib/settings');
-
-async function handler(req, res) {
+ // Version 4
+ 
+ async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
