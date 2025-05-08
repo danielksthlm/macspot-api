@@ -76,8 +76,8 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(200).json({ slots });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    console.error('🔥 FEL:', error.message, '\nSTACK:', error.stack);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 }
 
