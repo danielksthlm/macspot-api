@@ -75,6 +75,8 @@ module.exports = async function (context, req) {
     const { Pool } = require('pg');
     const startTimeMs = Date.now();
 
+    const slotMap = {}; // dag_fm eller dag_em → array av { iso, score, require_approval }
+
     const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
     for (const key of requiredEnv) {
       if (!process.env[key]) {
@@ -149,7 +151,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const travelTimeMin = settings.fallback_travel_time_minutes || 0;
+    let travelTimeMin = settings.fallback_travel_time_minutes || 0;
     const returnTravelTimeMin = travelTimeMin;
 
     const windowStartHour = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
@@ -247,19 +249,107 @@ module.exports = async function (context, req) {
           context.log(`⚠️ Slot ${slotTime.toISOString()} markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
         }
 
-        const key = `${dateStr}_${hour < 12 ? 'fm' : 'em'}`;
-        if (slotGroupPicked[key]) {
-          context.log(`⏩ Skippar ${key} – redan vald`);
+        const accessToken = await getAppleMapsAccessToken(context);
+        if (!accessToken) {
+          context.log(`⚠️ Apple Maps-token saknas – använder fallback restid ${travelTimeMin} min`);
+        } else {
+          const fetch = require('node-fetch');
+          const origin = meeting_type === 'atClient' ? settings.default_office_address : contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city;
+          const destination = meeting_type === 'atClient' ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city : settings.default_office_address;
+
+          const url = new URL('https://maps-api.apple.com/v1/directions');
+          url.searchParams.append('origin', origin);
+          url.searchParams.append('destination', destination);
+          url.searchParams.append('transportType', 'automobile');
+          url.searchParams.append('departureTime', slotTime.toISOString());
+
+          try {
+            const res = await fetch(url.toString(), {
+              headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            const data = await res.json();
+
+            const travelSeconds = data.routes?.[0]?.durationSeconds;
+            if (!travelSeconds) {
+              context.log(`⚠️ Apple Maps kunde inte hitta restid – använder fallback`);
+            } else {
+              travelTimeMin = Math.round(travelSeconds / 60);
+              context.log(`🗺️ Restid Apple Maps: ${travelTimeMin} min (${origin} → ${destination})`);
+            }
+          } catch (err) {
+            context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
+          }
+        }
+
+        // Kontrollera om restiden möjliggör ankomst i tid
+        const travelBufferMs = travelTimeMin * 60000;
+        if (slotStart - Date.now() < travelBufferMs) {
+          context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – restid (${travelTimeMin} min) möjliggör inte ankomst i tid`);
           continue;
         }
 
-        chosen.push({
+        const existing = bookingsByDay[dateStr];
+        let minDist = 999999;
+        if (existing.length > 0) {
+          minDist = Math.min(...existing.map(e => Math.abs(slotTime.getTime() - e.end)));
+        }
+
+        const key = `${dateStr}_${hour < 12 ? 'fm' : 'em'}`;
+        if (!slotMap[key]) slotMap[key] = [];
+
+        // Kontrollera om retur från tidigare möte till denna slot fungerar
+        const previous = bookingsByDay[dateStr]
+          .filter(b => b.end < slotStart)
+          .sort((a, b) => b.end - a.end)[0];
+
+        if (previous) {
+          const prevEnd = new Date(previous.end);
+          const from = previous.address || settings.default_office_address;
+          const to = meeting_type === 'atClient'
+            ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city
+            : settings.default_office_address;
+
+          const accessToken = await getAppleMapsAccessToken(context);
+          if (accessToken) {
+            try {
+              const fetch = require('node-fetch');
+              const url = new URL('https://maps-api.apple.com/v1/directions');
+              url.searchParams.append('origin', from);
+              url.searchParams.append('destination', to);
+              url.searchParams.append('transportType', 'automobile');
+              url.searchParams.append('departureTime', prevEnd.toISOString());
+
+              const res = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${accessToken}` }
+              });
+              const data = await res.json();
+              const returnMinutes = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
+              const arrivalTime = new Date(prevEnd.getTime() + returnMinutes * 60000);
+
+              if (arrivalTime > slotTime) {
+                context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
+                continue;
+              }
+            } catch (err) {
+              context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
+            }
+          }
+        }
+
+        slotMap[key].push({
           slot_iso: slotTime.toISOString(),
-          require_approval: requireApprovalForThisSlot
+          score: minDist,
+          require_approval: requireApprovalForThisSlot,
+          travel_time_min: travelTimeMin
         });
-        context.log(`✅ Slot ${slotTime.toISOString()} valdes`);
-        slotGroupPicked[key] = true;
       }
+    }
+
+    for (const [key, candidates] of Object.entries(slotMap)) {
+      if (candidates.length === 0) continue;
+      const best = candidates.sort((a, b) => b.score - a.score)[0];
+      context.log(`🏆 Bästa slot för ${key}: ${best.slot_iso} (score ${best.score})`);
+      chosen.push(best);
     }
 
     const elapsedMs = Date.now() - startTimeMs;
@@ -282,3 +372,41 @@ module.exports = async function (context, req) {
     };
   }
 };
+
+// Återanvändbar funktion för att hämta Apple Maps access token
+async function getAppleMapsAccessToken(context) {
+  try {
+    const jwt = require('jsonwebtoken');
+    const fs = require('fs');
+    const fetch = require('node-fetch');
+
+    const teamId = process.env.APPLE_MAPS_TEAM_ID;
+    const keyId = process.env.APPLE_MAPS_KEY_ID;
+    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') ||
+                       fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+
+    const token = jwt.sign({}, privateKey, {
+      algorithm: 'ES256',
+      issuer: teamId,
+      keyid: keyId,
+      expiresIn: '1h',
+      header: {
+        alg: 'ES256',
+        kid: keyId,
+        typ: 'JWT'
+      }
+    });
+
+    const res = await fetch('https://maps-api.apple.com/v1/token', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+    return data.accessToken;
+  } catch (err) {
+    context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
+    return null;
+  }
+}
