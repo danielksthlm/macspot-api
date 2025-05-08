@@ -76,7 +76,7 @@ export default async function (context, req) {
   }
 
     context.log('📥 Funktion getavailableslots anropad');
-    const DEBUG = process.env.DEBUG_MODE === 'true';
+    const DEBUG = String(process.env.DEBUG_MODE || '').toLowerCase() === 'true';
     const startTimeMs = Date.now();
 
   const { email, meeting_type } = req.body || {};
