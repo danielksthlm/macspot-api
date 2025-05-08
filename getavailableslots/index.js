@@ -248,6 +248,8 @@ export default async function (context, req) {
           // Korrigera loggutskrifter så de visar rätt hour
           await Promise.all(lengths.map(async (len) => {
             const key = `${dayStr}_${hour < 12 ? 'fm' : 'em'}`;
+            // Kontroll innan slotprövning
+            context.log(`⏳ Kontroll innan slotprövning – slotGroupPicked[${key}] = ${slotGroupPicked[key]}`);
             // Hoppa om slot redan vald för denna grupp
             if (slotGroupPicked[key]) {
               context.log(`⏩ Skippar ${key} – redan vald slot`);
@@ -380,6 +382,7 @@ export default async function (context, req) {
               iso: start.toISOString(),
               score: isFinite(minDist) ? minDist : 99999
             });
+            context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
             context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
             context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()}`);
             context.log(`⭐️ Slot score (isolation): ${isFinite(minDist) ? minDist : 99999}`);
@@ -444,6 +447,7 @@ export default async function (context, req) {
             }
 
             context.log(`✅ Slot godkänd: ${start.toLocaleString('sv-SE', { timeZone: settings.timezone || 'Europe/Stockholm' })}`);
+            context.log(`✅ Slot godkänd: ${slotIso} för dag ${slotDay}, del: ${slotPart}`);
             // --- Cache slot in available_slots_cache ---
             const slotDay = start.toISOString().split('T')[0];
             const slotPart = hour < 12 ? 'fm' : 'em';
