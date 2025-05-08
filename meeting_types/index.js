@@ -23,21 +23,34 @@ module.exports = async function (context, req) {
   });
 
   try {
-    const { rows } = await pool.query(
-      "SELECT value FROM booking_settings WHERE key = 'meeting_types'"
+    const settingsRes = await pool.query(
+      "SELECT key, value FROM booking_settings WHERE key IN ('meeting_types', 'default_meeting_length_atClient', 'default_meeting_length_atOffice', 'default_meeting_length_digital')"
     );
 
-    if (!rows || rows.length === 0) {
-      context.res = {
-        status: 404,
-        body: { error: 'Inga mötestyper hittades.' }
-      };
-      return;
+    const settings = {};
+    for (const row of settingsRes.rows) {
+      try {
+        settings[row.key] = JSON.parse(row.value);
+      } catch {
+        settings[row.key] = row.value;
+      }
     }
+
+    const meetingTypes = settings['meeting_types'];
+    const lengths = {
+      zoom: settings['default_meeting_length_digital'],
+      facetime: settings['default_meeting_length_digital'],
+      teams: settings['default_meeting_length_digital'],
+      atclient: settings['default_meeting_length_atClient'],
+      atoffice: settings['default_meeting_length_atOffice']
+    };
 
     context.res = {
       status: 200,
-      body: rows[0].value
+      body: {
+        types: meetingTypes,
+        lengths
+      }
     };
   } catch (error) {
     context.log.error('Database query failed:', error);
