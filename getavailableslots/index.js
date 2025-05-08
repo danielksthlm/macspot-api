@@ -1,4 +1,6 @@
-// Kontrollfunktion för booking_settings - förbättrad version 4b
+console.log('🚀 Funktion initierad');
+console.log('📛 DEBUG_MODE:', process.env.DEBUG_MODE);
+// Kontrollfunktion för booking_settings - förbättrad version 5
 function verifyBookingSettings(settings, context) {
   const expected = {
     default_office_address: 'string',
@@ -65,7 +67,7 @@ export default async function (context, req) {
     ({ v4: uuidv4 } = await import('uuid'));
     context.log('📦 Imports lyckades');
   } catch (err) {
-    context.log.error('❌ Import-fel:', err.message);
+    context.log.error('❌ Import-fel:', err);
     context.res = {
       status: 500,
       body: { error: 'Import misslyckades', detail: err.message }
