@@ -1,3 +1,47 @@
+// Kontrollfunktion för booking_settings
+function verifyBookingSettings(settings, context) {
+  const expected = {
+    default_office_address: 'string',
+    default_home_address: 'string',
+    fallback_travel_time_minutes: 'number',
+    buffer_between_meetings: 'number',
+    default_meeting_length_atOffice: 'object',
+    default_meeting_length_atClient: 'object',
+    default_meeting_length_digital: 'object',
+    meeting_types: 'object',
+    block_weekends: 'boolean',
+    open_time: 'string',
+    close_time: 'string',
+    lunch_start: 'string',
+    lunch_end: 'string',
+    travel_time_window_start: 'string',
+    travel_time_window_end: 'string',
+    require_approval: 'object',
+    max_days_in_advance: 'number',
+    max_weekly_booking_minutes: 'number',
+    cache_ttl_minutes: 'number',
+    allowed_atClient_meeting_days: 'object',
+    timezone: 'string'
+  };
+
+  const issues = [];
+  for (const [key, type] of Object.entries(expected)) {
+    const val = settings[key];
+    if (val === undefined) {
+      issues.push(`❌ Saknar inställning: ${key}`);
+    } else if (typeof val !== type) {
+      issues.push(`⚠️ Typfel för ${key}: har ${typeof val}, förväntade ${type}`);
+    }
+  }
+
+  if (issues.length > 0) {
+    const message = '🛑 Problem med booking_settings:\n' + issues.join('\n');
+    context.log.warn(message);
+    throw new Error(message);
+  } else {
+    context.log('✅ Alla booking_settings har rätt typ och finns definierade.');
+  }
+}
 // Slot pattern frequency tracker - test 2
 const slotPatternFrequency = {}; // key = hour + meeting_length → count
 const travelTimeCache = {}; // key = fromAddress->toAddress
@@ -116,6 +160,8 @@ export default async function (context, req) {
     }
     context.log('⚙️ Inställningar laddade:', Object.keys(settings));
     context.log(`🕓 Öppettider enligt inställningar: ${settings.open_time}–${settings.close_time}`);
+    // Verifiera booking_settings direkt efter laddning
+    verifyBookingSettings(settings, context);
     // Kontrollera att mötestypen är giltig
     if (!settings.meeting_types.includes(meeting_type)) {
       context.res = {
