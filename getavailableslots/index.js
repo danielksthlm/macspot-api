@@ -473,13 +473,8 @@ export default async function (context, req) {
           context.log(`⏹️ Klar timme ${hour}:00 (${Date.now() - hourStart} ms)`);
           // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
           if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
-            context.log(`✅ ${dayStr} har fm och em – avbryter dagen`);
-            break;
-          }
-          // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
-          if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
-            context.log(`✅ ${dayStr} har fm och em – avbryter dagen`);
-            break;
+            context.log(`✅ ${dayStr} har fm och em – avbryter dagens bearbetning`);
+            return;
           }
         }
         context.log(`✅ Klar med dag ${dayStr} på ${Date.now() - dayStart} ms`);
