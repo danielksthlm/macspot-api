@@ -233,6 +233,7 @@ export default async function (context, req) {
             slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
             context.log(`🧷 (cached slot) Markering: slotGroupPicked[${slotDay}_${slotPart}] = true`);
             slotGroupPicked[`${slotDay}_${slotPart}`] = true;
+            context.log(`🧷 (efter cached set) slotGroupPicked[${slotDay}_${slotPart}] =`, slotGroupPicked[`${slotDay}_${slotPart}`]);
             context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
             // Skip expensive processing if cached slot exists
             continue;
@@ -384,6 +385,7 @@ export default async function (context, req) {
             });
             context.log(`🧷 (ny slot) Markering: slotGroupPicked[${key}] = true`);
             slotGroupPicked[key] = true;
+            context.log(`🧷 (efter set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
             context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
             context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
             context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()}`);
@@ -485,6 +487,10 @@ export default async function (context, req) {
           context.log(`⏹️ Klar timme ${hour}:00 (${Date.now() - hourStart} ms)`);
           // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
           // OBS: Kontroll-loggen ska dyka EFTER att slotGroupPicked[key] satts!
+          context.log(`🧷 Debug-status innan kontroll:`);
+          context.log(`  slotGroupPicked keys:`, Object.keys(slotGroupPicked));
+          context.log(`  slotGroupPicked[${dayStr}_fm] =`, slotGroupPicked[`${dayStr}_fm`]);
+          context.log(`  slotGroupPicked[${dayStr}_em] =`, slotGroupPicked[`${dayStr}_em`]);
           context.log(`🔁 Kontroll: fm = ${slotGroupPicked[`${dayStr}_fm`]}; em = ${slotGroupPicked[`${dayStr}_em`]}`);
           if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
             context.log(`✅ ${dayStr} har fm och em – avbryter dagens bearbetning`);
