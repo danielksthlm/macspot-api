@@ -133,6 +133,34 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Example loop where slots are pushed to chosen (this is a placeholder to show where to add the logic)
+    // Assuming you have an array of slots and a chosen array:
+    // const slots = [...]; // your slots array
+    // const chosen = [];
+    // for (const slot of slots) {
+    //   const slotIso = slot.isoString; // example property
+    //   const travelTimeMin = settings.fallback_travel_time_minutes || 0;
+    //   const returnTravelTimeMin = travelTimeMin; // or some logic for return travel time
+
+    //   let requireApprovalForThisSlot = false;
+
+    //   const windowStartHour = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
+    //   const windowEndHour = parseInt((settings.travel_time_window_end || '23:00').split(':')[0], 10);
+
+    //   const travelStart = new Date(new Date(slotIso).getTime() - travelTimeMin * 60000);
+    //   const travelEnd = new Date(new Date(slotIso).getTime() + meeting_length * 60000 + returnTravelTimeMin * 60000);
+
+    //   if (travelStart.getHours() < windowStartHour || travelEnd.getHours() > windowEndHour) {
+    //     requireApprovalForThisSlot = true;
+    //     context.log(`⚠️ Slot markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
+    //   }
+
+    //   chosen.push({
+    //     ...slot,
+    //     require_approval: requireApprovalForThisSlot
+    //   });
+    // }
+
     const elapsedMs = Date.now() - startTimeMs;
     context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
 
