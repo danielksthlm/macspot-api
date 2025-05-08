@@ -17,7 +17,7 @@ async function handler(req, res) {
   }
 
   try {
-    const session = getSession(req, res);
+    const session = await getSession(req, res);
     if (!session) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
