@@ -76,7 +76,11 @@ export default async function (context, req) {
   }
 
     context.log('📥 Funktion getavailableslots anropad');
-    const DEBUG = String(process.env.DEBUG_MODE || '').toLowerCase() === 'true';
+    console.log('📛 DEBUG_MODE:', process.env.DEBUG_MODE);
+    const DEBUG = process.env.DEBUG_MODE === 'true';
+    if (!process.env.DEBUG_MODE) {
+      context.log('⚠️ DEBUG_MODE är inte satt – standard är false');
+    }
     const startTimeMs = Date.now();
 
   const { email, meeting_type } = req.body || {};
