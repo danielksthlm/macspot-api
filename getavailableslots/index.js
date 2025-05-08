@@ -1,4 +1,4 @@
-// Kontrollfunktion för booking_settings - förbättrad version 4
+// Kontrollfunktion för booking_settings - förbättrad version 4b
 function verifyBookingSettings(settings, context) {
   const expected = {
     default_office_address: 'string',
