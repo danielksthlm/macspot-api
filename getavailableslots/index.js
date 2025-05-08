@@ -280,7 +280,8 @@ export default async function (context, req) {
                 next.metadata.address,
                 end,
                 accessToken,
-                context
+                context,
+                db
               );
               const arrivalAtNext = end.getTime() + travelTimeAfter * 60000;
               if (arrivalAtNext > next.start) {
@@ -303,7 +304,8 @@ export default async function (context, req) {
                 settings.default_office_address,
                 new Date(previous.end),
                 accessToken,
-                context
+                context,
+                db
               );
               const arrivalTime = new Date(previous.end + returnTravelTime * 60000);
               if (arrivalTime > start) {
@@ -399,7 +401,7 @@ export default async function (context, req) {
 
               context.log('🗺️ Från:', fromAddress, '→ Till:', toAddress);
 
-              const travelTimeMin = await getTravelTime(fromAddress, toAddress, start, accessToken, context);
+              const travelTimeMin = await getTravelTime(fromAddress, toAddress, start, accessToken, context, db);
               appleCache[slotIso] = travelTimeMin;
             } catch (err) {
               context.log('⚠️ Restidskontroll misslyckades, använder fallback:', err.message);
@@ -570,39 +572,68 @@ async function getAppleMapsAccessToken(context) {
 }
 
 // Extraherad funktion: Travel time
-async function getTravelTime(fromAddress, toAddress, start, accessToken, context) {
-  // travelTimeCache och hourKey används som tidigare
+async function getTravelTime(fromAddress, toAddress, start, accessToken, context, db) {
   const travelKey = `${fromAddress}->${toAddress}`;
   const hourKey = `${fromAddress}|${toAddress}|${start.getHours()}`;
+
   if (travelTimeCache[hourKey] !== undefined) {
-    if (context && context.log) context.log('📍 Återanvänder restid (timvis cache):', travelTimeCache[hourKey], 'min');
+    context?.log?.('📍 Återanvänder restid (timvis cache):', travelTimeCache[hourKey], 'min');
     return travelTimeCache[hourKey];
   }
   if (travelTimeCache[travelKey] !== undefined) {
-    if (context && context.log) context.log('📍 Återanvänder restid från cache:', travelTimeCache[travelKey], 'min');
+    context?.log?.('📍 Återanvänder restid från cache:', travelTimeCache[travelKey], 'min');
     return travelTimeCache[travelKey];
   }
+
+  try {
+    const dbRes = await db.query(
+      `SELECT travel_minutes FROM travel_time_cache
+       WHERE from_address = $1 AND to_address = $2 AND hour = $3 LIMIT 1`,
+      [fromAddress, toAddress, start.getHours()]
+    );
+    if (dbRes.rows.length > 0) {
+      const mins = dbRes.rows[0].travel_minutes;
+      travelTimeCache[hourKey] = mins;
+      travelTimeCache[travelKey] = mins;
+      context?.log?.('📍 Återanvänder restid från DB-cache:', mins, 'min');
+      return mins;
+    }
+  } catch (err) {
+    context?.log?.('⚠️ Kunde inte läsa från travel_time_cache:', err.message);
+  }
+
   try {
     const url = new URL('https://maps-api.apple.com/v1/directions');
     url.searchParams.append('origin', fromAddress);
     url.searchParams.append('destination', toAddress);
     url.searchParams.append('transportType', 'automobile');
     url.searchParams.append('departureTime', start.toISOString());
-    if (context && context.log) context.log('📡 Maps request URL:', url.toString());
+    context?.log?.('📡 Maps request URL:', url.toString());
+
     const fetch = (await import('node-fetch')).default;
     const res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
     const data = await res.json();
-    const durationSec = data.routes?.[0]?.durationSeconds;
-    const travelTimeMin = Math.round((durationSec || 0) / 60);
-    travelTimeCache[travelKey] = travelTimeMin;
-    travelTimeCache[hourKey] = travelTimeMin;
-    return travelTimeMin;
+    const travelMin = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
+    travelTimeCache[travelKey] = travelMin;
+    travelTimeCache[hourKey] = travelMin;
+
+    // Spara i databasen
+    try {
+      await db.query(`
+        INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, NOW(), NOW())
+        ON CONFLICT (from_address, to_address, hour)
+        DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+      `, [fromAddress, toAddress, start.getHours(), travelMin]);
+    } catch (err) {
+      context?.log?.('⚠️ Kunde inte spara restid till DB-cache:', err.message);
+    }
+
+    return travelMin;
   } catch (err) {
-    if (context && context.log) context.log('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
+    context?.log?.('⚠️ Misslyckades hämta restid från Apple Maps:', err.message);
     travelTimeCache[travelKey] = Number.MAX_SAFE_INTEGER;
     travelTimeCache[hourKey] = Number.MAX_SAFE_INTEGER;
     return Number.MAX_SAFE_INTEGER;
