@@ -176,6 +176,7 @@ export default async function (context, req) {
     let accessToken;
     for (let i = 1; i <= daysToGenerate; i++) {
       const dayStart = Date.now();
+      const dayStr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i).toISOString().split('T')[0];
       context.log(`🕒 Startar bearbetning för dag ${dayStr}`);
       if (!accessToken) {
         accessToken = await getAppleMapsAccessToken(context);
@@ -186,7 +187,7 @@ export default async function (context, req) {
       }
       const day = new Date(now);
       day.setDate(day.getDate() + i);
-      const dayStr = day.toISOString().split('T')[0];
+      // const dayStr = day.toISOString().split('T')[0];
 
       const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
       const closeHour = parseInt((settings.close_time || '16:00').split(':')[0], 10);
