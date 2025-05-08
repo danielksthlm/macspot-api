@@ -158,6 +158,7 @@ export default async function (context, req) {
     }
     context.log('📐 Möteslängd vald av kund:', requestedLength);
     if (meeting_type === 'atClient' && Array.isArray(settings.default_meeting_length_atClient)) {
+      context.log('🧪 Råvärde settings.default_meeting_length_atClient:', settings.default_meeting_length_atClient);
       lengths = settings.default_meeting_length_atClient.map(Number);
     } else {
       lengths = [requestedLength];
