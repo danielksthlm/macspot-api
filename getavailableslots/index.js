@@ -65,6 +65,7 @@ export default async function (context, req) {
   }
 
     context.log('📥 Funktion getavailableslots anropad');
+    const DEBUG = process.env.DEBUG_MODE === 'true';
     const startTimeMs = Date.now();
 
   const { email, meeting_type } = req.body || {};
@@ -228,7 +229,19 @@ export default async function (context, req) {
       const chunk = Array.from({ length: 7 }, (_, offset) => i + offset).filter(d => d <= daysToGenerate);
       await Promise.all(chunk.map(async (dayOffset) => {
         const dayStart = Date.now();
-        const dayStr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset).toISOString().split('T')[0];
+        const day = new Date(now);
+        day.setDate(day.getDate() + dayOffset);
+        const dayStr = day.toISOString().split('T')[0];
+        // Kontrollera veckodagstillåtelse för atClient innan timloopen
+        const weekdayName = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][day.getDay()];
+        if (
+          meeting_type === 'atClient' &&
+          Array.isArray(settings.allowed_atClient_meeting_days) &&
+          !settings.allowed_atClient_meeting_days.includes(weekdayName)
+        ) {
+          context.log(`⏩ Skipped ${dayStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
+          return;
+        }
         context.log(`🕒 Startar bearbetning för dag ${dayStr}`);
         if (!accessToken) {
           accessToken = await getAppleMapsAccessToken(context);
@@ -237,8 +250,6 @@ export default async function (context, req) {
             return;
           }
         }
-        const day = new Date(now);
-        day.setDate(day.getDate() + dayOffset);
         // const dayStr = day.toISOString().split('T')[0];
 
         const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
@@ -284,12 +295,12 @@ export default async function (context, req) {
             if (!slotMap[`${slotDay}_${slotPart}`]) slotMap[`${slotDay}_${slotPart}`] = [];
             slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
             const key = `${slotDay}_${slotPart}`;
-            context.log(`🧷 (cached slot) Markering: slotGroupPicked[${key}] = true`);
-            slotGroupPicked[key] = true;
-            context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
-            context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
-            context.log(`🧷 (efter cached set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
-            context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
+          if (DEBUG) context.log(`🧷 (cached slot) Markering: slotGroupPicked[${key}] = true`);
+          slotGroupPicked[key] = true;
+          if (DEBUG) context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
+          if (DEBUG) context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
+          if (DEBUG) context.log(`🧷 (efter cached set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
+          context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
             // Skip expensive processing if cached slot exists
             continue;
           }
@@ -455,26 +466,26 @@ export default async function (context, req) {
             }
 
             // key redan beräknad ovan
-            context.log(`🕵️‍♀️ Slotgruppsnyckel: ${key}`);
+            if (DEBUG) context.log(`🕵️‍♀️ Slotgruppsnyckel: ${key}`);
             if (!slotMap[key]) slotMap[key] = [];
 
             const minDist = Math.min(...existing.map(e => Math.abs(slotStart - e.end)));
-            context.log(`🆕 Förbereder att lägga till slot i slotMap[${key}]`);
-            context.log(`🔍 slotMap-data: ISO=${start.toISOString()}, score=${isFinite(minDist) ? minDist : 99999}`);
-            context.log(`📎 Före push – key: ${key}, iso: ${start.toISOString()}, score: ${isFinite(minDist) ? minDist : 99999}`);
+            if (DEBUG) context.log(`🆕 Förbereder att lägga till slot i slotMap[${key}]`);
+            if (DEBUG) context.log(`🔍 slotMap-data: ISO=${start.toISOString()}, score=${isFinite(minDist) ? minDist : 99999}`);
+            if (DEBUG) context.log(`📎 Före push – key: ${key}, iso: ${start.toISOString()}, score: ${isFinite(minDist) ? minDist : 99999}`);
             slotMap[key].push({
               iso: start.toISOString(),
               score: isFinite(minDist) ? minDist : 99999
             });
-            context.log(`🧷 (ny slot) Markering: slotGroupPicked[${key}] = true`);
+            if (DEBUG) context.log(`🧷 (ny slot) Markering: slotGroupPicked[${key}] = true`);
             slotGroupPicked[key] = true;
-            context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
-            context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
-            context.log(`🧷 (efter set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
-            context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
-            context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
-            context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()}`);
-            context.log(`⭐️ Slot score (isolation): ${isFinite(minDist) ? minDist : 99999}`);
+            if (DEBUG) context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
+            if (DEBUG) context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
+            if (DEBUG) context.log(`🧷 (efter set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
+            if (DEBUG) context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
+            if (DEBUG) context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
+            if (DEBUG) context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()}`);
+            if (DEBUG) context.log(`⭐️ Slot score (isolation): ${isFinite(minDist) ? minDist : 99999}`);
 
             // 🧭 Kontrollera restid med Apple Maps och Graph API token fallback (cache per slot)
             const slotIso = start.toISOString();
@@ -579,11 +590,13 @@ export default async function (context, req) {
           context.log(`⏹️ Klar timme ${hour}:00 (${Date.now() - hourStart} ms)`);
           // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
           // OBS: Kontroll-loggen ska dyka EFTER att slotGroupPicked[key] satts!
-          context.log(`🧷 Debug-status innan kontroll:`);
-          context.log(`  slotGroupPicked keys:`, Object.keys(slotGroupPicked));
-          context.log(`  slotGroupPicked[${dayStr}_fm] =`, slotGroupPicked[`${dayStr}_fm`]);
-          context.log(`  slotGroupPicked[${dayStr}_em] =`, slotGroupPicked[`${dayStr}_em`]);
-          context.log(`🔁 Kontroll: fm = ${slotGroupPicked[`${dayStr}_fm`]}; em = ${slotGroupPicked[`${dayStr}_em`]}`);
+          if (DEBUG) {
+            context.log(`🧷 Debug-status innan kontroll:`);
+            context.log(`  slotGroupPicked keys:`, Object.keys(slotGroupPicked));
+            context.log(`  slotGroupPicked[${dayStr}_fm] =`, slotGroupPicked[`${dayStr}_fm`]);
+            context.log(`  slotGroupPicked[${dayStr}_em] =`, slotGroupPicked[`${dayStr}_em`]);
+            context.log(`🔁 Kontroll: fm = ${slotGroupPicked[`${dayStr}_fm`]}; em = ${slotGroupPicked[`${dayStr}_em`]}`);
+          }
           if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
             context.log(`✅ ${dayStr} har fm och em – avbryter dagens bearbetning`);
             return;
@@ -594,17 +607,17 @@ export default async function (context, req) {
     }
 
     const chosen = [];
-    context.log('🧮 Börjar välja bästa slot per grupp...');
+    if (DEBUG) context.log('🧮 Börjar välja bästa slot per grupp...');
     Object.entries(slotMap).forEach(([key, candidates]) => {
-      context.log(`📊 Slotgrupp ${key} innehåller ${candidates.length} kandidater`);
-      candidates.forEach(c => context.log(`  - Kandidat: ${c.iso}, score: ${c.score}`));
-      context.log(`📅 Utvärderar slotgrupp ${key} med ${candidates.length} kandidater`);
+      if (DEBUG) context.log(`📊 Slotgrupp ${key} innehåller ${candidates.length} kandidater`);
+      if (DEBUG) candidates.forEach(c => context.log(`  - Kandidat: ${c.iso}, score: ${c.score}`));
+      if (DEBUG) context.log(`📅 Utvärderar slotgrupp ${key} med ${candidates.length} kandidater`);
       const best = candidates.sort((a, b) => b.score - a.score)[0];
-      context.log(`🏁 Bästa kandidat för ${key}:`, best);
+      if (DEBUG) context.log(`🏁 Bästa kandidat för ${key}:`, best);
       if (best) {
         context.log(`✅ Valde slot ${best.iso} för grupp ${key}`);
-        context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
-        context.log(`🏆 Vald slot för ${key}: ${best.iso} (score: ${best.score})`);
+        if (DEBUG) context.log(`📂 Slotgrupp (dag/fm-em): ${key}`);
+        if (DEBUG) context.log(`🏆 Vald slot för ${key}: ${best.iso} (score: ${best.score})`);
         chosen.push(best.iso);
         slotGroupPicked[key] = true; // markera att gruppen har fått en vald slot
       }
