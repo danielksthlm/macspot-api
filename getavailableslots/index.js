@@ -172,7 +172,18 @@ export default async function (context, req) {
     const endMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); // sista dagen i den månaden
     const daysToGenerate = Math.ceil((endMonth - now) / (1000 * 60 * 60 * 24));
 
+    // Flytta Apple Maps-tokenhämtning till början av hour-loopen
+    let accessToken;
     for (let i = 1; i <= daysToGenerate; i++) {
+      const dayStart = Date.now();
+      context.log(`🕒 Startar bearbetning för dag ${dayStr}`);
+      if (!accessToken) {
+        accessToken = await getAppleMapsAccessToken(context);
+        if (!accessToken) {
+          context.log('⚠️ Apple Maps-token saknas – avbryter dagsloop');
+          break;
+        }
+      }
       const day = new Date(now);
       day.setDate(day.getDate() + i);
       const dayStr = day.toISOString().split('T')[0];
@@ -184,12 +195,8 @@ export default async function (context, req) {
         lastAllowedStartHour = closeHour - Math.max(...lengths) / 60;
       }
       for (let hour = openHour; hour <= lastAllowedStartHour; hour++) {
-        // Flytta tokenhämtning till början av hour-loopen
-        const accessToken = await getAppleMapsAccessToken(context);
-        if (!accessToken) {
-          context.log('⚠️ Apple Maps-token saknas – hoppar denna timme');
-          continue;
-        }
+        const hourStart = Date.now();
+        context.log(`⏳ Bearbetar timme ${hour}:00 för dag ${dayStr}`);
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
         if (slotGroupPicked[`${dayStr}_${slotPart}`]) {
@@ -270,24 +277,8 @@ export default async function (context, req) {
             .filter(e => e.start > end.getTime())
             .sort((a, b) => a.start - b.start)[0];
 
-          if (next?.metadata?.address) {
-            const accessToken = await getAppleMapsAccessToken(context);
-            if (accessToken) {
-              const travelTimeAfter = await getTravelTime(
-                settings.default_office_address,
-                next.metadata.address,
-                end,
-                accessToken,
-                context,
-                db
-              );
-              const arrivalAtNext = end.getTime() + travelTimeAfter * 60000;
-              if (arrivalAtNext > next.start) {
-                context.log(`⛔ Slot avvisad: restid till nästa möte för lång (${arrivalAtNext} > ${next.start})`);
-                return;
-              }
-            }
-          }
+          const validToNext = await validateTravelToNextMeeting(end, next, accessToken, settings, context, db);
+          if (!validToNext) return;
 
           // Kontrollera returresa från tidigare möte före denna slot
           const previous = existing
@@ -469,11 +460,14 @@ export default async function (context, req) {
           context.log(`🗃️ Slot cache tillagd i available_slots_cache: ${slotIso}`);
           context.log(`🎯 Slot score som cachades: ${slotScore}`);
         }));
+        // ⏹️ Klar timme-logg
+        context.log(`⏹️ Klar timme ${hour}:00 (${Date.now() - hourStart} ms)`);
         // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
         if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
           context.log(`✅ ${dayStr} har fm och em – avbryter dagen`);
           break;
         }
+      context.log(`✅ Klar med dag ${dayStr} på ${Date.now() - dayStart} ms`);
       }
     }
 
@@ -571,6 +565,7 @@ async function getAppleMapsAccessToken(context) {
 
 // Extraherad funktion: Travel time
 async function getTravelTime(fromAddress, toAddress, start, accessToken, context, db) {
+  const t0 = Date.now();
   const travelKey = `${fromAddress}->${toAddress}`;
   const hourKey = `${fromAddress}|${toAddress}|${start.getHours()}`;
 
@@ -613,6 +608,7 @@ async function getTravelTime(fromAddress, toAddress, start, accessToken, context
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const data = await res.json();
+    context?.log?.(`⏱️ Apple Maps-respons på ${Date.now() - t0} ms`);
     const travelMin = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
     travelTimeCache[travelKey] = travelMin;
     travelTimeCache[hourKey] = travelMin;
@@ -656,4 +652,23 @@ async function loadBookingSettings(db) {
     }
   }
   return settings;
+}
+
+// Extraherad funktion: Validera restid till nästa möte
+async function validateTravelToNextMeeting(end, next, accessToken, settings, context, db) {
+  if (!next?.metadata?.address) return true;
+  const travelTimeAfter = await getTravelTime(
+    settings.default_office_address,
+    next.metadata.address,
+    end,
+    accessToken,
+    context,
+    db
+  );
+  const arrivalAtNext = end.getTime() + travelTimeAfter * 60000;
+  if (arrivalAtNext > next.start) {
+    context.log(`⛔ Slot avvisad: restid till nästa möte för lång (${arrivalAtNext} > ${next.start})`);
+    return false;
+  }
+  return true;
 }
