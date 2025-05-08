@@ -168,9 +168,15 @@ export default async function (context, req) {
     // --- Cacha bokningar per dag ---
     const bookingsByDay = {};
 
-    for (let i = 1; i <= maxDays; i++) {
-      const day = new Date();
-      day.setDate(now.getDate() + i);
+    // Justera logik för att inkludera hela månaden även om max_days_in_advance bara täcker delar av den
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + maxDays);
+    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); // sista dagen i den månaden
+    const daysToGenerate = Math.ceil((endMonth - now) / (1000 * 60 * 60 * 24));
+
+    for (let i = 1; i <= daysToGenerate; i++) {
+      const day = new Date(now);
+      day.setDate(day.getDate() + i);
       const dayStr = day.toISOString().split('T')[0];
 
       const openHour = parseInt((settings.open_time || '08:00').split(':')[0], 10);
@@ -180,6 +186,12 @@ export default async function (context, req) {
         lastAllowedStartHour = closeHour - Math.max(...lengths) / 60;
       }
       for (let hour = openHour; hour <= lastAllowedStartHour; hour++) {
+        // Flytta tokenhämtning till början av hour-loopen
+        const accessToken = await getAppleMapsAccessToken(context);
+        if (!accessToken) {
+          context.log('⚠️ Apple Maps-token saknas – hoppar denna timme');
+          continue;
+        }
         const slotDay = dayStr;
         const slotPart = hour < 12 ? 'fm' : 'em';
         if (slotGroupPicked[`${dayStr}_${slotPart}`]) {
@@ -244,15 +256,63 @@ export default async function (context, req) {
           // --- Cacha dagens bokningar ---
           if (!bookingsByDay[dayStr]) {
             const existingRes = await db.query(
-              `SELECT start_time, end_time FROM bookings WHERE start_time::date = $1`,
+              `SELECT start_time, end_time, metadata FROM bookings WHERE start_time::date = $1`,
               [dayStr]
             );
             bookingsByDay[dayStr] = existingRes.rows.map(r => ({
               start: new Date(r.start_time).getTime(),
-              end: new Date(r.end_time).getTime()
+              end: new Date(r.end_time).getTime(),
+              metadata: r.metadata
             }));
           }
           const existing = bookingsByDay[dayStr];
+
+          // Kontrollera restid från denna slot till nästa möte
+          const next = existing
+            .filter(e => e.start > end.getTime())
+            .sort((a, b) => a.start - b.start)[0];
+
+          if (next?.metadata?.address) {
+            const accessToken = await getAppleMapsAccessToken(context);
+            if (accessToken) {
+              const travelTimeAfter = await getTravelTime(
+                settings.default_office_address,
+                next.metadata.address,
+                end,
+                accessToken,
+                context
+              );
+              const arrivalAtNext = end.getTime() + travelTimeAfter * 60000;
+              if (arrivalAtNext > next.start) {
+                context.log(`⛔ Slot avvisad: restid till nästa möte för lång (${arrivalAtNext} > ${next.start})`);
+                return;
+              }
+            }
+          }
+
+          // Kontrollera returresa från tidigare möte före denna slot
+          const previous = existing
+            .filter(e => e.end < start.getTime())
+            .sort((a, b) => b.end - a.end)[0];
+
+          if (previous?.metadata?.address) {
+            const accessToken = await getAppleMapsAccessToken(context);
+            if (accessToken) {
+              const returnTravelTime = await getTravelTime(
+                previous.metadata.address,
+                settings.default_office_address,
+                new Date(previous.end),
+                accessToken,
+                context
+              );
+              const arrivalTime = new Date(previous.end + returnTravelTime * 60000);
+              if (arrivalTime > start) {
+                context.log(`⛔ Slot avvisad: hinner inte från tidigare möte (${arrivalTime.toISOString()} > ${start.toISOString()})`);
+                return;
+              }
+            }
+          }
+
           // De övriga queries körs som vanligt
           const [weekRes, conflictRes] = await Promise.all([
             db.query(
@@ -409,14 +469,12 @@ export default async function (context, req) {
           context.log(`🗃️ Slot cache tillagd i available_slots_cache: ${slotIso}`);
           context.log(`🎯 Slot score som cachades: ${slotScore}`);
         }));
-        // ⛔ Avsluta tidigare om alla fm/em-tider har hittats
-        if (maxDays && Object.keys(slotGroupPicked).length >= maxDays * 2) {
-          context.log(`✅ Alla ${maxDays} dagar har både fm och em – avbryter tidigare`);
+        // ⛔ Avsluta dag-loopen om fm och em är valda för denna dag
+        if (slotGroupPicked[`${dayStr}_fm`] && slotGroupPicked[`${dayStr}_em`]) {
+          context.log(`✅ ${dayStr} har fm och em – avbryter dagen`);
           break;
         }
       }
-      // Stop loop if maxDays reached
-      // (inte behövs, loopen är nu for (let i = 1; i <= maxDays; i++) )
     }
 
     const chosen = [];
