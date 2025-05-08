@@ -234,6 +234,8 @@ export default async function (context, req) {
             const key = `${slotDay}_${slotPart}`;
             context.log(`🧷 (cached slot) Markering: slotGroupPicked[${key}] = true`);
             slotGroupPicked[key] = true;
+            context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
+            context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
             context.log(`🧷 (efter cached set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
             context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
             // Skip expensive processing if cached slot exists
@@ -386,6 +388,8 @@ export default async function (context, req) {
             });
             context.log(`🧷 (ny slot) Markering: slotGroupPicked[${key}] = true`);
             slotGroupPicked[key] = true;
+            context.log('🧷 slotGroupPicked status just nu:', JSON.stringify(slotGroupPicked, null, 2));
+            context.log(`📣 DEBUG: Slot för ${key} tillagd, nuvarande keys: ${Object.keys(slotGroupPicked)}`);
             context.log(`🧷 (efter set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
             context.log(`📌 Slot tillagd i slotMap[${key}]: ${start.toISOString()} (${len} min)`);
             context.log(`📍 Efter push – slotMap[${key}].length: ${slotMap[key].length}`);
