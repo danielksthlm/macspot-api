@@ -257,6 +257,7 @@ module.exports = async function (context, req) {
           slot_iso: slotTime.toISOString(),
           require_approval: requireApprovalForThisSlot
         });
+        context.log(`✅ Slot ${slotTime.toISOString()} valdes`);
         slotGroupPicked[key] = true;
       }
     }
