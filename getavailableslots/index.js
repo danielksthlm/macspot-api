@@ -73,6 +73,7 @@ module.exports = async function (context, req) {
 
   try {
     const { Pool } = require('pg');
+    const fetch = require('node-fetch');
     const startTimeMs = Date.now();
 
     const slotMap = {}; // dag_fm eller dag_em → array av { iso, score, require_approval }
@@ -157,8 +158,11 @@ module.exports = async function (context, req) {
     const windowStartHour = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
     const windowEndHour = parseInt((settings.travel_time_window_end || '23:00').split(':')[0], 10);
 
-    // Parallellisera dag-loop i chunkar om 7
-    const chunkSize = 7;
+    // Hämta Apple Maps-token en gång tidigt
+    const accessToken = await getAppleMapsAccessToken(context);
+
+    // Parallellisera dag-loop i chunkar om 28
+    const chunkSize = 28;
     for (let i = 0; i < days.length; i += chunkSize) {
       const chunk = days.slice(i, i + chunkSize);
       const results = await Promise.allSettled(
@@ -280,11 +284,9 @@ module.exports = async function (context, req) {
             }
             // --- SLUT CACHE ---
             if (!cacheHit) {
-              const accessToken = await getAppleMapsAccessToken(context);
               if (!accessToken) {
                 context.log(`⚠️ Apple Maps-token saknas – använder fallback restid ${travelTimeMin} min`);
               } else {
-                const fetch = require('node-fetch');
                 const url = new URL('https://maps-api.apple.com/v1/directions');
                 url.searchParams.append('origin', origin);
                 url.searchParams.append('destination', destination);
@@ -352,10 +354,8 @@ module.exports = async function (context, req) {
                 ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city
                 : settings.default_office_address;
 
-              const accessToken = await getAppleMapsAccessToken(context);
               if (accessToken) {
                 try {
-                  const fetch = require('node-fetch');
                   const url = new URL('https://maps-api.apple.com/v1/directions');
                   url.searchParams.append('origin', from);
                   url.searchParams.append('destination', to);
