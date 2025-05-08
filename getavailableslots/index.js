@@ -65,11 +65,11 @@ export default async function (context, req) {
     };
     return;
   }
-  const body = req.body;
-  if (!body || typeof body !== 'object') {
+  const body = (req && typeof req.body === 'object') ? req.body : null;
+  if (!body) {
     context.res = {
       status: 400,
-      body: { error: 'Body saknas eller är ogiltig.' }
+      body: { error: 'Ogiltig request: body saknas eller är ogiltig.' }
     };
     return;
   }
