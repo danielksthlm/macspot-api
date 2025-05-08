@@ -528,6 +528,11 @@ export default async function (context, req) {
     // });
 
     context.log('📤 Förbereder svar med valda slots:', chosen);
+    // 📋 Logga slotGroupPicked-status före svar
+    context.log('📋 Sammanfattning slotGroupPicked-status:');
+    Object.entries(slotGroupPicked).forEach(([k, v]) => {
+      context.log(`  ${k} = ${v}`);
+    });
     const elapsedMs = Date.now() - startTimeMs;
     context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
     context.res = {
