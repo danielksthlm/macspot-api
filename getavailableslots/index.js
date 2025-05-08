@@ -1,16 +1,21 @@
-// Version 6
- 
- async function handler(req, res) {
+module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.status(204).end();
+    context.res = {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }
+    };
     return;
   }
 
   if (req.method !== 'POST') {
-    res.status(405).json({ message: 'Method Not Allowed' });
+    context.res = {
+      status: 405,
+      body: { message: 'Method Not Allowed' }
+    };
     return;
   }
 
@@ -18,21 +23,31 @@
     const { email, meeting_type, meeting_length } = req.body || {};
 
     if (!email || !meeting_type || !meeting_length) {
-      res.status(400).json({ error: 'Missing one or more required fields: email, meeting_type, meeting_length' });
+      context.res = {
+        status: 400,
+        body: { error: 'Missing one or more required fields: email, meeting_type, meeting_length' }
+      };
       return;
     }
 
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.status(200).json({
-      received: {
-        email,
-        meeting_type,
-        meeting_length
+    context.res = {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: {
+        received: {
+          email,
+          meeting_type,
+          meeting_length
+        }
       }
-    });
+    };
   } catch (error) {
-    console.error('🔥 FEL:', error.message, '\nSTACK:', error.stack);
-    res.status(500).json({ error: error.message, stack: error.stack });
+    context.log('🔥 FEL:', error.message, '\nSTACK:', error.stack);
+    context.res = {
+      status: 500,
+      body: { error: error.message, stack: error.stack }
+    };
   }
-}
-module.exports = handler;
+};
