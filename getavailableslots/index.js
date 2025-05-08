@@ -231,9 +231,10 @@ export default async function (context, req) {
             const iso = cachedSlot.rows[0].slot_iso;
             if (!slotMap[`${slotDay}_${slotPart}`]) slotMap[`${slotDay}_${slotPart}`] = [];
             slotMap[`${slotDay}_${slotPart}`].push({ iso, score: 99999 }); // använd max-poäng
-            context.log(`🧷 (cached slot) Markering: slotGroupPicked[${slotDay}_${slotPart}] = true`);
-            slotGroupPicked[`${slotDay}_${slotPart}`] = true;
-            context.log(`🧷 (efter cached set) slotGroupPicked[${slotDay}_${slotPart}] =`, slotGroupPicked[`${slotDay}_${slotPart}`]);
+            const key = `${slotDay}_${slotPart}`;
+            context.log(`🧷 (cached slot) Markering: slotGroupPicked[${key}] = true`);
+            slotGroupPicked[key] = true;
+            context.log(`🧷 (efter cached set) slotGroupPicked[${key}] =`, slotGroupPicked[key]);
             context.log(`📦 Återanvände cached slot: ${iso} för ${slotDay} ${slotPart}`);
             // Skip expensive processing if cached slot exists
             continue;
