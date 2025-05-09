@@ -50,7 +50,7 @@ function verifyBookingSettings(settings, context) {
 
 module.exports = async function (context, req) {
   const isDebug = process.env.DEBUG === 'true';
-  const debugLog = (msg) => {
+  let debugLog = (msg) => {
     if (isDebug && context && context.log) {
       context.log(msg);
     }
@@ -78,8 +78,8 @@ module.exports = async function (context, req) {
   try {
     const { Pool } = require('pg');
     const fetch = require('node-fetch');
-    const startTimeMs = Date.now();
     debugLog('🏁 Börjar getavailableslots');
+    const t0 = Date.now();
 
     const slotMap = {}; // dag_fm eller dag_em → array av { iso, score, require_approval }
 
@@ -100,6 +100,7 @@ module.exports = async function (context, req) {
       ssl: { rejectUnauthorized: false }
     });
     debugLog('✅ PostgreSQL pool created');
+    debugLog('⏱️ Efter env och pool: ' + (Date.now() - t0) + ' ms');
 
     const { email, meeting_type, meeting_length } = req.body || {};
 
@@ -108,6 +109,8 @@ module.exports = async function (context, req) {
     const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
     debugLog(`👤 Kontakt hittad: ${contact?.id || 'ej funnen'}`);
+    const t1 = Date.now();
+    debugLog('⏱️ Efter kontakt: ' + (Date.now() - t0) + ' ms');
 
     const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
     const settings = {};
@@ -133,6 +136,8 @@ module.exports = async function (context, req) {
     debugLog(`⚙️ Inställningar laddade: ${Object.keys(settings).join(', ')}`);
     verifyBookingSettings(settings, context);
     debugLog('⚙️ Inställningar klara');
+    const t2 = Date.now();
+    debugLog('⏱️ Efter settings: ' + (Date.now() - t0) + ' ms');
 
     const bookingsByDay = {};
     const slotGroupPicked = {};
@@ -168,6 +173,8 @@ module.exports = async function (context, req) {
 
     // Hämta Apple Maps-token en gång tidigt
     const accessToken = await getAppleMapsAccessToken(context);
+    const t3 = Date.now();
+    debugLog('⏱️ Efter Apple Maps token: ' + (Date.now() - t0) + ' ms');
 
     // Parallellisera dag-loop i chunkar om 28
     const chunkSize = 28;
@@ -418,6 +425,27 @@ module.exports = async function (context, req) {
         })
       );
     }
+    const t4 = Date.now();
+    debugLog('⏱️ Efter slot-loop: ' + (Date.now() - t0) + ' ms');
+
+    // --- Summerad loggning av varför slots har avvisats (om isDebug) ---
+    if (isDebug) {
+      const skipReasons = {};
+      const originalDebugLog = debugLog;
+      debugLog = (msg) => {
+        if (msg.startsWith('⛔') || msg.startsWith('🍽️') || msg.startsWith('📛')) {
+          const reason = msg.split(' – ')[0];
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+        }
+        originalDebugLog(msg);
+      };
+
+      process.on('beforeExit', () => {
+        for (const [reason, count] of Object.entries(skipReasons)) {
+          context.log(`📉 ${reason}: ${count} st`);
+        }
+      });
+    }
 
     for (const [key, candidates] of Object.entries(slotMap)) {
       if (candidates.length === 0) continue;
@@ -427,10 +455,8 @@ module.exports = async function (context, req) {
     }
     debugLog(`📦 Slots genererade: ${chosen.length}`);
 
-    if (isDebug) {
-      const elapsedMs = Date.now() - startTimeMs;
-      context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
-    }
+    const elapsedMs = Date.now() - t0;
+    context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
 
     debugLog(`✅ getavailableslots klar med ${chosen.length} slots`);
     context.res = {
