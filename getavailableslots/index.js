@@ -49,6 +49,12 @@ function verifyBookingSettings(settings, context) {
 }
 
 module.exports = async function (context, req) {
+  const isDebug = process.env.DEBUG === 'true';
+  const debugLog = (msg) => {
+    if (isDebug && context && context.log) {
+      context.log(msg);
+    }
+  };
   if (req.method === 'OPTIONS') {
     context.res = {
       status: 204,
@@ -82,7 +88,7 @@ module.exports = async function (context, req) {
         throw new Error(`Missing environment variable: ${key}`);
       }
     }
-    // context.log('🔐 Environment variables verified');
+    debugLog('🔐 Environment variables verified');
 
     const pool = new Pool({
       user: process.env.PGUSER,
@@ -92,7 +98,7 @@ module.exports = async function (context, req) {
       port: parseInt(process.env.PGPORT || '5432', 10),
       ssl: { rejectUnauthorized: false }
     });
-    // context.log('✅ PostgreSQL pool created');
+    debugLog('✅ PostgreSQL pool created');
 
     const { email, meeting_type, meeting_length } = req.body || {};
 
@@ -100,7 +106,7 @@ module.exports = async function (context, req) {
 
     const contactRes = await db.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
-    // context.log('👤 Kontakt hittad:', contact);
+    debugLog(`👤 Kontakt hittad: ${contact?.id || 'ej funnen'}`);
 
     const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
     const settings = {};
@@ -123,7 +129,7 @@ module.exports = async function (context, req) {
         settings[row.key] = row.value;
       }
     }
-    // context.log('⚙️ Inställningar laddade:', Object.keys(settings));
+    debugLog(`⚙️ Inställningar laddade: ${Object.keys(settings).join(', ')}`);
     verifyBookingSettings(settings, context);
 
     const bookingsByDay = {};
