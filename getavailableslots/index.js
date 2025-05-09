@@ -103,7 +103,8 @@ module.exports = async function (context, req) {
     debugLog('✅ PostgreSQL pool created');
     debugLog('⏱️ Efter env och pool: ' + (Date.now() - t0) + ' ms');
 
-    const { email, meeting_type, meeting_length } = req.body || {};
+    const { email, meeting_type: rawMeetingType, meeting_length } = req.body || {};
+    const meeting_type = (rawMeetingType || '').toLowerCase();
     debugLog(`📨 Begäran mottagen med meeting_type: ${meeting_type}, meeting_length: ${meeting_length}, email: ${email}`);
 
     const db = await pool.connect();
@@ -220,18 +221,15 @@ module.exports = async function (context, req) {
         chunk.map(async (day) => {
           const dateStr = day.toISOString().split('T')[0];
           const weekdayName = day.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+          debugLog(`🧪 Kontroll av veckodag '${weekdayName}' mot ${JSON.stringify(settings.allowed_atClient_meeting_days)} för mötestyp: ${meeting_type}`);
 
           if (settings.block_weekends && (day.getDay() === 0 || day.getDay() === 6)) {
             // context.log(`⏭️ Skipper ${dateStr} (helg)`);
             return;
           }
 
-          // Debug-logg före filtrering av veckodagar för atClient
-          if (meeting_type === 'atClient') {
-            debugLog(`🧪 Kontroll av veckodag '${weekdayName}' mot ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
-          }
           if (
-            meeting_type === 'atClient' &&
+            meeting_type === 'atclient' &&
             Array.isArray(settings.allowed_atClient_meeting_days) &&
             !settings.allowed_atClient_meeting_days.includes(weekdayName)
           ) {
