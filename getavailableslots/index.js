@@ -259,7 +259,7 @@ module.exports = async function (context, req) {
             }
 
             debugLog(`🕵️ Kontroll: slot ${slotTime.toISOString()} till ${slotEndTime.toISOString()} vs lunch ${lunchStart.toISOString()}–${lunchEnd.toISOString()}`);
-            if (slotTime < lunchEnd && slotEndTime > lunchStart) {
+            if (meeting_type !== 'atclient' && slotTime < lunchEnd && slotEndTime > lunchStart) {
               debugLog(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
               return;
             }
