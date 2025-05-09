@@ -158,6 +158,23 @@ module.exports = async function (context, req) {
     debugLog(`📆 Antal dagar att bearbeta: ${days.length}`);
     debugLog('📅 Dagar genererade för bearbetning');
 
+    // --- Ladda alla bokningar för hela intervallet i ett slag ---
+    const startDateStr = days[0].toISOString().split('T')[0];
+    const endDateStr = days[days.length - 1].toISOString().split('T')[0];
+    const allBookingsRes = await db.query(
+      'SELECT start_time, end_time FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
+      [startDateStr, endDateStr]
+    );
+    const allBookings = allBookingsRes.rows.map(b => ({
+      start: new Date(b.start_time).getTime(),
+      end: new Date(b.end_time).getTime(),
+      date: new Date(b.start_time).toISOString().split('T')[0]
+    }));
+    for (const booking of allBookings) {
+      if (!bookingsByDay[booking.date]) bookingsByDay[booking.date] = [];
+      bookingsByDay[booking.date].push({ start: booking.start, end: booking.end });
+    }
+
     if (!email || !meeting_type || !meeting_length) {
       context.res = {
         status: 400,
@@ -215,16 +232,8 @@ module.exports = async function (context, req) {
               continue;
             }
 
-            if (!bookingsByDay[dateStr]) {
-              const bookingsRes = await db.query(
-                'SELECT start_time, end_time FROM bookings WHERE start_time::date = $1',
-                [dateStr]
-              );
-              bookingsByDay[dateStr] = bookingsRes.rows.map(b => ({
-                start: new Date(b.start_time).getTime(),
-                end: new Date(b.end_time).getTime()
-              }));
-            }
+            // Ersatt daglig DB-fråga: om ingen bokning för dagen, sätt till tom array
+            if (!bookingsByDay[dateStr]) bookingsByDay[dateStr] = [];
 
             const bufferMs = (settings.buffer_between_meetings || 15) * 60 * 1000;
             const slotStart = slotTime.getTime();
