@@ -235,6 +235,11 @@ module.exports = async function (context, req) {
           ) {
             context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient. Tillåtna: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
             return;
+          } else if (
+            meeting_type !== 'atclient' &&
+            settings.allowed_atClient_meeting_days
+          ) {
+            debugLog(`🧪 Hoppar veckodagskontroll – meeting_type är ${meeting_type}, ej atClient`);
           }
 
           await Promise.all([10, 14].map(async (hour) => {
@@ -244,6 +249,14 @@ module.exports = async function (context, req) {
             const lunchStart = new Date(`${dateStr}T${settings.lunch_start || '11:45'}:00Z`);
             const lunchEnd = new Date(`${dateStr}T${settings.lunch_end || '13:15'}:00Z`);
             const slotEndTime = new Date(slotTime.getTime() + meeting_length * 60000);
+
+            // Avvisa möten utanför öppettider
+            const openTime = new Date(`${dateStr}T${settings.open_time}:00Z`);
+            const closeTime = new Date(`${dateStr}T${settings.close_time}:00Z`);
+            if (slotTime < openTime || slotEndTime > closeTime) {
+              debugLog(`⏰ Slot ${slotTime.toISOString()} ligger utanför öppettider (${settings.open_time}–${settings.close_time}) – skippar`);
+              return;
+            }
 
             debugLog(`🕵️ Kontroll: slot ${slotTime.toISOString()} till ${slotEndTime.toISOString()} vs lunch ${lunchStart.toISOString()}–${lunchEnd.toISOString()}`);
             if (slotTime < lunchEnd && slotEndTime > lunchStart) {
@@ -289,7 +302,9 @@ module.exports = async function (context, req) {
             const travelEnd = new Date(slotTime.getTime() + meeting_length * 60000 + returnTravelTimeMin * 60000);
 
             let requireApprovalForThisSlot = false;
-            if (travelStart.getHours() < windowStartHour || travelEnd.getHours() > windowEndHour) {
+            const travelStartHour = travelStart.getUTCHours();
+            const travelEndHour = travelEnd.getUTCHours();
+            if (travelStartHour < windowStartHour || travelEndHour >= windowEndHour) {
               debugLog(`⚠️ Slot ${slotTime.toISOString()} kräver godkännande – utanför restidsfönster`);
               requireApprovalForThisSlot = true;
             }
@@ -401,7 +416,7 @@ module.exports = async function (context, req) {
               const from = previous.address || settings.default_office_address;
               const to = meeting_type === 'atClient'
                 ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city
-                : settings.default_office_address;
+                : settings.default_home_address;
 
               if (accessToken) {
                 try {
