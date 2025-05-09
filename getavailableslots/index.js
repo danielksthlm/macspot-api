@@ -226,8 +226,8 @@ module.exports = async function (context, req) {
           }
 
           if (meeting_type === 'atClient') {
-            context.log(`🔎 Kontroll av veckodag: ${weekdayName}`);
-            context.log(`📋 Tillåtna dagar för atClient: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
+            debugLog(`🔎 Kontroll av veckodag: ${weekdayName}`);
+            debugLog(`📋 Tillåtna dagar för atClient: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
           }
           if (
             meeting_type === 'atClient' &&
@@ -348,8 +348,8 @@ module.exports = async function (context, req) {
                     context.log(`⚠️ Apple Maps kunde inte hitta restid – använder fallback`);
                   } else {
                     travelTimeMin = Math.round(travelSeconds / 60);
-                    // context.log(`🗺️ Restid Apple Maps: ${travelTimeMin} min (${origin} → ${destination})`);
                   }
+                  debugLog(`🗺️ Restid från Apple Maps: ${travelTimeMin} min (${origin} → ${destination} @ ${hourKey}:00)`);
                 } catch (err) {
                   context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
                 }
@@ -509,6 +509,13 @@ module.exports = async function (context, req) {
     context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
 
     debugLog(`✅ getavailableslots klar med ${chosen.length} slots`);
+    // --- Summerad loggning av varför slots har avvisats (om isDebug) ---
+    if (isDebug && typeof skipReasons !== 'undefined') {
+      for (const [reason, count] of Object.entries(skipReasons)) {
+        context.log(`📉 ${reason}: ${count} st`);
+      }
+      context.log(`📈 Totalt tillagda slots: ${slotCount}`);
+    }
     context.res = {
       status: 200,
       headers: {
