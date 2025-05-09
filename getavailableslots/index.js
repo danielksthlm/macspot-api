@@ -147,6 +147,7 @@ module.exports = async function (context, req) {
       date.setDate(today.getDate() + i);
       return date;
     });
+    debugLog(`📆 Antal dagar att bearbeta: ${days.length}`);
 
     if (!email || !meeting_type || !meeting_length) {
       context.res = {
@@ -418,9 +419,12 @@ module.exports = async function (context, req) {
       // context.log(`🏆 Bästa slot för ${key}: ${best.slot_iso} (score ${best.score})`);
       chosen.push(best);
     }
+    debugLog(`📦 Slots genererade: ${chosen.length}`);
 
-    // const elapsedMs = Date.now() - startTimeMs;
-    // context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
+    if (isDebug) {
+      const elapsedMs = Date.now() - startTimeMs;
+      context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
+    }
 
     context.res = {
       status: 200,
