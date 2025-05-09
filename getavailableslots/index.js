@@ -226,16 +226,16 @@ module.exports = async function (context, req) {
             return;
           }
 
+          // Debug-logg före filtrering av veckodagar för atClient
           if (meeting_type === 'atClient') {
-            debugLog(`🔎 Kontroll av veckodag: ${weekdayName}`);
-            debugLog(`📋 Tillåtna dagar för atClient: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
+            debugLog(`📅 Dagens namn: ${weekdayName}, tillåtna dagar: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
           }
           if (
             meeting_type === 'atClient' &&
             Array.isArray(settings.allowed_atClient_meeting_days) &&
             !settings.allowed_atClient_meeting_days.includes(weekdayName)
           ) {
-            context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
+            context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient. Tillåtna: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
             return;
           }
 
