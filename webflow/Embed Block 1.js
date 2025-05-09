@@ -99,14 +99,14 @@
 
   // Render meeting length radio buttons for a given meeting type
   function renderMeetingLengths(type) {
-    const slotContainer = document.getElementById('time_slot_items');
+    const slotContainer = document.getElementById('time_slot_select');
     if (!slotContainer) return;
     slotContainer.innerHTML = '';
 
-    const values = (lengths && lengths[type]) ? lengths[type] : [60]; // fallback om inget definierat
+    const values = (lengths && lengths[type]) ? lengths[type] : [90]; // fallback om inget definierat
     values.forEach(value => {
       const cell = document.createElement('div');
-      cell.className = 'radio-button-items';
+      cell.className = 'radio-button-items'; // one grid cell
 
       const label = document.createElement('label');
       label.className = 'radio-button-items';
@@ -121,12 +121,6 @@
 
       const text = document.createElement('span');
       text.textContent = ` ${value} min`;
-      text.style.display = 'block';
-      text.style.marginLeft = '10px';
-      text.style.marginTop = '-20px';
-      text.style.lineHeight = '1.4';
-      text.style.paddingLeft = '8px';
-
       label.appendChild(input);
       label.appendChild(text);
       cell.appendChild(label);
@@ -577,18 +571,6 @@
         cursor: pointer;
       }
       .calendar-day.selected {
-        background-color: #00796b;
-        color: white;
-      }
-      .time-slot {
-        margin: 5px;
-        padding: 8px 12px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        cursor: pointer;
-        background: white;
-      }
-      .time-slot.selected {
         background-color: #00796b;
         color: white;
       }
