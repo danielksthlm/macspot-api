@@ -228,7 +228,7 @@ module.exports = async function (context, req) {
 
           // Debug-logg före filtrering av veckodagar för atClient
           if (meeting_type === 'atClient') {
-            debugLog(`📅 Dagens namn: ${weekdayName}, tillåtna dagar: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
+            debugLog(`🧪 Kontroll av veckodag '${weekdayName}' mot ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
           }
           if (
             meeting_type === 'atClient' &&
