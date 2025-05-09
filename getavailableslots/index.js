@@ -104,6 +104,7 @@ module.exports = async function (context, req) {
     debugLog('⏱️ Efter env och pool: ' + (Date.now() - t0) + ' ms');
 
     const { email, meeting_type, meeting_length } = req.body || {};
+    debugLog(`📨 Begäran mottagen med meeting_type: ${meeting_type}, meeting_length: ${meeting_length}, email: ${email}`);
 
     const db = await pool.connect();
 
