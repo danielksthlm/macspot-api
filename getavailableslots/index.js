@@ -80,6 +80,7 @@ module.exports = async function (context, req) {
     const fetch = require('node-fetch');
     debugLog('🏁 Börjar getavailableslots');
     const t0 = Date.now();
+    const travelCache = new Map(); // key: from|to|hour
 
     const slotMap = {}; // dag_fm eller dag_em → array av { iso, score, require_approval }
 
@@ -276,7 +277,7 @@ module.exports = async function (context, req) {
               requireApprovalForThisSlot = true;
             }
 
-            // --- CACHE: Kontrollera om restiden redan finns i databasen ---
+            // --- CACHE: Kontrollera om restiden redan finns i minnescache/databasen ---
             let cacheHit = false;
             const origin = meeting_type === 'atClient'
               ? settings.default_office_address
@@ -284,21 +285,28 @@ module.exports = async function (context, req) {
             const destination = meeting_type === 'atClient'
               ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city
               : settings.default_office_address;
+            const hourKey = slotTime.getUTCHours();
+            const cacheKey = `${origin}|${destination}|${hourKey}`;
             try {
-              const hourKey = slotTime.getUTCHours();
-              const cacheRes = await db.query(
-                `SELECT travel_minutes FROM travel_time_cache
-                 WHERE from_address = $1 AND to_address = $2 AND hour = $3
-                 LIMIT 1`,
-                [origin, destination, hourKey]
-              );
-              if (cacheRes.rows.length > 0) {
-                travelTimeMin = cacheRes.rows[0].travel_minutes;
+              if (travelCache.has(cacheKey)) {
+                travelTimeMin = travelCache.get(cacheKey);
                 cacheHit = true;
-                context.log(`⚡ Cache hit: ${origin} → ${destination} @ ${hourKey}:00 = ${travelTimeMin} min`);
-              }
-              else {
-                context.log(`⏳ Cache miss: ${origin} → ${destination} @ ${hourKey}:00`);
+                context.log(`⚡ Cache hit (minne): ${origin} → ${destination} @ ${hourKey}:00 = ${travelTimeMin} min`);
+              } else {
+                const cacheRes = await db.query(
+                  `SELECT travel_minutes FROM travel_time_cache
+                   WHERE from_address = $1 AND to_address = $2 AND hour = $3
+                   LIMIT 1`,
+                  [origin, destination, hourKey]
+                );
+                if (cacheRes.rows.length > 0) {
+                  travelTimeMin = cacheRes.rows[0].travel_minutes;
+                  cacheHit = true;
+                  travelCache.set(cacheKey, travelTimeMin);
+                  context.log(`⚡ Cache hit (db): ${origin} → ${destination} @ ${hourKey}:00 = ${travelTimeMin} min`);
+                } else {
+                  context.log(`⏳ Cache miss: ${origin} → ${destination} @ ${hourKey}:00`);
+                }
               }
             } catch (err) {
               context.log(`⚠️ Kunde inte läsa från restidscache: ${err.message}`);
@@ -334,6 +342,8 @@ module.exports = async function (context, req) {
             if (!cacheHit && travelTimeMin < Number.MAX_SAFE_INTEGER) {
               try {
                 const hour = slotTime.getUTCHours();
+                // Lägg till till minnescache
+                travelCache.set(cacheKey, travelTimeMin);
                 await db.query(`
                   INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
                   VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -394,6 +404,9 @@ module.exports = async function (context, req) {
                   // --- Cacha returrestid ---
                   try {
                     const hour = prevEnd.getUTCHours();
+                    // Lägg till till minnescache även för retur
+                    const returnCacheKey = `${from}|${to}|${hour}`;
+                    travelCache.set(returnCacheKey, returnMinutes);
                     await db.query(`
                       INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
                       VALUES ($1, $2, $3, $4, NOW(), NOW())
