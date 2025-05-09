@@ -230,7 +230,7 @@ module.exports = async function (context, req) {
             Array.isArray(settings.allowed_atClient_meeting_days) &&
             !settings.allowed_atClient_meeting_days.includes(weekdayName)
           ) {
-            // context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
+            context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient`);
             return;
           }
 

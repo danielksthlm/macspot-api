@@ -309,10 +309,14 @@
           if (Array.isArray(slotData.slots)) {
             const grouped = {};
             slotData.slots.forEach(slot => {
-              const [date, time] = slot.slot_iso.split('T');
-              const cleanTime = time.slice(0, 5);
+              // Parse slot_iso as local date and time for accurate timezone placement
+              const localDate = new Date(slot.slot_iso);
+              const date = localDate.getFullYear() + '-' +
+                           String(localDate.getMonth() + 1).padStart(2, '0') + '-' +
+                           String(localDate.getDate()).padStart(2, '0');
+              const time = localDate.toTimeString().slice(0, 5);
               if (!grouped[date]) grouped[date] = [];
-              grouped[date].push(cleanTime);
+              grouped[date].push(time);
             });
             window.setAvailableSlots(grouped);
           }
@@ -428,7 +432,7 @@
       const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
       // Corrected startOffset calculation for week starting on Monday:
-      const startOffset = (firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1);
+      const startOffset = (firstDay.getDay() + 6) % 7;
       if (startOffset !== 0) {
         for (let i = 0; i < startOffset; i++) {
           const placeholder = document.createElement('div');
@@ -453,10 +457,10 @@
         if (isPast) {
           dayEl.classList.add('unavailable');
           dayEl.style.color = '#ccc';
-          dayEl.style.pointerEvents = 'none';
         } else if (availableSlots[isoDate] && availableSlots[isoDate].length > 0) {
           dayEl.classList.add('available');
           dayEl.style.cursor = 'pointer';
+          dayEl.style.pointerEvents = 'auto';
           dayEl.addEventListener('click', () => {
             highlightDate(dayEl);
             renderTimes(availableSlots[isoDate]);
@@ -488,6 +492,23 @@
     function renderTimes(times) {
       timesWrapper.innerHTML = '';
       times.forEach(time => {
+        // --- BEGIN: Show weekday and date label before each time ---
+        const selectedDateEl = document.querySelector('.calendar-day.selected');
+        if (selectedDateEl) {
+          const selectedDay = selectedDateEl.textContent.padStart(2, '0');
+          const year = currentMonth.getFullYear();
+          const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
+          const date = new Date(`${year}-${month}-${selectedDay}`);
+          const weekday = date.toLocaleDateString('sv-SE', { weekday: 'long' });
+          const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${selectedDay} ${date.toLocaleDateString('sv-SE', { month: 'short' })}`;
+          const label = document.createElement('div');
+          label.style.fontSize = '0.75rem';
+          label.style.color = '#555';
+          label.style.marginBottom = '2px';
+          label.textContent = formatted;
+          timesWrapper.appendChild(label);
+        }
+        // --- END: Show weekday and date label before each time ---
         const timeEl = document.createElement('button');
         timeEl.type = 'button';
         timeEl.className = 'time-slot';
