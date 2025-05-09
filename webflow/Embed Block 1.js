@@ -99,29 +99,42 @@
 
   // Render meeting length radio buttons for a given meeting type
   function renderMeetingLengths(type) {
-    const container = document.getElementById('meeting_type_select');
-    if (!container) return;
-    let meetingLengthWrapper = document.getElementById('meeting_length_wrapper') || document.createElement('div');
-    meetingLengthWrapper.id = 'meeting_length_wrapper';
-    meetingLengthWrapper.className = 'field';
-    meetingLengthWrapper.style.display = 'block';
-    meetingLengthWrapper.innerHTML = '';
+    const slotContainer = document.getElementById('time_slot_items');
+    if (!slotContainer) return;
+    slotContainer.innerHTML = '';
 
     const values = (lengths && lengths[type]) ? lengths[type] : [60]; // fallback om inget definierat
     values.forEach(value => {
+      const cell = document.createElement('div');
+      cell.className = 'radio-button-items';
+
       const label = document.createElement('label');
-      label.style.marginRight = '10px';
+      label.className = 'radio-button-items';
+
       const input = document.createElement('input');
       input.type = 'radio';
       input.name = 'meeting_length';
       input.value = value;
+      input.className = 'radio-button-items';
       if (value === values[0]) input.checked = true;
       input.addEventListener('change', validateAndRenderCustomerFields);
+
+      const text = document.createElement('span');
+      text.textContent = ` ${value} min`;
+      text.style.display = 'block';
+      text.style.marginLeft = '10px';
+      text.style.marginTop = '-20px';
+      text.style.lineHeight = '1.4';
+      text.style.paddingLeft = '8px';
+
       label.appendChild(input);
-      label.append(` ${value} min`);
-      meetingLengthWrapper.appendChild(label);
+      label.appendChild(text);
+      cell.appendChild(label);
+      slotContainer.appendChild(cell);
     });
-    container.parentElement?.appendChild(meetingLengthWrapper);
+
+    const wrapper = document.getElementById('time_slot_group');
+    if (wrapper) wrapper.style.display = 'block';
   }
 
   function validateEmail() {
