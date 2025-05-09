@@ -202,7 +202,7 @@ module.exports = async function (context, req) {
             const slotEndTime = new Date(slotTime.getTime() + meeting_length * 60000);
 
             if (slotTime < lunchEnd && slotEndTime > lunchStart) {
-              // context.log(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
+              debugLog(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
               continue;
             }
 
@@ -234,7 +234,7 @@ module.exports = async function (context, req) {
             }
 
             if (isTooClose) {
-              // context.log(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
+              debugLog(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
               continue;
             }
 
@@ -255,7 +255,7 @@ module.exports = async function (context, req) {
             const maxMinutes = settings.max_weekly_booking_minutes || 99999;
 
             if (bookedMinutes + meeting_length > maxMinutes) {
-              // context.log(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids (${bookedMinutes} + ${meeting_length} > ${maxMinutes})`);
+              debugLog(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids (${bookedMinutes} + ${meeting_length} > ${maxMinutes})`);
               continue;
             }
 
@@ -264,8 +264,8 @@ module.exports = async function (context, req) {
 
             let requireApprovalForThisSlot = false;
             if (travelStart.getHours() < windowStartHour || travelEnd.getHours() > windowEndHour) {
+              debugLog(`⚠️ Slot ${slotTime.toISOString()} kräver godkännande – utanför restidsfönster`);
               requireApprovalForThisSlot = true;
-              // context.log(`⚠️ Slot ${slotTime.toISOString()} markeras med require_approval: true pga resa utanför fönster (${travelStart.toISOString()}–${travelEnd.toISOString()})`);
             }
 
             // --- CACHE: Kontrollera om restiden redan finns i databasen ---
@@ -342,7 +342,7 @@ module.exports = async function (context, req) {
             // Kontrollera om restiden möjliggör ankomst i tid
             const travelBufferMs = travelTimeMin * 60000;
             if (slotStart - Date.now() < travelBufferMs) {
-              // context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – restid (${travelTimeMin} min) möjliggör inte ankomst i tid`);
+              debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – restid (${travelTimeMin} min) möjliggör inte ankomst i tid`);
               continue;
             }
 
@@ -399,7 +399,7 @@ module.exports = async function (context, req) {
                   // --- Slut cache returrestid ---
 
                   if (arrivalTime > slotTime) {
-                    // context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
+                    debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
                     continue;
                   }
                 } catch (err) {
