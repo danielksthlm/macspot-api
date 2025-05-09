@@ -275,7 +275,10 @@ module.exports = async function (context, req) {
               if (cacheRes.rows.length > 0) {
                 travelTimeMin = cacheRes.rows[0].travel_minutes;
                 cacheHit = true;
-                // Behåll ej info-logg av cache-hit
+                context.log(`⚡ Cache hit: ${origin} → ${destination} @ ${hourKey}:00 = ${travelTimeMin} min`);
+              }
+              else {
+                context.log(`⏳ Cache miss: ${origin} → ${destination} @ ${hourKey}:00`);
               }
             } catch (err) {
               context.log(`⚠️ Kunde inte läsa från restidscache: ${err.message}`);
@@ -376,7 +379,7 @@ module.exports = async function (context, req) {
                       ON CONFLICT (from_address, to_address, hour)
                       DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
                     `, [from, to, hour, returnMinutes]);
-                    // context.log(`💾 Returrestid sparad i cache: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
+                    context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
                   } catch (err) {
                     context.log(`⚠️ Kunde inte spara returrestid till cache: ${err.message}`);
                   }
