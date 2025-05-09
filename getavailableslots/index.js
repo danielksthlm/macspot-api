@@ -19,7 +19,7 @@ function verifyBookingSettings(settings, context) {
     max_days_in_advance: 'number',
     max_weekly_booking_minutes: 'number',
     cache_ttl_minutes: 'number',
-    allowed_atClient_meeting_days: 'object',
+    allowed_atClient_meeting_days: 'array',
     timezone: 'string'
   };
 
@@ -36,7 +36,7 @@ function verifyBookingSettings(settings, context) {
       if (typeof val !== 'boolean') {
         issues.push(`⚠️ Typfel för ${key}: ska vara boolean`);
       }
-    } else if (typeof val !== type) {
+    } else if (type === 'array' ? !Array.isArray(val) : typeof val !== type) {
       issues.push(`⚠️ Typfel för ${key}: har ${typeof val}, förväntade ${type}`);
     }
   }
