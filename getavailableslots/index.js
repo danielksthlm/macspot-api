@@ -162,17 +162,32 @@ module.exports = async function (context, req) {
     const startDateStr = days[0].toISOString().split('T')[0];
     const endDateStr = days[days.length - 1].toISOString().split('T')[0];
     const allBookingsRes = await db.query(
-      'SELECT start_time, end_time FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
+      'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
       [startDateStr, endDateStr]
     );
     const allBookings = allBookingsRes.rows.map(b => ({
       start: new Date(b.start_time).getTime(),
       end: new Date(b.end_time).getTime(),
-      date: new Date(b.start_time).toISOString().split('T')[0]
+      date: new Date(b.start_time).toISOString().split('T')[0],
+      meeting_type: b.meeting_type
     }));
     for (const booking of allBookings) {
       if (!bookingsByDay[booking.date]) bookingsByDay[booking.date] = [];
       bookingsByDay[booking.date].push({ start: booking.start, end: booking.end });
+    }
+    // --- Summera bokade minuter per vecka & mötestyp ---
+    const weeklyMinutesByType = {};
+    const weekKey = (date) => {
+      const start = new Date(date);
+      start.setUTCHours(0, 0, 0, 0);
+      start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+      return start.toISOString().split('T')[0];
+    };
+    for (const b of allBookings) {
+      const type = b.meeting_type || 'unknown';
+      const week = weekKey(b.start);
+      weeklyMinutesByType[type] = weeklyMinutesByType[type] || {};
+      weeklyMinutesByType[type][week] = (weeklyMinutesByType[type][week] || 0) + (b.end - b.start) / 60000;
     }
 
     if (!email || !meeting_type || !meeting_length) {
@@ -219,7 +234,7 @@ module.exports = async function (context, req) {
             return;
           }
 
-          for (const hour of [10, 14]) {
+          await Promise.all([10, 14].map(async (hour) => {
             debugLog(`🕑 Bearbetar datum ${dateStr}, timmar: 10 och 14`);
             const slotTime = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:00:00Z`);
 
@@ -229,7 +244,7 @@ module.exports = async function (context, req) {
 
             if (slotTime < lunchEnd && slotEndTime > lunchStart) {
               debugLog(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
-              continue;
+              return;
             }
 
             // Ersatt daglig DB-fråga: om ingen bokning för dagen, sätt till tom array
@@ -253,28 +268,17 @@ module.exports = async function (context, req) {
 
             if (isTooClose) {
               debugLog(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
-              continue;
+              return;
             }
 
-            const weekStart = new Date(slotTime);
-            weekStart.setUTCHours(0, 0, 0, 0);
-            weekStart.setUTCDate(slotTime.getUTCDate() - slotTime.getUTCDay()); // söndag
-            const weekEnd = new Date(weekStart);
-            weekEnd.setUTCDate(weekStart.getUTCDate() + 7);
-
-            const weekRes = await db.query(
-              `SELECT SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) AS minutes
-               FROM bookings
-               WHERE meeting_type = $1 AND start_time >= $2 AND start_time < $3`,
-              [meeting_type, weekStart.toISOString(), weekEnd.toISOString()]
-            );
-
-            const bookedMinutes = parseInt(weekRes.rows[0].minutes) || 0;
+            // --- Hämta bokade minuter för veckan och mötestyp från minnesstruktur ---
+            const weekKeyStr = weekKey(slotTime);
+            const bookedMinutes = (weeklyMinutesByType[meeting_type] || {})[weekKeyStr] || 0;
             const maxMinutes = settings.max_weekly_booking_minutes || 99999;
 
             if (bookedMinutes + meeting_length > maxMinutes) {
               debugLog(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids (${bookedMinutes} + ${meeting_length} > ${maxMinutes})`);
-              continue;
+              return;
             }
 
             const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
@@ -370,7 +374,7 @@ module.exports = async function (context, req) {
             const travelBufferMs = travelTimeMin * 60000;
             if (slotStart - Date.now() < travelBufferMs) {
               debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – restid (${travelTimeMin} min) möjliggör inte ankomst i tid`);
-              continue;
+              return;
             }
 
             const existing = bookingsByDay[dateStr];
@@ -397,40 +401,45 @@ module.exports = async function (context, req) {
 
               if (accessToken) {
                 try {
-                  const url = new URL('https://maps-api.apple.com/v1/directions');
-                  url.searchParams.append('origin', from);
-                  url.searchParams.append('destination', to);
-                  url.searchParams.append('transportType', 'automobile');
-                  url.searchParams.append('departureTime', prevEnd.toISOString());
+                  // Rensa bort och undvik att spara returrestid om from och to är identiska
+                  if (from === to) {
+                    context.log(`💾 Returrestid är 0 min (${from} → ${to}) – ingen cache behövs`);
+                  } else {
+                    const url = new URL('https://maps-api.apple.com/v1/directions');
+                    url.searchParams.append('origin', from);
+                    url.searchParams.append('destination', to);
+                    url.searchParams.append('transportType', 'automobile');
+                    url.searchParams.append('departureTime', prevEnd.toISOString());
 
-                  const res = await fetch(url.toString(), {
-                    headers: { Authorization: `Bearer ${accessToken}` }
-                  });
-                  const data = await res.json();
-                  const returnMinutes = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
-                  const arrivalTime = new Date(prevEnd.getTime() + returnMinutes * 60000);
+                    const res = await fetch(url.toString(), {
+                      headers: { Authorization: `Bearer ${accessToken}` }
+                    });
+                    const data = await res.json();
+                    const returnMinutes = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
+                    const arrivalTime = new Date(prevEnd.getTime() + returnMinutes * 60000);
 
-                  // --- Cacha returrestid ---
-                  try {
-                    const hour = prevEnd.getUTCHours();
-                    // Lägg till till minnescache även för retur
-                    const returnCacheKey = `${from}|${to}|${hour}`;
-                    travelCache.set(returnCacheKey, returnMinutes);
-                    await db.query(`
-                      INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
-                      VALUES ($1, $2, $3, $4, NOW(), NOW())
-                      ON CONFLICT (from_address, to_address, hour)
-                      DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
-                    `, [from, to, hour, returnMinutes]);
-                    context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
-                  } catch (err) {
-                    context.log(`⚠️ Kunde inte spara returrestid till cache: ${err.message}`);
-                  }
-                  // --- Slut cache returrestid ---
+                    // --- Cacha returrestid ---
+                    try {
+                      const hour = prevEnd.getUTCHours();
+                      // Lägg till till minnescache även för retur
+                      const returnCacheKey = `${from}|${to}|${hour}`;
+                      travelCache.set(returnCacheKey, returnMinutes);
+                      await db.query(`
+                        INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
+                        VALUES ($1, $2, $3, $4, NOW(), NOW())
+                        ON CONFLICT (from_address, to_address, hour)
+                        DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+                      `, [from, to, hour, returnMinutes]);
+                      context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
+                    } catch (err) {
+                      context.log(`⚠️ Kunde inte spara returrestid till cache: ${err.message}`);
+                    }
+                    // --- Slut cache returrestid ---
 
-                  if (arrivalTime > slotTime) {
-                    debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
-                    continue;
+                    if (arrivalTime > slotTime) {
+                      debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
+                      return;
+                    }
                   }
                 } catch (err) {
                   context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
@@ -445,7 +454,7 @@ module.exports = async function (context, req) {
               travel_time_min: travelTimeMin
             });
             slotCount++;
-          }
+          }));
         })
       );
     }
