@@ -496,7 +496,6 @@
           const selectedDateEl = document.querySelector('.calendar-day.selected');
           if (selectedDateEl) {
             const selectedDay = selectedDateEl.textContent.padStart(2, '0');
-            // Use currentMonth for year/month
             const year = currentMonth.getFullYear();
             const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
             const dateIso = `${year}-${month}-${selectedDay}`;
