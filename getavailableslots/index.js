@@ -179,6 +179,7 @@ module.exports = async function (context, req) {
     // Parallellisera dag-loop i chunkar om 28
     const chunkSize = 28;
     debugLog('🔁 Startar slot-loop i chunkar');
+    let slotCount = 0;
     for (let i = 0; i < days.length; i += chunkSize) {
       const chunk = days.slice(i, i + chunkSize);
       const results = await Promise.allSettled(
@@ -421,16 +422,29 @@ module.exports = async function (context, req) {
               require_approval: requireApprovalForThisSlot,
               travel_time_min: travelTimeMin
             });
+            slotCount++;
           }
         })
       );
     }
     const t4 = Date.now();
+    debugLog(`🧮 Slot-loop tog totalt: ${t4 - t3} ms`);
     debugLog('⏱️ Efter slot-loop: ' + (Date.now() - t0) + ' ms');
+
+    if (isDebug) {
+      const totalSlots = Object.values(slotMap).flat().length;
+      const cacheHits = Object.values(slotMap).flat().filter(s => s.travel_time_min && s.travel_time_min !== settings.fallback_travel_time_minutes).length;
+      const requireApprovalCount = Object.values(slotMap).flat().filter(s => s.require_approval).length;
+
+      context.log(`📊 Totalt genererade slots: ${totalSlots}`);
+      context.log(`⚡ Slots med cacheträff: ${cacheHits}`);
+      context.log(`🛑 Slots som kräver godkännande: ${requireApprovalCount}`);
+    }
 
     // --- Summerad loggning av varför slots har avvisats (om isDebug) ---
     if (isDebug) {
       const skipReasons = {};
+      // slotCount already declared above
       const originalDebugLog = debugLog;
       debugLog = (msg) => {
         if (msg.startsWith('⛔') || msg.startsWith('🍽️') || msg.startsWith('📛')) {
@@ -444,6 +458,7 @@ module.exports = async function (context, req) {
         for (const [reason, count] of Object.entries(skipReasons)) {
           context.log(`📉 ${reason}: ${count} st`);
         }
+        context.log(`📈 Totalt tillagda slots: ${slotCount}`);
       });
     }
 
