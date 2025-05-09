@@ -194,8 +194,8 @@ module.exports = async function (context, req) {
     const t3 = Date.now();
     debugLog('⏱️ Efter Apple Maps token: ' + (Date.now() - t0) + ' ms');
 
-    // Parallellisera dag-loop i chunkar om 14
-    const chunkSize = 14;
+    // Parallellisera dag-loop i chunkar om 28
+    const chunkSize = 28;
     debugLog('🔁 Startar slot-loop i chunkar');
     let slotCount = 0;
     for (let i = 0; i < days.length; i += chunkSize) {
@@ -219,7 +219,7 @@ module.exports = async function (context, req) {
             return;
           }
 
-          await Promise.all([10, 14].map(async (hour) => {
+          for (const hour of [10, 14]) {
             debugLog(`🕑 Bearbetar datum ${dateStr}, timmar: 10 och 14`);
             const slotTime = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:00:00Z`);
 
@@ -321,12 +321,6 @@ module.exports = async function (context, req) {
               context.log(`⚠️ Kunde inte läsa från restidscache: ${err.message}`);
             }
             // --- SLUT CACHE ---
-            // Skippa om origin och destination är samma adress
-            if (origin === destination) {
-              context.log(`⏭️ Skipper restid ${origin} → ${destination} (samma adress)`);
-              travelTimeMin = 0;
-              cacheHit = true;
-            }
             if (!cacheHit) {
               if (!accessToken) {
                 context.log(`⚠️ Apple Maps-token saknas – använder fallback restid ${travelTimeMin} min`);
@@ -403,11 +397,6 @@ module.exports = async function (context, req) {
 
               if (accessToken) {
                 try {
-                  // Skippa returrestid om from och to är samma
-                  if (from === to) {
-                    context.log(`⏭️ Skipper returrestid för ${from} → ${to} (samma adress)`);
-                    return;
-                  }
                   const url = new URL('https://maps-api.apple.com/v1/directions');
                   url.searchParams.append('origin', from);
                   url.searchParams.append('destination', to);
@@ -441,7 +430,7 @@ module.exports = async function (context, req) {
 
                   if (arrivalTime > slotTime) {
                     debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
-                    return;
+                    continue;
                   }
                 } catch (err) {
                   context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
@@ -456,7 +445,7 @@ module.exports = async function (context, req) {
               travel_time_min: travelTimeMin
             });
             slotCount++;
-          }));
+          }
         })
       );
     }
