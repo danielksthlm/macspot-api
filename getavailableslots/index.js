@@ -246,6 +246,7 @@ module.exports = async function (context, req) {
             const lunchEnd = new Date(`${dateStr}T${settings.lunch_end || '13:15'}:00Z`);
             const slotEndTime = new Date(slotTime.getTime() + meeting_length * 60000);
 
+            debugLog(`🕵️ Kontroll: slot ${slotTime.toISOString()} till ${slotEndTime.toISOString()} vs lunch ${lunchStart.toISOString()}–${lunchEnd.toISOString()}`);
             if (slotTime < lunchEnd && slotEndTime > lunchStart) {
               debugLog(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
               return;
