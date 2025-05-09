@@ -225,6 +225,10 @@ module.exports = async function (context, req) {
             return;
           }
 
+          if (meeting_type === 'atClient') {
+            context.log(`🔎 Kontroll av veckodag: ${weekdayName}`);
+            context.log(`📋 Tillåtna dagar för atClient: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
+          }
           if (
             meeting_type === 'atClient' &&
             Array.isArray(settings.allowed_atClient_meeting_days) &&
