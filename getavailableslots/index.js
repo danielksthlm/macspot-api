@@ -79,6 +79,7 @@ module.exports = async function (context, req) {
     const { Pool } = require('pg');
     const fetch = require('node-fetch');
     const startTimeMs = Date.now();
+    debugLog('🏁 Börjar getavailableslots');
 
     const slotMap = {}; // dag_fm eller dag_em → array av { iso, score, require_approval }
 
@@ -131,6 +132,7 @@ module.exports = async function (context, req) {
     }
     debugLog(`⚙️ Inställningar laddade: ${Object.keys(settings).join(', ')}`);
     verifyBookingSettings(settings, context);
+    debugLog('⚙️ Inställningar klara');
 
     const bookingsByDay = {};
     const slotGroupPicked = {};
@@ -148,6 +150,7 @@ module.exports = async function (context, req) {
       return date;
     });
     debugLog(`📆 Antal dagar att bearbeta: ${days.length}`);
+    debugLog('📅 Dagar genererade för bearbetning');
 
     if (!email || !meeting_type || !meeting_length) {
       context.res = {
@@ -168,6 +171,7 @@ module.exports = async function (context, req) {
 
     // Parallellisera dag-loop i chunkar om 28
     const chunkSize = 28;
+    debugLog('🔁 Startar slot-loop i chunkar');
     for (let i = 0; i < days.length; i += chunkSize) {
       const chunk = days.slice(i, i + chunkSize);
       const results = await Promise.allSettled(
@@ -190,6 +194,7 @@ module.exports = async function (context, req) {
           }
 
           for (const hour of [10, 14]) {
+            debugLog(`🕑 Bearbetar datum ${dateStr}, timmar: 10 och 14`);
             const slotTime = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:00:00Z`);
 
             const lunchStart = new Date(`${dateStr}T${settings.lunch_start || '11:45'}:00Z`);
@@ -349,6 +354,7 @@ module.exports = async function (context, req) {
 
             const key = `${dateStr}_${hour < 12 ? 'fm' : 'em'}`;
             if (!slotMap[key]) slotMap[key] = [];
+            debugLog(`✅ Slot tillagd: ${key}`);
 
             // Kontrollera om retur från tidigare möte till denna slot fungerar
             const previous = bookingsByDay[dateStr]
@@ -426,6 +432,7 @@ module.exports = async function (context, req) {
       context.log(`⏱️ Total exekveringstid: ${elapsedMs} ms`);
     }
 
+    debugLog(`✅ getavailableslots klar med ${chosen.length} slots`);
     context.res = {
       status: 200,
       headers: {
@@ -436,6 +443,7 @@ module.exports = async function (context, req) {
       }
     };
   } catch (error) {
+    debugLog(`💥 Fel uppstod: ${error.message}`);
     context.log('🔥 FEL:', error.message, '\nSTACK:', error.stack);
     context.res = {
       status: 500,
