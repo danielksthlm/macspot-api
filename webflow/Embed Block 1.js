@@ -1,25 +1,77 @@
-<script>
-  // === ID-Matris: Fält och deras start-synlighet (från Webflow/CSS) ===
-  // ID               | Start-synlighet
-  // -----------------|----------------
-  // booking_email    | visible
-  // meeting_type_group | visible (visas efter e-post)
-  // meeting_type_select | visible
-  // company          | display: none
-  // first_name       | display: none
-  // last_name        | display: none
-  // phone            | display: none
-  // address          | display: none
-  // postal_code      | display: none
-  // city             | display: none
-  // country          | display: none
-  // missing_fields_messages | visible
-  // contact_validation_loading | hidden (visas vid API-anrop)
-  // contact-update-button | hidden (visas vid ifyllda fält)
-  // Meeting type lengths will be loaded from backend and kept in this scope
-  let lengths = {};
+// Kontrollerar om alla tre kundfält är ifyllda och triggar initCalendarAndSlots vid behov.
+function checkClientReady() {
+  // Cache DOM lookups
+  const cltEmailEl = document.getElementById('clt_email');
+  const cltMeetingTypeEl = document.getElementById('clt_meetingtype');
+  const cltMeetingLengthEl = document.getElementById('clt_meetinglength');
+  const cltReady = document.getElementById('clt_ready');
 
-  async function loadMeetingTypes() {
+  const cltEmail = cltEmailEl?.value.trim();
+  const cltMeetingType = cltMeetingTypeEl?.value.trim();
+  const cltMeetingLength = cltMeetingLengthEl?.value.trim();
+  const isReady = cltEmail && cltMeetingType && cltMeetingLength;
+  if (cltReady) cltReady.value = isReady ? 'true' : 'false';
+
+  if (isReady) {
+    try {
+      if (!window.formState) window.formState = {};
+      window.formState.email = cltEmail;
+      window.formState.meeting_type = cltMeetingType;
+      window.formState.meeting_length = parseInt(cltMeetingLength, 10) || 90;
+      fetch('https://macspotbackend.azurewebsites.net/api/getavailableslots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cltEmail,
+          meeting_type: cltMeetingType,
+          meeting_length: parseInt(cltMeetingLength, 10) || 90
+        })
+      })
+      .then(res => res.json())
+      .then(slotData => {
+        if (Array.isArray(slotData.slots)) {
+          const grouped = {};
+          slotData.slots.forEach(slot => {
+            const localDate = new Date(slot.slot_iso);
+            const localYear = localDate.getFullYear();
+            const localMonth = String(localDate.getMonth() + 1).padStart(2, '0');
+            const localDay = String(localDate.getDate()).padStart(2, '0');
+            const date = `${localYear}-${localMonth}-${localDay}`;
+            const time = localDate.toTimeString().slice(0, 5);
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push(time);
+          });
+          requestAnimationFrame(() => {
+            const calendarWrapper = document.getElementById('calendar_wrapper');
+            if (calendarWrapper) {
+              calendarWrapper.classList.add('visible-calendar');
+              calendarWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            if (calendarWrapper && calendarWrapper.offsetParent !== null) {
+              window.setAvailableSlots(grouped);
+            }
+          });
+// Wrapperfunktion för att trigga checkClientReady
+function triggerClientReadyCheck() {
+  checkClientReady();
+}
+        }
+      })
+      .catch(err => {
+        console.error('Kunde inte hämta tillgängliga tider:', err);
+      });
+      // Removed duplicate: calendarWrapper.classList.add('visible-calendar') and scrollIntoView
+    } catch (err) {
+      console.error('Fel vid initiering av kalender och slots:', err);
+    }
+  } else {
+    console.log('⏳ Väntar – inte alla fält är ifyllda ännu');
+  }
+}
+<script>
+// Laddar mötestyper (t.ex. Zoom, Teams, atclient, atoffice) och renderar radio-knappar.
+// Syfte: Användaren väljer typ av möte, vilket styr tillgängliga tider och fält.
+async function loadMeetingTypes() {
     try {
       const res = await fetch('https://macspotbackend.azurewebsites.net/api/meeting_types');
       if (!res.ok) throw new Error('Failed to fetch meeting types');
@@ -30,10 +82,29 @@
       const container = document.getElementById('meeting_type_select');
       if (!container) return;
 
-      while (container.firstChild) {
-        container.removeChild(container.firstChild);
+      container.innerHTML = '';
+      // Rendera radio-knapp för varje mötestyp.
+      function createRadioElement({name, value, label, checked, onChange}) {
+        const cell = document.createElement('div');
+        cell.className = 'radio-button-items';
+        const labelEl = document.createElement('label');
+        labelEl.className = 'radio-button-items';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = name;
+        input.value = value;
+        input.className = 'radio-button-items';
+        if (checked) input.checked = true;
+        if (typeof onChange === 'function') input.addEventListener('change', onChange);
+        labelEl.appendChild(input);
+        const text = document.createElement('span');
+        text.textContent = ` ${label}`;
+        text.className = 'radio-label-text';
+        labelEl.appendChild(text);
+        cell.appendChild(labelEl);
+        return cell;
       }
-      (Array.isArray(types) ? types : JSON.parse(types)).forEach(type => {
+      (Array.isArray(types) ? types : JSON.parse(types)).forEach((type, idx) => {
         const value = type.toLowerCase();
         const labelText = type;
         const displayNames = {
@@ -44,40 +115,21 @@
           atoffice: 'Möte på mitt kontor i Stockholm'
         };
         const visibleLabel = displayNames.hasOwnProperty(value) ? displayNames[value] : labelText;
-
-        const cell = document.createElement('div');
-        cell.className = 'radio-button-items';
-
-        const label = document.createElement('label');
-        label.className = 'radio-button-items';
-
-        const input = document.createElement('input');
-        input.type = 'radio';
-        input.name = 'meeting_type';
-        input.value = value;
-        input.className = 'radio-button-items';
-
-        // Add event listener to handle meeting length rendering and validation
-        input.addEventListener('change', () => {
-          renderMeetingLengths(value);
-          validateAndRenderCustomerFields();
+        const checked = false; // ensure no meeting type is preselected
+        const radio = createRadioElement({
+          name: 'meeting_type',
+          value,
+          label: visibleLabel,
+          checked,
+          onChange: () => {
+            renderMeetingLengths(value);
+            validateAndRenderCustomerFields();
+          }
         });
-
-        label.appendChild(input);
-        const text = document.createElement('span');
-        text.textContent = ` ${visibleLabel}`;
-        text.style.display = 'block';
-        text.style.marginLeft = '10px';
-        text.style.marginTop = '-20px';
-        text.style.lineHeight = '1.4';
-        text.style.paddingLeft = '8px';
-        label.appendChild(text);
-        cell.appendChild(label);
-        container.appendChild(cell);
+        container.appendChild(radio);
       });
 
-      // Instead of old meetingLengthWrapper, render lengths for first type (if any)
-      // Find checked or first meeting type, else fallback to first in list
+      // Rendera längder för första (eller vald) mötestyp direkt.
       let selectedType = document.querySelector('input[name="meeting_type"]:checked')?.value;
       if (!selectedType && types.length > 0) {
         selectedType = types[0].toLowerCase();
@@ -97,56 +149,71 @@
     }
   }
 
-  // Render meeting length radio buttons for a given meeting type
+  // Renderar radio-knappar för möteslängd baserat på vald mötestyp.
   function renderMeetingLengths(type) {
     const slotContainer = document.getElementById('time_slot_select');
     if (!slotContainer) return;
     slotContainer.innerHTML = '';
 
     const values = (lengths && lengths[type]) ? lengths[type] : [90]; // fallback om inget definierat
-    values.forEach(value => {
+    function createMeetingLengthRadio(value, checked) {
       const cell = document.createElement('div');
-      cell.className = 'radio-button-items'; // one grid cell
-
-      const label = document.createElement('label');
-      label.className = 'radio-button-items';
-
+      cell.className = 'radio-button-items';
+      const labelEl = document.createElement('label');
+      labelEl.className = 'radio-button-items';
       const input = document.createElement('input');
       input.type = 'radio';
       input.name = 'meeting_length';
       input.value = value;
       input.className = 'radio-button-items';
-      if (value === values[0]) input.checked = true;
+      if (checked) input.checked = true;
       input.addEventListener('change', validateAndRenderCustomerFields);
-
+      labelEl.appendChild(input);
       const text = document.createElement('span');
       text.textContent = ` ${value} min`;
-      label.appendChild(input);
-      label.appendChild(text);
-      cell.appendChild(label);
-      slotContainer.appendChild(cell);
+      text.className = 'radio-label-text';
+      labelEl.appendChild(text);
+      cell.appendChild(labelEl);
+      return cell;
+    }
+    values.forEach((value, idx) => {
+      slotContainer.appendChild(createMeetingLengthRadio(value, false));
     });
 
     const wrapper = document.getElementById('time_slot_group');
-    if (wrapper) wrapper.style.display = 'block';
+    if (wrapper) wrapper.classList.add('visible-group');
   }
 
+  // Enkel e-postvalidering och styr visning av mötestypval.
   function validateEmail() {
     const emailEl = document.querySelector('#booking_email');
     const email = emailEl ? emailEl.value.trim() : '';
     const isValid = email.length > 0 && email.includes('@');
     const meetingTypeGroup = document.getElementById('meeting_type_group');
     if (meetingTypeGroup) {
-      meetingTypeGroup.style.display = isValid ? 'block' : 'none';
+      if (isValid) {
+        meetingTypeGroup.classList.add('visible-group');
+        meetingTypeGroup.classList.remove('hidden');
+      } else {
+        meetingTypeGroup.classList.remove('visible-group');
+        meetingTypeGroup.classList.add('hidden');
+      }
     }
     if (email.length > 0 && email.includes('@')) {
       loadMeetingTypes();
     }
+    // Dessa dolda fält används för att signalera att alla tre kunddata (email, mötestyp, längd) är ifyllda.
+    const cltEmail = document.getElementById('clt_email');
+    if (cltEmail) cltEmail.value = email;
     validateAndRenderCustomerFields();
   }
 
+  // Validerar kontaktuppgifter mot backend och renderar nödvändiga kontaktfält.
+  // Syfte: Säkerställa att alla obligatoriska fält är ifyllda innan bokning.
+  // Hanterar även logik för submit-knapp och sparar state i window.formState.
   async function validateAndRenderCustomerFields() {
     console.log('🔁 validateAndRenderCustomerFields() körs');
+    // Cache DOM lookups
     const emailEl = document.querySelector('#booking_email');
     const email = emailEl ? emailEl.value.trim() : '';
     const meetingTypeEl = document.querySelector('input[name="meeting_type"]:checked');
@@ -169,6 +236,16 @@
     const missingFieldsContainer = document.getElementById('missing_fields_messages');
     const submitButton = document.getElementById('contact-update-button');
     const loadingEl = document.getElementById('contact_validation_loading');
+    const cltEmail = document.getElementById('clt_email');
+    const cltMeetingType = document.getElementById('clt_meetingtype');
+    const cltMeetingLength = document.getElementById('clt_meetinglength');
+    const selectedLengthRadio = document.querySelector('input[name="meeting_length"]:checked');
+    const selectedLength = selectedLengthRadio ? parseInt(selectedLengthRadio.value, 10) : 90;
+
+    // Set hidden input values before checkClientReady for clarity
+    if (cltEmail) cltEmail.value = email;
+    if (cltMeetingType) cltMeetingType.value = meetingType;
+    if (cltMeetingLength) cltMeetingLength.value = selectedLength;
 
     // Clear previous missing field messages and remove .needs-filling classes
     if (missingFieldsContainer) {
@@ -178,16 +255,15 @@
       input.classList.remove('needs-filling');
     });
 
+    // Visa och validera endast om både e-post och mötestyp är angivna.
     if (!email || !meetingType) {
-      if (addressField) addressField.style.display = 'none';
-      if (submitButton) {
-        submitButton.style.display = 'none';
-      }
+      if (addressField) addressField.classList.add('hidden');
+      if (submitButton) submitButton.classList.add('hidden');
       return;
     }
 
     try {
-      if (loadingEl) loadingEl.style.display = 'block';
+      if (loadingEl) loadingEl.classList.add('loading-visible');
 
       const url = `https://macspotbackend.azurewebsites.net/api/validate_contact`;
       const response = await fetch(url, {
@@ -205,41 +281,34 @@
 
       const data = await response.json();
       console.log('✅ API JSON:', data);
-      // console.log('ℹ️ typeof missing_fields:', typeof data.missing_fields);
-      // console.log('🔎 missing_fields:', data.missing_fields);
       if (!('missing_fields' in data)) {
         console.log('✅ missing_fields inte nödvändigt – kunden är komplett');
       } else if (!Array.isArray(data.missing_fields)) {
         console.warn('⚠️ missing_fields finns men är inte en array');
       }
 
-
       if (data.missing_fields && Array.isArray(data.missing_fields)) {
         let firstFocusable = null;
         allFields.forEach(input => {
           const fieldName = input.id;
-          // console.log(`🧪 Kontroll: fieldName = '${fieldName}'`);
-          // console.log(`🔍 Finns i missing_fields?`, data.missing_fields.includes(fieldName));
           const isAddressField = ['address', 'postal_code', 'city', 'country'].includes(fieldName);
           const shouldShow = data.missing_fields.includes(fieldName) && (!isAddressField || meetingType === 'atclient');
           if (shouldShow) {
-            // console.log("👁️ Visar fält:", fieldName);
-            // console.log(`➡️ input.id = ${input.id}`);
-            // console.log(`➡️ input.style.display = ${input.style.display}`);
-            input.style.display = 'block';
+            input.classList.remove('hidden');
             input.classList.add('needs-filling');
             if (!input.value.trim() && !firstFocusable) {
               firstFocusable = input;
             }
             if (missingFieldsContainer) {
               const p = document.createElement('p');
-              p.style.color = 'red';
+              p.className = 'missing-field-message';
               const label = fieldLabels[fieldName] || fieldName;
               p.textContent = `Saknat fält: ${label}`;
               missingFieldsContainer.appendChild(p);
             }
           } else {
-            input.style.display = 'none';
+            input.classList.add('hidden');
+            input.classList.remove('needs-filling');
           }
         });
         if (firstFocusable) {
@@ -249,7 +318,11 @@
       }
 
       if (addressField) {
-        addressField.style.display = (meetingType === 'atclient') ? 'block' : 'none';
+        if (meetingType === 'atclient') {
+          addressField.classList.remove('hidden');
+        } else {
+          addressField.classList.add('hidden');
+        }
       }
 
       // Show submit button only if all visible fields have content
@@ -258,27 +331,23 @@
         return el.offsetParent !== null; // visible
       });
       allVisibleFilled = visibleInputs.every(input => input.value.trim());
-      // Button display logic moved just before formState assignment (see below)
 
       // --- Button display logic (refactored) ---
       if (submitButton) {
-        submitButton.style.display = 'none';
+        submitButton.classList.add('hidden');
         if (allVisibleFilled) {
           if (data.status === 'new_customer') {
-            submitButton.style.display = 'block';
-            submitButton.textContent = 'Spara kund';
-          } else {
-            // Befintlig kund med ny eller kompletterad data
-            submitButton.style.display = 'block';
-            submitButton.textContent = window.formState?.slot_iso ? 'Boka möte' : 'Uppdatera kund';
+            submitButton.classList.remove('hidden');
+            submitButton.textContent = 'Skapa';
+          } else if (data.status === 'existing_customer' && data.missing_fields.length > 0) {
+            submitButton.classList.remove('hidden');
+            submitButton.textContent = 'Uppdatera';
           }
         }
       }
 
       if (allVisibleFilled) {
-        // Get selected meeting length from radio buttons (default 90)
-        const selectedLengthRadio = document.querySelector('input[name="meeting_length"]:checked');
-        const selectedLength = selectedLengthRadio ? parseInt(selectedLengthRadio.value, 10) : 90;
+        // Spara nuvarande kontakt- och mötesdata i window.formState
         window.formState = {
           email,
           meeting_type: meetingType,
@@ -294,85 +363,56 @@
             country: document.getElementById('country')?.value || ''
           }
         };
-        // --- BEGIN: Fetch available slots and set in window.setAvailableSlots ---
-        try {
-          const slotRes = await fetch('https://macspotbackend.azurewebsites.net/api/getavailableslots', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email,
-              meeting_type: meetingType,
-              meeting_length: selectedLength
-            })
-          });
-          const slotData = await slotRes.json();
-          if (Array.isArray(slotData.slots)) {
-            const grouped = {};
-            slotData.slots.forEach(slot => {
-              // Parse slot_iso as local date and time for accurate timezone placement
-              const localDate = new Date(slot.slot_iso);
-              const date = localDate.getFullYear() + '-' +
-                           String(localDate.getMonth() + 1).padStart(2, '0') + '-' +
-                           String(localDate.getDate()).padStart(2, '0');
-              const time = localDate.toTimeString().slice(0, 5);
-              if (!grouped[date]) grouped[date] = [];
-              grouped[date].push(time);
-            });
-            window.setAvailableSlots(grouped);
-          }
-        } catch (err) {
-          console.error('Kunde inte hämta tillgängliga tider:', err);
+        // Hidden input values already set above
+        // Only warn if missing
+        if (!cltEmail || !cltMeetingType || !cltMeetingLength) {
+          console.warn('⚠️ En eller flera dolda kundfält saknas i DOM');
         }
-        // --- END: Fetch available slots ---
-        const calendarWrapper = document.getElementById('calendar-wrapper');
-        if (calendarWrapper) {
-          calendarWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        triggerClientReadyCheck();
+        // No need for extra calendarWrapper.classList.add/scrollIntoView here
       }
 
     } catch (error) {
       console.error('Error validating contact:', error);
       allFields.forEach(input => {
-        input.style.display = 'none';
+        input.classList.add('hidden');
       });
       if (addressField) {
-        addressField.style.display = 'none';
+        addressField.classList.add('hidden');
       }
       if (submitButton) {
-        submitButton.style.display = 'none';
+        submitButton.classList.add('hidden');
       }
     } finally {
-      if (loadingEl) loadingEl.style.display = 'none';
+      if (loadingEl) loadingEl.classList.remove('loading-visible');
     }
   }
 
+  // Gör kontaktvalideringsfunktionen globalt åtkomlig.
   window.validateCustomerContact = validateAndRenderCustomerFields;
 
-  window.setAvailableSlots = function(availableSlots) {
-    // availableSlots is an object with keys as ISO date strings, values as arrays of time strings
-    // Example: { "2024-06-15": ["09:00", "10:30"], "2024-06-16": ["11:00"] }
-
-    const calendarWrapper = document.getElementById('calendar-wrapper');
-    const timesWrapper = document.getElementById('times-wrapper');
-
-    if (!calendarWrapper || !timesWrapper) {
-      console.warn('Calendar or times wrapper not found.');
+  // Hanterar rendering av tillgängliga mötestider och kalender.
+  // availableSlots är ett objekt: { "YYYY-MM-DD": ["09:00", "10:30"], ... }
+window.setAvailableSlots = function(availableSlots) {
+    const calendarWrapper = document.getElementById('calendar_wrapper');
+    const timesWrapper = document.getElementById('times_wrapper');
+    if (!calendarWrapper) {
+      console.warn('⚠️ calendarWrapper saknas');
       return;
     }
-
-    // Clear calendar and times
     calendarWrapper.innerHTML = '';
-    timesWrapper.innerHTML = '';
+    if (timesWrapper) timesWrapper.innerHTML = '';
 
-    // Month navigation state
+    // Håller aktuell månad för navigering.
     let currentMonth = new Date();
 
-    // Helper: format date as YYYY-MM-DD
+    // Hjälpfunktion: format YYYY-MM-DD
     function formatDate(date) {
       return date.toISOString().split('T')[0];
     }
 
-    // Render improved calendar with month name, weekdays, and grid layout
+    // Ritar kalendern: månadstitel, veckodagar och grid.
+    // Grid: 8 kolumner (1 för veckonummer, 7 för måndag-söndag).
     function renderCalendar() {
       calendarWrapper.innerHTML = '';
 
@@ -381,7 +421,7 @@
       monthTitle.className = 'calendar-month';
       monthTitle.textContent = monthName;
 
-      // Month navigation
+      // Navigeringspilar för månad bakåt/frammåt.
       const navWrapper = document.createElement('div');
       navWrapper.style.display = 'flex';
       navWrapper.style.justifyContent = 'space-between';
@@ -402,7 +442,7 @@
         renderCalendar();
       };
 
-      // Block or hide left arrow if in current month
+      // Döljer vänsterpil om vi är i nuvarande månad.
       const today = new Date();
       const isCurrentMonth = currentMonth.getFullYear() === today.getFullYear() &&
                              currentMonth.getMonth() === today.getMonth();
@@ -416,9 +456,15 @@
       navWrapper.appendChild(nextButton);
       calendarWrapper.appendChild(navWrapper);
 
-      const weekdays = ['Mån', 'Tis', 'Ons', 'Tors', 'Fre', 'Lör', 'Sön']; // Starts on Monday, correct
+      const weekdays = ['Mån', 'Tis', 'Ons', 'Tors', 'Fre', 'Lör', 'Sön']; // Kalendern börjar på måndag
+      // Header: veckonummer + veckodagar
       const weekdayHeader = document.createElement('div');
       weekdayHeader.className = 'calendar-weekdays';
+      // Veckonummer-header
+      const weekNumHeader = document.createElement('div');
+      weekNumHeader.className = 'week-number';
+      weekNumHeader.textContent = 'V';
+      weekdayHeader.appendChild(weekNumHeader);
       weekdays.forEach(d => {
         const wd = document.createElement('div');
         wd.textContent = d;
@@ -426,101 +472,146 @@
       });
       calendarWrapper.appendChild(weekdayHeader);
 
+      // --- Kalendergrid: 8 kolumner (veckonummer + 7 dagar) ---
+      // Här sker rendering av 8x7-grid med veckonummer till vänster.
+      // Varje rad = vecka. Första cellen = veckonummer, resterande = dagar.
       const grid = document.createElement('div');
       grid.className = 'calendar-grid';
 
+      // Hjälpfunktion för ISO-veckonummer
+      function getISOWeek(date) {
+        // Kopiera datum för att inte modifiera original
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        // Sätt till närmaste torsdag: aktuellt datum + 4 - veckodag
+        let dayNum = d.getUTCDay();
+        if (dayNum === 0) dayNum = 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+        const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return weekNo;
+      }
+
       const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-      // Corrected startOffset calculation for week starting on Monday:
-      const startOffset = (firstDay.getDay() + 6) % 7;
-      if (startOffset !== 0) {
-        for (let i = 0; i < startOffset; i++) {
-          const placeholder = document.createElement('div');
-          grid.appendChild(placeholder);
-        }
-      }
+      // Justera så att kalendern börjar på måndag (startOffset = antal tomma celler före första dagen)
+      const jsDay = firstDay.getDay(); // JS: 0 = söndag, 1 = måndag, ..., 6 = lördag
+      const startOffset = jsDay === 0 ? 6 : jsDay - 1;
 
-      // Track if we already auto-rendered the first available date for this render
-      // (window.initialSlotRendered is used globally)
-      for (let day = 1; day <= lastDay.getDate(); day++) {
-        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-        const isoDate = formatDate(date);
-        const dayEl = document.createElement('div');
-        dayEl.className = 'calendar-day';
-        dayEl.textContent = day;
+      // Totalt antal dagar i grid (inkl. placeholder)
+      const totalDays = startOffset + lastDay.getDate();
+      const numWeeks = Math.ceil(totalDays / 7);
 
-        // Block previous dates (before today)
-        const todayMidnight = new Date();
-        todayMidnight.setHours(0, 0, 0, 0);
-        const isPast = date < todayMidnight;
+      let day = 1;
+      for (let week = 0; week < numWeeks; week++) {
+        // Beräkna måndagens datum för denna vecka
+        let mondayDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + week * 7);
+        const weekNumber = getISOWeek(mondayDate);
+        // Första cellen: veckonummer
+        const weekNumberEl = document.createElement('div');
+        weekNumberEl.className = 'week-number';
+        weekNumberEl.textContent = weekNumber;
+        grid.appendChild(weekNumberEl);
+        for (let wd = 0; wd < 7; wd++) {
+          const gridIndex = week * 7 + wd;
+          // Om före första dagen i månaden eller efter sista: tom cell
+          if (gridIndex < startOffset || day > lastDay.getDate()) {
+            const placeholder = document.createElement('div');
+            grid.appendChild(placeholder);
+          } else {
+            const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+            const isoDate = formatDate(date);
+            const dayEl = document.createElement('div');
+            dayEl.className = 'calendar-day';
+            dayEl.textContent = day;
+            dayEl.dataset.date = isoDate;
 
-        if (isPast) {
-          dayEl.classList.add('unavailable');
-          dayEl.style.color = '#ccc';
-        } else if (availableSlots[isoDate] && availableSlots[isoDate].length > 0) {
-          dayEl.classList.add('available');
-          dayEl.style.cursor = 'pointer';
-          dayEl.style.pointerEvents = 'auto';
-          dayEl.addEventListener('click', () => {
-            highlightDate(dayEl);
-            renderTimes(availableSlots[isoDate]);
-          });
-          // Automatically show first available date
-          if (!window.initialSlotRendered) {
-            highlightDate(dayEl);
-            renderTimes(availableSlots[isoDate]);
-            window.initialSlotRendered = true;
+            const todayMidnight = new Date();
+            todayMidnight.setHours(0, 0, 0, 0);
+            const isPast = date < todayMidnight;
+
+            if (isPast) {
+              dayEl.classList.add('unavailable');
+            } else if (availableSlots[isoDate] && availableSlots[isoDate].length > 0) {
+              dayEl.classList.add('available');
+              dayEl.addEventListener('click', () => {
+                highlightDate(dayEl);
+                renderTimes(availableSlots[isoDate]);
+              });
+              if (!window.initialSlotRendered) {
+                highlightDate(dayEl);
+                renderTimes(availableSlots[isoDate]);
+                window.initialSlotRendered = true;
+              }
+            } else {
+              dayEl.classList.add('unavailable');
+            }
+
+            grid.appendChild(dayEl);
+            day++;
           }
-        } else {
-          dayEl.classList.add('unavailable');
-          dayEl.style.color = '#ccc';
         }
-
-        grid.appendChild(dayEl);
       }
+      // Ta bort gammalt grid om det finns
+      const oldGrid = calendarWrapper.querySelector('.calendar-grid');
+      if (oldGrid) oldGrid.remove();
+
+      // Lägg till nya grid
       calendarWrapper.appendChild(grid);
     }
 
-    // Highlight selected date in calendar
+    // Markerar vald dag i kalendern.
     function highlightDate(selectedDayEl) {
       const dayEls = calendarWrapper.querySelectorAll('.calendar-day');
-      dayEls.forEach(el => el.classList.remove('selected'));
+      dayEls.forEach(el => {
+        el.classList.remove('selected');
+      });
       selectedDayEl.classList.add('selected');
+      console.log('📌 Vald dag:', selectedDayEl.dataset.date);
+      // Guard clause: Check timesWrapper existence before showing
+      const timesWrapper = document.getElementById('times_wrapper');
+      if (!timesWrapper) {
+        console.warn('⚠️ timesWrapper is null – highlightDate avbryts');
+        return;
+      }
+      timesWrapper.classList.add('visible-group');
+      timesWrapper.classList.remove('hidden');
     }
 
-    // Render available times for selected date
+    // Visar tillgängliga tider för vald dag.
     function renderTimes(times) {
+      const timesWrapper = document.getElementById('times_wrapper');
+      if (!timesWrapper) {
+        console.warn('⚠️ timesWrapper is null');
+        return;
+      }
+      timesWrapper.classList.add('visible-group');
+      timesWrapper.classList.remove('hidden');
       timesWrapper.innerHTML = '';
+      // Visa veckodag och datum före tiderna.
+      const selectedDateEl = document.querySelector('.calendar-day.selected');
+      if (selectedDateEl) {
+        const selectedDay = selectedDateEl.textContent.padStart(2, '0');
+        const year = currentMonth.getFullYear();
+        const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
+        const date = new Date(`${year}-${month}-${selectedDay}`);
+        const weekday = date.toLocaleDateString('sv-SE', { weekday: 'long' });
+        const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${selectedDay} ${date.toLocaleDateString('sv-SE', { month: 'short' })}`;
+        const label = document.createElement('div');
+        label.textContent = `📅 ${formatted}`;
+        label.className = 'timeslot-date-label';
+        timesWrapper.appendChild(label);
+      }
       times.forEach(time => {
-        // --- BEGIN: Show weekday and date label before each time ---
-        const selectedDateEl = document.querySelector('.calendar-day.selected');
-        if (selectedDateEl) {
-          const selectedDay = selectedDateEl.textContent.padStart(2, '0');
-          const year = currentMonth.getFullYear();
-          const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
-          const date = new Date(`${year}-${month}-${selectedDay}`);
-          const weekday = date.toLocaleDateString('sv-SE', { weekday: 'long' });
-          const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${selectedDay} ${date.toLocaleDateString('sv-SE', { month: 'short' })}`;
-          const label = document.createElement('div');
-          label.style.fontSize = '0.75rem';
-          label.style.color = '#555';
-          label.style.marginBottom = '2px';
-          label.textContent = formatted;
-          timesWrapper.appendChild(label);
-        }
-        // --- END: Show weekday and date label before each time ---
         const timeEl = document.createElement('button');
         timeEl.type = 'button';
         timeEl.className = 'time-slot';
         timeEl.textContent = time;
         timeEl.addEventListener('click', () => {
-          // Mark selected time
+          // Markera vald tid och spara i formState.
           const allTimes = timesWrapper.querySelectorAll('.time-slot');
           allTimes.forEach(t => t.classList.remove('selected'));
           timeEl.classList.add('selected');
-          // Store selected time in formState
           if (!window.formState) window.formState = {};
-          // --- Begin new block to set slot_iso ---
           const selectedDateEl = document.querySelector('.calendar-day.selected');
           if (selectedDateEl) {
             const selectedDay = selectedDateEl.textContent.padStart(2, '0');
@@ -529,83 +620,39 @@
             const dateIso = `${year}-${month}-${selectedDay}`;
             const isoTime = `${dateIso}T${time}:00.000Z`;
             window.formState.slot_iso = isoTime;
-            // Show submit button when both date and time are selected
+            // Visa bokningsknapp när tid är vald.
             const submitButton = document.getElementById('contact-update-button');
             if (submitButton) {
-              submitButton.style.display = 'block';
+              submitButton.classList.remove('hidden');
               submitButton.textContent = 'Boka möte';
             }
           }
           window.formState.meeting_time = time;
-          // --- End new block ---
           console.log('Selected time:', time);
         });
         timesWrapper.appendChild(timeEl);
       });
     }
 
-    // Reset the initialSlotRendered flag before rendering calendar for a new slot set
+    // --- window.initialSlotRendered ---
+    // Denna flagga styr att första lediga dag/tid i kalendern auto-renderas EN gång när slots laddas.
+    // Den återställs varje gång nya slots laddas (t.ex. vid byte av mötestyp/längd).
+    // Detta gör att användaren alltid ser första lediga slot direkt.
     window.initialSlotRendered = false;
-    // Move calendar rendering before any fetch/asynchronous logic and wrap in requestAnimationFrame
-    requestAnimationFrame(() => renderCalendar());
-  };
+    renderCalendar();
+};
 
   document.addEventListener('DOMContentLoaded', async () => {
-    // Meeting length select dropdown removed (radio buttons are now used exclusively)
+    // Init: Sätter eventlyssnare och gömmer submit-knapp
     const meetingTypeGroup = document.getElementById('meeting_type_group');
-    const style = document.createElement('style');
-    style.textContent = `
-      #calendar-wrapper {
-        max-width: 280px;
-        margin-bottom: 1rem;
-      }
-      .calendar-month {
-        font-weight: bold;
-        text-align: center;
-        margin: 0.5rem 0;
-      }
-      .calendar-weekdays {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        font-size: 0.8rem;
-        text-align: center;
-        margin-bottom: 4px;
-        color: #444;
-      }
-      .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr); /* Monday to Sunday */
-        gap: 4px;
-      }
-      .calendar-day {
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        line-height: 28px;
-        text-align: center;
-        border-radius: 4px;
-        cursor: default;
-        font-size: 0.9rem;
-        background-color: #f5f5f5;
-      }
-      .calendar-day.available {
-        background-color: #e0f7fa;
-        cursor: pointer;
-      }
-      .calendar-day.selected {
-        background-color: #00796b;
-        color: white;
-      }
-    `;
-    document.head.appendChild(style);
-
     const emailEl = document.querySelector('#booking_email');
     if (emailEl) emailEl.addEventListener('input', validateEmail);
 
-    // Lägg till lyssnare på meeting_type_group för att validera vid ändring
+    // Vid byte av mötestyp: nollställ kalender/tider, återställ initialSlotRendered och validera kontaktfält.
     if (meetingTypeGroup) {
       meetingTypeGroup.addEventListener('change', () => {
-        const calendarWrapper = document.getElementById('calendar-wrapper');
-        const timesWrapper = document.getElementById('times-wrapper');
+        const calendarWrapper = document.getElementById('calendar_wrapper');
+        const timesWrapper = document.getElementById('times_wrapper');
         if (calendarWrapper) calendarWrapper.innerHTML = '';
         if (timesWrapper) timesWrapper.innerHTML = '';
         if (window.formState) {
@@ -613,31 +660,30 @@
         }
         const submitButton = document.getElementById('contact-update-button');
         if (submitButton) {
-          submitButton.style.display = 'none';
+          submitButton.classList.add('hidden');
         }
-        // Reset initialSlotRendered so the calendar auto-selects again
         window.initialSlotRendered = false;
         validateAndRenderCustomerFields();
       });
     }
 
-    // Also call validateAndRenderCustomerFields automatically if both fields are filled
+    // Om e-post och mötestyp redan är ifyllda: validera kontaktfält direkt.
     const meetingTypeEl = document.querySelector('input[name="meeting_type"]:checked');
-    if (emailEl && emailEl.value.trim() && meetingTypeEl) {
+    if (emailEl?.value.trim() && meetingTypeEl) {
       validateAndRenderCustomerFields();
     }
 
-    // Göm knappen initialt
+    // Göm bokningsknappen initialt och sätt click-handler för bokning.
     const submitButton = document.getElementById('contact-update-button');
     if (submitButton) {
-      submitButton.style.display = 'none';
+      submitButton.classList.add('hidden');
       submitButton.onclick = async (event) => {
         event.preventDefault();
         if (!window.formState) {
           alert('Vänligen fyll i alla obligatoriska fält.');
           return;
         }
-        // Validera att slot_iso finns innan fetch
+        // Kontrollera att slot_iso (vald tid) finns innan bokning.
         if (!window.formState.slot_iso) {
           alert('Vänligen välj en tid i kalendern.');
           submitButton.disabled = false;
@@ -659,19 +705,21 @@
             throw new Error('Booking failed');
           }
           const result = await response.json();
-          // Byt ut alert mot visuell feedback
+          // Visuell feedback vid lyckad bokning.
           const confirmationEl = document.getElementById('booking-status');
           if (confirmationEl) {
             confirmationEl.textContent = '✅ Bokning genomförd!';
-            confirmationEl.style.color = 'green';
+            confirmationEl.classList.add('booking-success');
+            confirmationEl.classList.remove('booking-failed');
           }
-          // Optionally reset form or redirect
+          // Optionellt: nollställ formulär eller gör redirect.
         } catch (error) {
           alert('Ett fel uppstod vid bokningen. Försök igen.');
           const confirmationEl = document.getElementById('booking-status');
           if (confirmationEl) {
             confirmationEl.textContent = '❌ Bokningen misslyckades – försök igen.';
-            confirmationEl.style.color = 'red';
+            confirmationEl.classList.add('booking-failed');
+            confirmationEl.classList.remove('booking-success');
           }
           console.error(error);
         } finally {
@@ -682,3 +730,5 @@
     }
   });
 </script>
+
+// (window.initCalendarAndSlots togs bort – logik flyttad till checkClientReady)
