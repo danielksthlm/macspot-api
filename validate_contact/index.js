@@ -44,6 +44,25 @@ module.exports = async function (context, req) {
       field => !metadata[field] || typeof metadata[field] !== 'string' || metadata[field].trim() === ''
     );
 
+    if ((req.body?.write_if_valid || req.query?.write_if_valid) && missingFields.length > 0) {
+      const metadataFromClient = req.body?.metadata;
+      if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
+        if (!contact) {
+          await pool.query(
+            `INSERT INTO contact (booking_email, metadata, created_at) VALUES ($1, $2, NOW())`,
+            [email, metadataFromClient]
+          );
+          context.log.info('✅ Ny kontakt skapad via validate_contact');
+        } else {
+          await pool.query(
+            `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
+            [metadataFromClient, email]
+          );
+          context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
+        }
+      }
+    }
+
     if (!contact) {
       context.res = {
         status: 200,

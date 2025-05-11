@@ -4,6 +4,30 @@
   }
 </style>
 <script>
+  // Återställer formulärstate (mötestyp, mötestid, tider, clt_ready)
+  function resetFormState() {
+    console.log('🔄 Återställer formulärstate');
+    const fieldsToClear = [
+      'clt_meetingtype',
+      'clt_meetinglength',
+      'clt_ready'
+    ];
+    fieldsToClear.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    const meetingRadios = document.querySelectorAll('input[name="meeting_type"]');
+    meetingRadios.forEach(r => r.checked = false);
+    const lengthRadios = document.querySelectorAll('input[name="meeting_length"]');
+    lengthRadios.forEach(r => r.checked = false);
+
+    const slotContainer = document.getElementById('time_slot_select');
+    if (slotContainer) slotContainer.innerHTML = '';
+    const slotGroup = document.getElementById('time_slot_group');
+    if (slotGroup) slotGroup.style.display = 'none';
+  }
+
   // Kontrollerar e-post och triggar laddning av mötestyper och validering.
   function validateEmail() {
     console.log('🔎 validateEmail() körs');
@@ -16,6 +40,7 @@
     }
     if (email.length > 0 && email.includes('@')) {
       loadMeetingTypes();
+      resetFormState();
       // Lägg till logg direkt efter anropet
       console.log('🧪 Validering och mötestyper triggat, väntar på meeting_type_select');
       const typeGroup = document.getElementById('meeting_type_group');
@@ -194,6 +219,11 @@
     const cltMeetingLength = document.getElementById('clt_meetinglength');
     const cltReady = document.getElementById('clt_ready');
 
+    const addressField = document.querySelector('#address_fields');
+    if (!addressField) {
+      console.warn('⚠️ #address_fields hittades inte i DOM');
+    }
+
     // Lägg till guard för att vänta på mötestyp och mötestid innan validering av namn
     if (!meetingType || !meetingLength) {
       console.log('⏳ Väntar på mötestyp och mötestid innan validering av namn');
@@ -222,9 +252,7 @@
         f.classList.add('hidden');
         f.classList.remove('needs-filling');
       });
-      const addressField = document.getElementById('address_field');
       if (addressField) addressField.classList.add('hidden');
-      const submitButton = document.getElementById('contact-update-button');
       if (submitButton) submitButton.classList.add('hidden');
       if (cltReady) cltReady.value = 'false';
       return;
@@ -257,45 +285,59 @@
       const missingFieldsContainer = document.getElementById('missing_fields_messages');
       if (missingFieldsContainer) missingFieldsContainer.innerHTML = '';
 
-      // Visa/göm fält enligt missing_fields och mötestyp
+      // Börja med att dölja alla fält och #address_fields
+      allFields.forEach(f => {
+        f.classList.add('hidden');
+        f.classList.remove('needs-filling');
+        f.style.display = 'none';
+      });
+      if (addressField) addressField.style.display = 'none';
+
+      // Visa alltid dessa fält om kunden är ny eller har missing_fields
+      const alwaysShow = ['first_name', 'last_name', 'phone', 'company'];
       allFields.forEach(input => {
         const fieldName = input.id;
         const isAddressField = ['address', 'postal_code', 'city', 'country'].includes(fieldName);
-        const shouldShow = data.missing_fields && data.missing_fields.includes(fieldName) && (!isAddressField || meetingType === 'atclient');
-        if (shouldShow) {
+        const shouldShow = data.status === 'new_customer' && alwaysShow.includes(fieldName);
+        const isMissing = data.missing_fields && data.missing_fields.includes(fieldName);
+        const showField = shouldShow || isMissing;
+
+        if (showField) {
           input.classList.remove('hidden');
           input.classList.add('needs-filling');
-          if (missingFieldsContainer) {
+          input.style.display = 'block';
+          if (missingFieldsContainer && isMissing) {
             const p = document.createElement('p');
             p.className = 'missing-field-message';
             p.textContent = `Saknat fält: ${fieldLabels[fieldName] || fieldName}`;
             missingFieldsContainer.appendChild(p);
           }
-        } else {
-          input.classList.add('hidden');
-          input.classList.remove('needs-filling');
         }
       });
 
-      // Visa eller göm adressfält beroende på mötestyp
-      const addressField = document.getElementById('address_field');
-      if (addressField) {
-        if (meetingType === 'atclient') {
-          addressField.classList.remove('hidden');
-        } else {
-          addressField.classList.add('hidden');
-        }
+      // Visa #address_fields om meetingType === 'atclient' och (ny kund eller någon adress i missing_fields)
+      const addressFieldIds = ['address', 'postal_code', 'city', 'country'];
+      const addressRequired =
+        meetingType === 'atclient' &&
+        (
+          data.status === 'new_customer' ||
+          (data.missing_fields && addressFieldIds.some(id => data.missing_fields.includes(id)))
+        );
+
+      if (addressRequired && addressField) {
+        addressField.style.display = 'block';
+        console.log('✅ Visar #address_fields pga atclient + ny kund eller missing_fields');
       }
 
       // Visa knapp baserat på status och om alla synliga fält är ifyllda
       if (submitButton) {
         if (data.status === 'new_customer') {
           submitButton.classList.remove('hidden');
-          submitButton.textContent = 'Skapa';
+          submitButton.value = 'Skapa';
           console.log('🆕 Ny kund – visa "Skapa" knapp');
         } else if (data.status === 'existing_customer' && data.missing_fields.length > 0) {
           submitButton.classList.remove('hidden');
-          submitButton.textContent = 'Uppdatera';
+          submitButton.value = 'Uppdatera';
           console.log('✏️ Befintlig kund med saknade fält – visa "Uppdatera" knapp');
         } else {
           submitButton.classList.add('hidden');
@@ -338,7 +380,8 @@
     const submitButton = document.getElementById('contact-update-button');
     if (submitButton) {
       submitButton.classList.add('hidden');
-      console.log('🚫 Gömmer kontaktknapp vid sidladdning');
+      submitButton.value = '';
+      console.log('🚫 Gömmer kontaktknapp vid sidladdning och nollställer text');
     }
   });
 </script>
