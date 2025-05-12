@@ -1,5 +1,14 @@
 const { Pool } = require('pg');
 
+const pool = new Pool({
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: parseInt(process.env.PGPORT || '5432', 10),
+  ssl: { rejectUnauthorized: false }
+});
+
 module.exports = async function (context, req) {
   const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
   for (const key of requiredEnv) {
@@ -12,15 +21,6 @@ module.exports = async function (context, req) {
       return;
     }
   }
-
-  const pool = new Pool({
-    user: process.env.PGUSER,
-    host: process.env.PGHOST,
-    database: process.env.PGDATABASE,
-    password: process.env.PGPASSWORD,
-    port: parseInt(process.env.PGPORT || '5432', 10),
-    ssl: { rejectUnauthorized: false }
-  });
 
   try {
     const settingsRes = await pool.query(
@@ -60,6 +60,6 @@ module.exports = async function (context, req) {
       body: { error: error.message }
     };
   } finally {
-    await pool.end();
+    // pool.end() tas bort – vi återanvänder en delad pool mellan anrop
   }
 };

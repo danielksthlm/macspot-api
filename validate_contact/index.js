@@ -1,7 +1,14 @@
 const { Pool } = require('pg');
+const pool = new Pool({
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: parseInt(process.env.PGPORT || '5432', 10),
+  ssl: { rejectUnauthorized: false }
+});
 
 module.exports = async function (context, req) {
-  let pool;
   try {
     const email = req.body?.email || req.query?.email;
     const meeting_type = req.body?.meeting_type || req.query?.meeting_type;
@@ -16,15 +23,6 @@ module.exports = async function (context, req) {
     for (const key of requiredEnv) {
       if (!process.env[key]) throw new Error(`Missing environment variable: ${key}`);
     }
-
-    pool = new Pool({
-      user: process.env.PGUSER,
-      host: process.env.PGHOST,
-      database: process.env.PGDATABASE,
-      password: process.env.PGPASSWORD,
-      port: parseInt(process.env.PGPORT || '5432', 10),
-      ssl: { rejectUnauthorized: false }
-    });
 
     const contactRes = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
@@ -96,6 +94,6 @@ module.exports = async function (context, req) {
       body: { error: error.message, stack: error.stack }
     };
   } finally {
-    if (pool) await pool.end();
+    // Poolen är delad och återanvänds – vi stänger den inte här
   }
 };

@@ -1,3 +1,13 @@
+const { Pool } = require('pg');
+const pool = new Pool({
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: parseInt(process.env.PGPORT || '5432', 10),
+  ssl: { rejectUnauthorized: false }
+});
+
 function verifyBookingSettings(settings, context) {
   const expected = {
     default_office_address: 'string',
@@ -76,7 +86,7 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const { Pool } = require('pg');
+    // Pool återanvänds från global instans
     const fetch = require('node-fetch');
     debugLog('🏁 Börjar getavailableslots');
     const t0 = Date.now();
@@ -91,15 +101,6 @@ module.exports = async function (context, req) {
       }
     }
     debugLog('🔐 Environment variables verified');
-
-    const pool = new Pool({
-      user: process.env.PGUSER,
-      host: process.env.PGHOST,
-      database: process.env.PGDATABASE,
-      password: process.env.PGPASSWORD,
-      port: parseInt(process.env.PGPORT || '5432', 10),
-      ssl: { rejectUnauthorized: false }
-    });
     debugLog('✅ PostgreSQL pool created');
     debugLog('⏱️ Efter env och pool: ' + (Date.now() - t0) + ' ms');
 
