@@ -1,59 +1,49 @@
 <script>
-// Skapa ett nytt objekt CalendarModule och flytta in funktionerna som metoder
-window.CalendarModule = {
-  renderCalendar: function(groupedSlots, currentDate) {
-    const calendarWrapper = document.getElementById('calendar_wrapper');
-    if (!calendarWrapper) {
-      console.warn('⚠️ calendarWrapper is null – renderCalendar avbryts');
-      return;
-    }
-    // Exempel på rendering (detaljer beroende på implementation)
-    calendarWrapper.innerHTML = ''; // Rensa tidigare innehåll
-    // Rendera kalender baserat på groupedSlots och currentDate
-    // ...
-  },
-
-  renderTimes: function(times) {
-    const timesWrapper = document.getElementById('times_wrapper');
-    if (!timesWrapper) {
-      console.warn('⚠️ timesWrapper is null – renderTimes avbryts');
-      return;
-    }
-    timesWrapper.innerHTML = ''; // Rensa tidigare tider
-    // Rendera tider baserat på times
-    // ...
-  },
-
-  highlightDate: function(date) {
-    const calendarWrapper = document.getElementById('calendar_wrapper');
-    if (!calendarWrapper) return;
-    const selectedDayEl = calendarWrapper.querySelector(`[data-date="${date.toISOString().slice(0,10)}"]`);
-    if (selectedDayEl) {
-      selectedDayEl.classList.add('selected');
-      selectedDayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  },
-
-  formatDate: function(date) {
-    // Exempel på formatering
-    return date.toISOString().slice(0,10);
+window.initAvailableSlotFetch = function() {
+  const cltReady = document.getElementById('clt_ready')?.value;
+  if (cltReady !== 'true' || !window.formState) {
+    console.warn('❌ Kan inte hämta tillgängliga tider – formState eller clt_ready saknas');
+    return;
   }
-};
 
-// Gör att kod 2b kan köra rendering baserat på laddade slots.
-window.setAvailableSlots = function(groupedSlots) {
-  console.log('📆 setAvailableSlots kallad med:', Object.keys(groupedSlots || {}).length, 'datum');
-  // Hantera initialSlotRendered (återställs varje gång nya slots sätts)
-  window.initialSlotRendered = false;
-  window.latestAvailableSlots = groupedSlots; // fallback cache om renderCalendar saknas
-  // Hitta första datum med lediga tider
-  const firstAvailableDateStr = Object.keys(groupedSlots).sort()[0];
-  const firstAvailableDate = new Date(firstAvailableDateStr);
-  window.firstAvailableDate = firstAvailableDate;
-  if (typeof window.CalendarModule.renderCalendar === 'function') {
-    window.CalendarModule.renderCalendar(groupedSlots, window.firstAvailableDate);
-  } else {
-    console.warn('⚠️ renderCalendar saknas – kontrollera att 2b är laddad');
-  }
+  console.log('📡 Hämtar tillgängliga tider för:', window.formState);
+
+  fetch('https://macspotbackend.azurewebsites.net/api/getavailableslots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: window.formState.email,
+      meeting_type: window.formState.meeting_type,
+      meeting_length: window.formState.meeting_length
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    console.log('🧪 Rått slotData från API:', data);
+    if (Array.isArray(data.slots)) {
+      const grouped = {};
+      data.slots.forEach(slot => {
+        const localDate = new Date(slot.slot_iso);
+        const localYear = localDate.getFullYear();
+        const localMonth = String(localDate.getMonth() + 1).padStart(2, '0');
+        const localDay = String(localDate.getDate()).padStart(2, '0');
+        const date = `${localYear}-${localMonth}-${localDay}`;
+        const time = localDate.toTimeString().slice(0, 5);
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push(time);
+      });
+      console.log('📦 Skickar grouped slots till setAvailableSlots:', grouped);
+      if (typeof window.setAvailableSlots === 'function') {
+        window.setAvailableSlots(grouped);
+      } else {
+        console.warn('⚠️ setAvailableSlots() saknas – kontrollera att kalendermodul är laddad');
+      }
+    } else {
+      console.warn('⚠️ Ogiltigt slotData-format:', data);
+    }
+  })
+  .catch(err => {
+    console.error('❌ Fel vid hämtning av slots:', err);
+  });
 };
 </script>

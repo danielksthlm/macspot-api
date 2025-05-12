@@ -1,5 +1,12 @@
 <script>
-// 2b: Kalender/tider/slots render-funktioner, och setAvailableSlots
+
+window.getISOWeek = function(date) {
+  const tempDate = new Date(date.getTime());
+  tempDate.setHours(0, 0, 0, 0);
+  tempDate.setDate(tempDate.getDate() + 3 - ((tempDate.getDay() + 6) % 7));
+  const week1 = new Date(tempDate.getFullYear(), 0, 4);
+  return 1 + Math.round(((tempDate.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+};
 
 window.CalendarModule = {
   // Hjälpfunktion: format YYYY-MM-DD
@@ -9,30 +16,19 @@ window.CalendarModule = {
 
   highlightDate: function(selectedDayEl) {
     const calendarWrapper = document.getElementById('calendar_wrapper');
-    const dayEls = calendarWrapper.querySelectorAll('.calendar-day');
+    const dayEls = calendarWrapper?.querySelectorAll('.calendar-day') || [];
     dayEls.forEach(el => {
       el.classList.remove('selected');
     });
     selectedDayEl.classList.add('selected');
     selectedDayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // Guard clause: Check timesWrapper existence before showing
-    const timesWrapper = document.getElementById('times_wrapper');
-    if (!timesWrapper) {
-      console.warn('⚠️ timesWrapper is null – highlightDate avbryts');
-      return;
-    }
-    timesWrapper.style.display = 'block';
   },
 
   renderTimes: function(times, currentMonth) {
-    const timesWrapper = document.getElementById('times_wrapper');
-    if (!timesWrapper) {
-      console.warn('⚠️ timesWrapper is null – renderTimes avbryts');
-      return;
-    }
-    timesWrapper.style.display = 'block';
-    timesWrapper.innerHTML = '';
-    // Visa veckodag och datum före tiderna.
+    const calendarTimes = document.getElementById('calendar_times');
+    calendarTimes.style.setProperty('display', 'block', 'important');
+    calendarTimes.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    calendarTimes.innerHTML = '';
     const selectedDateEl = document.querySelector('.calendar-day.selected');
     if (selectedDateEl) {
       const selectedDay = selectedDateEl.textContent.padStart(2, '0');
@@ -47,7 +43,7 @@ window.CalendarModule = {
       label.style.fontWeight = 'bold';
       label.style.color = '#333';
       label.style.marginBottom = '0.25rem';
-      timesWrapper.appendChild(label);
+      calendarTimes.appendChild(label);
     }
     times.forEach(time => {
       const timeEl = document.createElement('button');
@@ -55,11 +51,9 @@ window.CalendarModule = {
       timeEl.className = 'time-slot';
       timeEl.textContent = time;
       timeEl.addEventListener('click', () => {
-        // Markera vald tid och spara i formState.
-        const allTimes = timesWrapper.querySelectorAll('.time-slot');
+        const allTimes = calendarTimes.querySelectorAll('.time-slot');
         allTimes.forEach(t => t.classList.remove('selected'));
         timeEl.classList.add('selected');
-        // --- BEGIN: formState uppdateras med slot_iso och meeting_time ---
         if (!window.formState) window.formState = {};
         const selectedDateEl = document.querySelector('.calendar-day.selected');
         if (selectedDateEl) {
@@ -69,7 +63,6 @@ window.CalendarModule = {
           const dateIso = `${year}-${month}-${selectedDay}`;
           const isoTime = `${dateIso}T${time}:00.000Z`;
           window.formState.slot_iso = isoTime;
-          // Visa bokningsknapp när tid är vald.
           const submitButton = document.getElementById('contact-update-button');
           if (submitButton) {
             submitButton.style.display = 'block';
@@ -78,24 +71,27 @@ window.CalendarModule = {
         }
         window.formState.meeting_time = time;
       });
-      timesWrapper.appendChild(timeEl);
+      calendarTimes.appendChild(timeEl);
     });
   },
 
   renderCalendar: function(availableSlots, currentMonth) {
     const calendarWrapper = document.getElementById('calendar_wrapper');
     if (!calendarWrapper) {
-      console.warn('⚠️ calendarWrapper is null – renderCalendar avbryts');
       return;
     }
+    const calendarTimes = document.getElementById('calendar_times');
+    const keepCalendarTimes = calendarTimes?.parentElement?.removeChild(calendarTimes);
     calendarWrapper.innerHTML = '';
+    if (keepCalendarTimes) calendarWrapper.appendChild(keepCalendarTimes);
+    calendarWrapper.style.setProperty('display', 'flex', 'important');
+    calendarWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
     const monthTitle = document.createElement('div');
     monthTitle.className = 'calendar-month';
     monthTitle.textContent = monthName;
 
-    // Navigeringspilar för månad bakåt/frammåt.
     const navWrapper = document.createElement('div');
     navWrapper.style.display = 'flex';
     navWrapper.style.justifyContent = 'space-between';
@@ -116,7 +112,6 @@ window.CalendarModule = {
       window.CalendarModule.renderCalendar(availableSlots, currentMonth);
     };
 
-    // Döljer vänsterpil om vi är i nuvarande månad.
     const today = new Date();
     const isCurrentMonth = currentMonth.getFullYear() === today.getFullYear() &&
                            currentMonth.getMonth() === today.getMonth();
@@ -185,9 +180,12 @@ window.CalendarModule = {
               window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
             });
             if (!window.initialSlotRendered) {
-              window.CalendarModule.highlightDate(dayEl);
-              window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
-              window.initialSlotRendered = true;
+              setTimeout(() => {
+                document.getElementById('calendar_wrapper')?.style.setProperty('display', 'flex', 'important');
+                window.CalendarModule.highlightDate(dayEl);
+                window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
+                window.initialSlotRendered = true;
+              }, 100);
             }
           } else {
             dayEl.classList.add('unavailable');
@@ -203,25 +201,35 @@ window.CalendarModule = {
   }
 };
 
-// Hjälpfunktion för ISO-veckonummer
-window.getISOWeek = function(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  let dayNum = d.getUTCDay();
-  if (dayNum === 0) dayNum = 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return weekNo;
-};
-
 window.setAvailableSlots = function(groupedSlots) {
-  // Hantera initialSlotRendered (återställs varje gång nya slots sätts)
+  if (!window.CalendarModule || typeof window.CalendarModule.renderCalendar !== 'function') {
+    return;
+  }
+  if (Object.keys(groupedSlots).length === 0) {
+    return;
+  }
   window.initialSlotRendered = false;
   window.latestAvailableSlots = groupedSlots;
-  // Hitta första datum med lediga tider
   const firstAvailableDateStr = Object.keys(groupedSlots).sort()[0];
   const firstAvailableDate = new Date(firstAvailableDateStr);
   window.firstAvailableDate = firstAvailableDate;
-  window.CalendarModule.renderCalendar(groupedSlots, window.firstAvailableDate);
+  window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
+  document.getElementById('calendar_wrapper')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
+
+// Vänta på att #calendar_wrapper laddas in i DOM
+let waitForCalendarWrapper2b = setInterval(() => {
+  const calendarWrapper = document.getElementById('calendar_wrapper');
+  if (calendarWrapper) {
+    clearInterval(waitForCalendarWrapper2b);
+    calendarWrapper.style.setProperty('display', 'flex', 'important');
+    calendarWrapper.style.visibility = 'visible';
+    calendarWrapper.style.opacity = '1';
+    calendarWrapper.style.maxHeight = 'none';
+    calendarWrapper.style.position = 'static';
+    calendarWrapper.style.top = 'auto';
+    calendarWrapper.style.transition = 'none';
+  }
+}, 100);
+
 </script>
