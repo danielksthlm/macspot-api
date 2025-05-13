@@ -79,6 +79,8 @@
     },
 
     renderCalendar: function(availableSlots, currentMonth) {
+      // Add currentMonthKey at top of renderCalendar
+      const currentMonthKey = currentMonth.getFullYear() + '-' + currentMonth.getMonth();
       const calendarWrapper = document.getElementById('calendar_wrapper');
       if (!calendarWrapper) return;
 
@@ -118,6 +120,13 @@
         leftArrow.style.cursor = 'pointer';
         rightArrow.style.cursor = 'pointer';
       }
+      if (monthEl) {
+        monthEl.onclick = () => {
+          const today = new Date();
+          window.CalendarModule.renderCalendar(window.latestAvailableSlots, today);
+        };
+        monthEl.style.cursor = 'pointer';
+      }
       // --- End inserted ---
 
       // Grid container
@@ -153,15 +162,18 @@
       const startOffset = jsDay === 0 ? 6 : jsDay - 1;
       const totalDays = startOffset + lastDay.getDate();
       const numWeeks = Math.ceil(totalDays / 7);
-      const totalCells = numWeeks * 7;
+      // Ensure we don't overrender grid rows (e.g. skip 7th row if not needed)
+      const maxDays = numWeeks * 7;
 
       if (!weekNumberEls.length) console.warn('⚠️ Inga .weeknumber-element hittades i DOM');
       if (!dayEls.length) console.warn('⚠️ Inga .day-element hittades i DOM');
       let dayIndex = 0;
       for (let week = 0; week < numWeeks; week++) {
+
+        const gridIndex = week * 7;
         const monday = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + week * 7);
         const weekNumber = window.getISOWeek(monday);
-        if (weekNumberEls[week]) {
+        if (week < weekNumberEls.length) {
           weekNumberEls[week].textContent = 'v' + weekNumber;
         }
 
@@ -172,7 +184,7 @@
             console.warn(`⚠️ Saknar .day-element vid index ${dayIndex}`);
             continue;
           }
-          if (gridIndex < startOffset || gridIndex >= totalDays) {
+          if (gridIndex < startOffset || gridIndex >= totalDays || gridIndex >= maxDays) {
             dayEl.textContent = '';
             dayEl.removeAttribute('data-date');
             dayIndex++;
@@ -191,20 +203,28 @@
           todayMidnight.setHours(0, 0, 0, 0);
           const isPast = date < todayMidnight;
 
-          if (!isPast && availableSlots[isoDate] && availableSlots[isoDate].length > 0) {
+          // --- Inserted: highlight today, available, and bind click ---
+          const isToday = date.toDateString() === new Date().toDateString();
+          if (isToday) {
+            dayEl.classList.add('today');
+          }
+
+          const isAvailable = !isPast && availableSlots[isoDate] && availableSlots[isoDate].length > 0;
+          if (isAvailable) {
+            dayEl.classList.add('available');
             (function bindClick(cell, date, isoDate) {
               cell.addEventListener('click', () => {
                 window.CalendarModule.highlightDate(cell);
                 window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
               });
             })(dayEl, date, isoDate);
-            if (!window.initialSlotRendered) {
-              setTimeout(() => {
-                document.getElementById('calendar_wrapper')?.style.setProperty('display', 'flex', 'important');
-                window.CalendarModule.highlightDate(dayEl);
-                window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
-                window.initialSlotRendered = true;
-              }, 100);
+            // Immediately select and render the first available slot (no setTimeout)
+            if (!window.initialSlotRendered || window.lastRenderedMonth !== currentMonthKey) {
+              window.initialSlotRendered = true;
+              window.lastRenderedMonth = currentMonthKey;
+              window.CalendarModule.highlightDate(dayEl);
+              window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
+              dayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
           }
           dayIndex++;
@@ -247,7 +267,7 @@
     const calendarWrapper = document.getElementById('calendar_wrapper');
     if (calendarWrapper) {
       clearInterval(waitForCalendarWrapper2b);
-      calendarWrapper.style.display = 'flex';
+      // Removed: calendarWrapper.style.display = 'flex';
       // Insert the waitForCalendarGrid block here
       let waitForCalendarGrid = setInterval(() => {
         const grid = document.getElementById('calendar_grid');
@@ -264,4 +284,40 @@
       }, 100);
     }
   }, 100);
+// --- Inserted CSS for today and available day styling ---
+const calendarStyle = document.createElement('style');
+calendarStyle.textContent = `
+.day.today {
+  display: flex;
+  border: 1px solid #B2B2B2;
+  border-radius: 50%;
+  aspect-ratio: 1 / 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.day.available {
+  display: flex;
+  background-color: #B2B2B2;
+  color: #F5F5F5;
+  border-radius: 50%;
+  aspect-ratio: 1 / 1;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.day.available:hover {
+  background-color: #e9a56f;
+  color: #F5F5F5;
+}
+
+.day.available.selected {
+  display: flex;
+  background-color: #e9a56f;
+  color: #F5F5F5;
+  border: 1px solid #B2B2B2;
+}
+`;
+document.head.appendChild(calendarStyle);
 </script>
