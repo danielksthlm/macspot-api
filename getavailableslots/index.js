@@ -1,3 +1,4 @@
+const { DateTime } = require('luxon');
 const { Pool } = require('pg');
 const pool = new Pool({
   user: process.env.PGUSER,
@@ -36,7 +37,7 @@ function verifyBookingSettings(settings, context) {
   const issues = [];
   for (const [key, type] of Object.entries(expected)) {
     const val = settings[key];
-    if (val === undefined) {
+    if (val === undefined || val === null || (key === 'timezone' && String(val).trim() === '')) {
       issues.push(`❌ Saknar inställning: ${key}`);
     } else if (key === 'allowed_atClient_meeting_days') {
       if (!Array.isArray(val) || !val.every(v => typeof v === 'string')) {
@@ -140,6 +141,7 @@ module.exports = async function (context, req) {
     debugLog(`⚙️ Inställningar laddade: ${Object.keys(settings).join(', ')}`);
     verifyBookingSettings(settings, context);
     debugLog('⚙️ Inställningar klara');
+    const timezone = settings.timezone || 'Europe/Stockholm';
     const t2 = Date.now();
     debugLog('⏱️ Efter settings: ' + (Date.now() - t0) + ' ms');
 
@@ -204,8 +206,8 @@ module.exports = async function (context, req) {
     let travelTimeMin = settings.fallback_travel_time_minutes || 0;
     const returnTravelTimeMin = travelTimeMin;
 
-    const windowStartHour = parseInt((settings.travel_time_window_start || '06:00').split(':')[0], 10);
-    const windowEndHour = parseInt((settings.travel_time_window_end || '23:00').split(':')[0], 10);
+    const windowStartHour = DateTime.fromISO(`${days[0].toISOString().split('T')[0]}T${settings.travel_time_window_start || '06:00'}`, { zone: timezone }).toUTC().hour;
+    const windowEndHour = DateTime.fromISO(`${days[0].toISOString().split('T')[0]}T${settings.travel_time_window_end || '23:00'}`, { zone: timezone }).toUTC().hour;
 
     // Hämta Apple Maps-token en gång tidigt
     const accessToken = await getAppleMapsAccessToken(context);
@@ -247,13 +249,13 @@ module.exports = async function (context, req) {
             debugLog(`🕑 Bearbetar datum ${dateStr}, timmar: 10 och 14`);
             const slotTime = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:00:00Z`);
 
-            const lunchStart = new Date(`${dateStr}T${settings.lunch_start || '11:45'}:00Z`);
-            const lunchEnd = new Date(`${dateStr}T${settings.lunch_end || '13:15'}:00Z`);
+            const openTime = DateTime.fromISO(`${dateStr}T${settings.open_time}`, { zone: timezone }).toUTC().toJSDate();
+            const closeTime = DateTime.fromISO(`${dateStr}T${settings.close_time}`, { zone: timezone }).toUTC().toJSDate();
+            const lunchStart = DateTime.fromISO(`${dateStr}T${settings.lunch_start || '11:45'}`, { zone: timezone }).toUTC().toJSDate();
+            const lunchEnd = DateTime.fromISO(`${dateStr}T${settings.lunch_end || '13:15'}`, { zone: timezone }).toUTC().toJSDate();
             const slotEndTime = new Date(slotTime.getTime() + meeting_length * 60000);
 
             // Avvisa möten utanför öppettider
-            const openTime = new Date(`${dateStr}T${settings.open_time}:00Z`);
-            const closeTime = new Date(`${dateStr}T${settings.close_time}:00Z`);
             if (slotTime < openTime || slotEndTime > closeTime) {
               debugLog(`⏰ Slot ${slotTime.toISOString()} ligger utanför öppettider (${settings.open_time}–${settings.close_time}) – skippar`);
               return;
@@ -469,6 +471,7 @@ module.exports = async function (context, req) {
 
             slotMap[key].push({
               slot_iso: slotTime.toISOString(),
+              slot_local: DateTime.fromJSDate(slotTime, { zone: 'utc' }).setZone(timezone).toISO(),
               score: minDist,
               require_approval: requireApprovalForThisSlot,
               travel_time_min: travelTimeMin
