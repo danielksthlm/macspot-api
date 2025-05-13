@@ -43,7 +43,8 @@ window.initAvailableSlotFetch = function() {
     }
   })
   .catch(err => {
-    console.error('❌ Fel vid hämtning av slots:', err);
+    console.error('❌ Fetch error in getavailableslots:', err.message || err);
+    alert('Fel vid hämtning av tider. Kontrollera din internetanslutning eller att servern är tillgänglig.');
   });
 };
 </script>

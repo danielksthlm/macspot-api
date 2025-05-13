@@ -84,6 +84,7 @@
       const calendarWrapper = document.getElementById('calendar_wrapper');
       if (!calendarWrapper) return;
 
+
       // Preserve calendar_times before resetting innerHTML
       const calendarTimes = document.getElementById('calendar_times');
       const shouldRestoreTimes = !!calendarTimes;
@@ -133,7 +134,7 @@
       const grid = document.getElementById('calendar_grid');
       if (!grid) {
         console.warn('❌ calendar_grid saknas i DOM');
-        return;
+        // Fortsätt ändå för felsökning i Webflow
       }
       console.log('🧱 Börjar rendera kalendern...');
       console.log('📆 Månad:', currentMonth.toISOString());
@@ -161,16 +162,16 @@
       const jsDay = firstDay.getDay();
       const startOffset = jsDay === 0 ? 6 : jsDay - 1;
       const totalDays = startOffset + lastDay.getDate();
-      const numWeeks = Math.ceil(totalDays / 7);
-      // Ensure we don't overrender grid rows (e.g. skip 7th row if not needed)
-      const maxDays = numWeeks * 7;
+      // Always show dynamic number of weeks based on days
+      const numWeeks = Math.ceil((startOffset + lastDay.getDate()) / 7);
 
       if (!weekNumberEls.length) console.warn('⚠️ Inga .weeknumber-element hittades i DOM');
       if (!dayEls.length) console.warn('⚠️ Inga .day-element hittades i DOM');
+
+      const maxDayElements = dayEls.length;
+
       let dayIndex = 0;
       for (let week = 0; week < numWeeks; week++) {
-
-        const gridIndex = week * 7;
         const monday = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + week * 7);
         const weekNumber = window.getISOWeek(monday);
         if (week < weekNumberEls.length) {
@@ -179,56 +180,65 @@
 
         for (let wd = 0; wd < 7; wd++) {
           const gridIndex = week * 7 + wd;
+          if (dayIndex >= maxDayElements) {
+            console.warn(`⚠️ Dagindex ${dayIndex} överskrider antal .day-element (${maxDayElements})`);
+            break;
+          }
           const dayEl = dayEls[dayIndex];
           if (!dayEl) {
             console.warn(`⚠️ Saknar .day-element vid index ${dayIndex}`);
             continue;
           }
-          if (gridIndex < startOffset || gridIndex >= totalDays || gridIndex >= maxDays) {
+          const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + gridIndex);
+          if (cellDate.getMonth() !== currentMonth.getMonth()) {
             dayEl.textContent = '';
             dayEl.removeAttribute('data-date');
+            dayEl.classList.remove('today', 'available', 'selected');
             dayIndex++;
             continue;
-          }
+          } else {
+            const isoDate = window.CalendarModule.formatDate(cellDate);
+            dayEl.textContent = cellDate.getDate();
+            dayEl.dataset.date = isoDate;
 
-          const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + gridIndex);
-          const date = cellDate;
-          const isoDate = window.CalendarModule.formatDate(date);
-          dayEl.textContent = date.getDate();
-          console.log(`📅 Fyller dag: ${isoDate} → ${date.getDate()} (index ${dayIndex})`);
-          dayEl.dataset.date = isoDate;
-          console.log(`✅ Dag satt: ${isoDate} → ${date.getDate()}`);
+            const isToday = cellDate.toDateString() === new Date().toDateString();
+            dayEl.classList.toggle('today', isToday);
 
-          const todayMidnight = new Date();
-          todayMidnight.setHours(0, 0, 0, 0);
-          const isPast = date < todayMidnight;
+            const isAvailable = availableSlots[isoDate]?.length > 0;
+            dayEl.classList.toggle('available', isAvailable);
 
-          // --- Inserted: highlight today, available, and bind click ---
-          const isToday = date.toDateString() === new Date().toDateString();
-          if (isToday) {
-            dayEl.classList.add('today');
-          }
-
-          const isAvailable = !isPast && availableSlots[isoDate] && availableSlots[isoDate].length > 0;
-          if (isAvailable) {
-            dayEl.classList.add('available');
-            (function bindClick(cell, date, isoDate) {
-              cell.addEventListener('click', () => {
-                window.CalendarModule.highlightDate(cell);
+            if (isAvailable) {
+              dayEl.addEventListener('click', () => {
+                window.CalendarModule.highlightDate(dayEl);
                 window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
+                window.userHasManuallySelectedDate = true;
               });
-            })(dayEl, date, isoDate);
-            // Immediately select and render the first available slot (no setTimeout)
-            if (!window.initialSlotRendered || window.lastRenderedMonth !== currentMonthKey) {
-              window.initialSlotRendered = true;
-              window.lastRenderedMonth = currentMonthKey;
-              window.CalendarModule.highlightDate(dayEl);
-              window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
-              dayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+              if (
+                !window.userHasManuallySelectedDate &&
+                (!window.initialSlotRendered || window.lastRenderedMonth !== currentMonthKey)
+              ) {
+                window.initialSlotRendered = true;
+                window.lastRenderedMonth = currentMonthKey;
+                window.CalendarModule.highlightDate(dayEl);
+                window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
+              }
             }
+            dayIndex++;
           }
-          dayIndex++;
         }
+      }
+
+      for (let i = numWeeks; i < weekNumberEls.length; i++) {
+        weekNumberEls[i].textContent = '';
+      }
+
+      // Töm alla .day efter sista dayIndex
+      for (let i = dayIndex; i < dayEls.length; i++) {
+        const el = dayEls[i];
+        el.textContent = '';
+        el.removeAttribute('data-date');
+        el.classList.remove('today', 'available', 'selected');
       }
 
       // Ta inte bort eller ersätt calendar_grid – hanteras nu i Webflow
@@ -237,7 +247,7 @@
         calendarWrapper.appendChild(calendarTimes);
       }
 
-      calendarWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // calendarWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       console.log('✅ Kalendern färdigrenderad');
     }
@@ -260,6 +270,10 @@
       monthLabel.textContent = firstAvailableDate.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
     }
     window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
+    const wrapper = document.getElementById('calendar_wrapper');
+    if (wrapper) {
+      wrapper.style.display = 'flex';
+    }
   };
 
   // Vänta på att #calendar_wrapper laddas in i DOM
@@ -267,7 +281,7 @@
     const calendarWrapper = document.getElementById('calendar_wrapper');
     if (calendarWrapper) {
       clearInterval(waitForCalendarWrapper2b);
-      // Removed: calendarWrapper.style.display = 'flex';
+      // Removed calendarWrapper.style.display = 'flex';
       // Insert the waitForCalendarGrid block here
       let waitForCalendarGrid = setInterval(() => {
         const grid = document.getElementById('calendar_grid');
@@ -287,23 +301,25 @@
 // --- Inserted CSS for today and available day styling ---
 const calendarStyle = document.createElement('style');
 calendarStyle.textContent = `
-.day.today {
+.day.today,
+.day.available,
+.day.available.selected {
   display: flex;
-  border: 1px solid #B2B2B2;
-  border-radius: 50%;
+  width: 100%;
+  height: 100%;
   aspect-ratio: 1 / 1;
+  border-radius: 50%;
   align-items: center;
   justify-content: center;
 }
 
+.day.today {
+  border: 1px solid #B2B2B2;
+}
+
 .day.available {
-  display: flex;
   background-color: #B2B2B2;
   color: #F5F5F5;
-  border-radius: 50%;
-  aspect-ratio: 1 / 1;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
 }
 
@@ -313,7 +329,6 @@ calendarStyle.textContent = `
 }
 
 .day.available.selected {
-  display: flex;
   background-color: #e9a56f;
   color: #F5F5F5;
   border: 1px solid #B2B2B2;
