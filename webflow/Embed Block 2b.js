@@ -16,8 +16,8 @@
     highlightDate: function(selectedDayEl) {
       const calendarWrapper = document.getElementById('calendar_wrapper');
       const dayEls = calendarWrapper ? [document.getElementById('calendar_day')] : [];
-      // Remove 'selected' from all calendar_day elements by id
-      const allDayEls = calendarWrapper ? calendarWrapper.querySelectorAll('[id^="calendar_day"]') : [];
+      // Remove 'selected' from all Day elements by class
+      const allDayEls = calendarWrapper ? calendarWrapper.querySelectorAll('.day') : [];
       allDayEls.forEach(el => {
         el.classList.remove('selected');
       });
@@ -31,7 +31,7 @@
         console.warn('⚠️ calendar_times saknas – renderTimes avbryts');
         return;
       }
-      calendarTimes.style.setProperty('display', 'block', 'important');
+      calendarTimes.style.display = 'block';
       calendarTimes.scrollIntoView({ behavior: 'smooth', block: 'start' });
       calendarTimes.innerHTML = '';
       const selectedDateEl = document.querySelector('.calendar-day.selected');
@@ -44,9 +44,6 @@
         const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${selectedDay} ${date.toLocaleDateString('sv-SE', { month: 'short' })}`;
         const label = document.createElement('div');
         label.textContent = `📅 ${formatted}`;
-        label.style.fontSize = '0.8rem';
-        label.style.color = '#333';
-        label.style.marginBottom = '0.25rem';
         calendarTimes.appendChild(label);
       }
       times.forEach(time => {
@@ -90,65 +87,64 @@
       const shouldRestoreTimes = !!calendarTimes;
 
       // Reset wrapper
-      calendarWrapper.innerHTML = '';
+      // calendarWrapper.innerHTML = '';
 
-      const outerWrapper = document.createElement('div');
+      // Hantera header manuellt i Webflow – endast återställ innehåll om wrapper finns
+      const existingHeaderWrapper = document.getElementById('calendar_header');
+      if (existingHeaderWrapper) {
+        existingHeaderWrapper.innerHTML = '';
+        // Add optional dynamic header content here if needed
+      }
 
-      // Header: månad och år med vänster/höger knappar
-      const header = document.createElement('div');
-      header.style.display = 'flex';
-      header.style.justifyContent = 'center';
-      header.style.alignItems = 'center';
-      header.style.gridColumn = '1 / -1';
+      // --- Inserted: month/year label and arrow handlers ---
+      const monthEl = document.getElementById('calendar_month');
+      if (monthEl) {
+        monthEl.textContent = currentMonth.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
+      }
 
-      const leftBtn = document.createElement('button');
-      leftBtn.innerHTML = '&#10094;'; // ❮
-      leftBtn.className = 'arrow';
-      leftBtn.onclick = () => {
-        currentMonth.setMonth(currentMonth.getMonth() - 1);
-        window.CalendarModule.renderCalendar(availableSlots, currentMonth);
-      };
-
-      const rightBtn = document.createElement('button');
-      rightBtn.innerHTML = '&#10095;'; // ❯
-      rightBtn.className = 'arrow';
-      rightBtn.onclick = () => {
-        currentMonth.setMonth(currentMonth.getMonth() + 1);
-        window.CalendarModule.renderCalendar(availableSlots, currentMonth);
-      };
-
-      const title = document.createElement('div');
-      title.className = 'h3';
-      title.textContent = currentMonth.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
-      title.style.flex = '1';
-      title.style.textAlign = 'center';
-
-      header.appendChild(leftBtn);
-      header.appendChild(title);
-      header.appendChild(rightBtn);
-      outerWrapper.appendChild(header);
+      // Flytta pilhantering till renderCalendar för att alltid binda korrekt
+      const leftArrow = document.getElementById('cal_arrow_left');
+      const rightArrow = document.getElementById('cal_arrow_right');
+      if (leftArrow && rightArrow) {
+        leftArrow.onclick = () => {
+          const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+          window.CalendarModule.renderCalendar(availableSlots, newMonth);
+        };
+        rightArrow.onclick = () => {
+          const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1);
+          window.CalendarModule.renderCalendar(availableSlots, newMonth);
+        };
+        // Gör pilarna till "pointer" vid hover
+        leftArrow.style.cursor = 'pointer';
+        rightArrow.style.cursor = 'pointer';
+      }
+      // --- End inserted ---
 
       // Grid container
-      const grid = document.createElement('div');
-      grid.id = 'calendar_grid';
-      grid.style.display = 'grid';
-      grid.style.gridTemplateColumns = 'repeat(8, minmax(2em, 1fr))';
+      const grid = document.getElementById('calendar_grid');
+      if (!grid) {
+        console.warn('❌ calendar_grid saknas i DOM');
+        return;
+      }
+      console.log('🧱 Börjar rendera kalendern...');
+      console.log('📆 Månad:', currentMonth.toISOString());
+      console.log('📦 availableSlots:', availableSlots);
 
-      // Weekday header row
-      const weekNameRow = document.createElement('div');
-      weekNameRow.id = 'week_name';
-      weekNameRow.style.gridColumn = '1 / -1';
-      weekNameRow.style.display = 'grid';
-      weekNameRow.style.gridTemplateColumns = 'repeat(8, minmax(2em, 1fr))';
+      console.log('✅ calendar_grid hittades i DOM:', grid);
+      console.log('📦 calendar_grid innerHTML vid start:', grid.innerHTML.slice(0, 200));
 
-      ['', 'M', 'T', 'O', 'T', 'F', 'L', 'S'].forEach(label => {
-        const col = document.createElement('div');
-        col.className = 'WeekLabel';
-        col.textContent = label;
-      // Removed col.style.textAlign = 'center';
-        weekNameRow.appendChild(col);
+      // Update existing .weeklabel elements instead of recreating header row
+      const weekLabelEls = grid.querySelectorAll('.weeklabel');
+      const weekNumberEls = grid.querySelectorAll('.weeknumber');
+      const dayEls = grid.querySelectorAll('.day');
+      console.log('🔢 Antal .weeklabel:', weekLabelEls.length);
+      console.log('🔢 Antal .weeknumber:', weekNumberEls.length);
+      console.log('🔢 Antal .day:', dayEls.length);
+
+      const labels = ['', 'M', 'T', 'O', 'T', 'F', 'L', 'S'];
+      weekLabelEls.forEach((el, index) => {
+        el.textContent = labels[index] || '';
       });
-      grid.appendChild(weekNameRow);
 
       // Date range setup
       const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
@@ -157,85 +153,73 @@
       const startOffset = jsDay === 0 ? 6 : jsDay - 1;
       const totalDays = startOffset + lastDay.getDate();
       const numWeeks = Math.ceil(totalDays / 7);
+      const totalCells = numWeeks * 7;
 
-      let day = 1;
-
+      if (!weekNumberEls.length) console.warn('⚠️ Inga .weeknumber-element hittades i DOM');
+      if (!dayEls.length) console.warn('⚠️ Inga .day-element hittades i DOM');
+      let dayIndex = 0;
       for (let week = 0; week < numWeeks; week++) {
-        for (let wd = 0; wd < 8; wd++) {
-          let cell;
-          if (wd === 0) {
-            // Week number
-            cell = document.createElement('div');
-            cell.className = 'WeekNumber';
-            const monday = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + week * 7);
-            const weekNumber = window.getISOWeek(monday);
-            cell.textContent = 'v' + weekNumber;
-          // Removed cell.style.textAlign = 'center';
-            // Removed cell.style.cursor = 'pointer';
-            } else {
-              cell = document.createElement('p');
-              const gridIndex = week * 7 + (wd - 1);
-              if (gridIndex < startOffset || day > lastDay.getDate()) {
-                cell.textContent = '';
-              } else {
-                // Use corrected date calculation to match visual cell
-                const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + gridIndex);
-                // 🧠 cellDate = verkligt datum för den här cellen (t.ex. 2025-05-12)
-                const date = cellDate;
-                const isoDate = window.CalendarModule.formatDate(date);
-                cell.id = 'calendar_day';
-                // 🧩 isoDate används som nyckel i availableSlots och för att koppla till backend-data
-                cell.textContent = date.getDate();
-                cell.className = 'Day';
-              // Removed cell.style.textAlign = 'center';
-                // 📅 Det här är det datum användaren ser i kalendern (t.ex. "12")
-                cell.dataset.date = isoDate;
-                // 🧷 Kopplar det visuella datumet till backend-datan via dataset
+        const monday = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + week * 7);
+        const weekNumber = window.getISOWeek(monday);
+        if (weekNumberEls[week]) {
+          weekNumberEls[week].textContent = 'v' + weekNumber;
+        }
 
-                const todayMidnight = new Date();
-                todayMidnight.setHours(0, 0, 0, 0);
-                const isPast = date < todayMidnight;
+        for (let wd = 0; wd < 7; wd++) {
+          const gridIndex = week * 7 + wd;
+          const dayEl = dayEls[dayIndex];
+          if (!dayEl) {
+            console.warn(`⚠️ Saknar .day-element vid index ${dayIndex}`);
+            continue;
+          }
+          if (gridIndex < startOffset || gridIndex >= totalDays) {
+            dayEl.textContent = '';
+            dayEl.removeAttribute('data-date');
+            dayIndex++;
+            continue;
+          }
 
-                if (isPast) {
-                  // no class added here per instructions
-                } else if (availableSlots[isoDate] && availableSlots[isoDate].length > 0) {
-                  // no class added here per instructions
-                  // ✅ Om datumet har tillgängliga tider, gör det klickbart
-                  (function bindClick(cell, date, isoDate) {
-                    cell.addEventListener('click', () => {
-                      window.CalendarModule.highlightDate(cell);
-                      window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
-                    });
-                  })(cell, date, isoDate);
-                  if (!window.initialSlotRendered) {
-                    setTimeout(() => {
-                      document.getElementById('calendar_wrapper')?.style.setProperty('display', 'flex', 'important');
-                      window.CalendarModule.highlightDate(cell);
-                      window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
-                      window.initialSlotRendered = true;
-                    }, 100);
-                  }
-                } else {
-                  // no class added here per instructions
-                }
-              }
+          const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + gridIndex);
+          const date = cellDate;
+          const isoDate = window.CalendarModule.formatDate(date);
+          dayEl.textContent = date.getDate();
+          console.log(`📅 Fyller dag: ${isoDate} → ${date.getDate()} (index ${dayIndex})`);
+          dayEl.dataset.date = isoDate;
+          console.log(`✅ Dag satt: ${isoDate} → ${date.getDate()}`);
+
+          const todayMidnight = new Date();
+          todayMidnight.setHours(0, 0, 0, 0);
+          const isPast = date < todayMidnight;
+
+          if (!isPast && availableSlots[isoDate] && availableSlots[isoDate].length > 0) {
+            (function bindClick(cell, date, isoDate) {
+              cell.addEventListener('click', () => {
+                window.CalendarModule.highlightDate(cell);
+                window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
+              });
+            })(dayEl, date, isoDate);
+            if (!window.initialSlotRendered) {
+              setTimeout(() => {
+                document.getElementById('calendar_wrapper')?.style.setProperty('display', 'flex', 'important');
+                window.CalendarModule.highlightDate(dayEl);
+                window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
+                window.initialSlotRendered = true;
+              }, 100);
             }
-          grid.appendChild(cell);
+          }
+          dayIndex++;
         }
       }
 
-      // Replace old grid if it exists
-      const oldGrid = document.getElementById('calendar_grid');
-      if (oldGrid) oldGrid.remove();
-      outerWrapper.appendChild(grid);
-
-      calendarWrapper.appendChild(outerWrapper);
+      // Ta inte bort eller ersätt calendar_grid – hanteras nu i Webflow
 
       if (shouldRestoreTimes && !calendarWrapper.contains(calendarTimes)) {
         calendarWrapper.appendChild(calendarTimes);
       }
 
       calendarWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      console.log('✅ Kalendern färdigrenderad');
     }
   };
 
@@ -251,8 +235,11 @@
     const firstAvailableDateStr = Object.keys(groupedSlots).sort()[0];
     const firstAvailableDate = new Date(firstAvailableDateStr);
     window.firstAvailableDate = firstAvailableDate;
+    const monthLabel = document.getElementById('calendar_month');
+    if (monthLabel) {
+      monthLabel.textContent = firstAvailableDate.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
+    }
     window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
-    document.getElementById('calendar_wrapper')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   // Vänta på att #calendar_wrapper laddas in i DOM
@@ -260,13 +247,21 @@
     const calendarWrapper = document.getElementById('calendar_wrapper');
     if (calendarWrapper) {
       clearInterval(waitForCalendarWrapper2b);
-      calendarWrapper.style.setProperty('display', 'flex', 'important');
-      calendarWrapper.style.visibility = 'visible';
-      calendarWrapper.style.opacity = '1';
-      calendarWrapper.style.maxHeight = 'none';
-      calendarWrapper.style.position = 'static';
-      calendarWrapper.style.top = 'auto';
-      calendarWrapper.style.transition = 'none';
+      calendarWrapper.style.display = 'flex';
+      // Insert the waitForCalendarGrid block here
+      let waitForCalendarGrid = setInterval(() => {
+        const grid = document.getElementById('calendar_grid');
+        if (grid) {
+          clearInterval(waitForCalendarGrid);
+          console.log('✅ calendar_grid hittades av waitForCalendarGrid');
+          if (window.latestAvailableSlots && window.firstAvailableDate) {
+            console.log('🧠 Trigger renderCalendar från waitForCalendarGrid');
+            window.CalendarModule.renderCalendar(window.latestAvailableSlots, window.firstAvailableDate);
+          }
+        } else {
+          console.log('⏳ Väntar på calendar_grid...');
+        }
+      }, 100);
     }
   }, 100);
 </script>
