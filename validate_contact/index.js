@@ -28,6 +28,14 @@ module.exports = async function (context, req) {
     const contact = contactRes.rows[0];
     let metadata = contact?.metadata || {};
 
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = {};
+      }
+    }
+
     if (typeof metadata !== 'object' || metadata === null) metadata = {};
 
     const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
@@ -43,7 +51,14 @@ module.exports = async function (context, req) {
     );
 
     if ((req.body?.write_if_valid || req.query?.write_if_valid) && missingFields.length > 0) {
-      const metadataFromClient = req.body?.metadata;
+      let metadataFromClient = req.body?.metadata;
+      if (typeof metadataFromClient === 'string') {
+        try {
+          metadataFromClient = JSON.parse(metadataFromClient);
+        } catch {
+          metadataFromClient = {};
+        }
+      }
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
         if (!contact) {
           await pool.query(
