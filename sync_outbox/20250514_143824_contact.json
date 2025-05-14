@@ -1,6 +1,6 @@
 [
   {
-    "change_id": "1df31afa-3ca1-40fe-8b22-00e1fe5060ae",
+    "change_id": "3a7bef69-6bd0-4de1-843d-f1ce3424c67a",
     "table": "contact",
     "operation": "UPDATE",
     "data": {
@@ -18,7 +18,7 @@
         "postal_code": "115 32"
       },
       "created_at": "2025-04-23T17:12:02.554503+02:00",
-      "updated_at": "2025-05-06T08:14:31.838153+02:00",
+      "updated_at": "2025-05-14T14:35:57.122219+02:00",
       "booking_email": "daniel@anynode.se"
     }
   }

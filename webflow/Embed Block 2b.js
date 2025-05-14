@@ -26,51 +26,86 @@
     },
 
     renderTimes: function(times, currentMonth) {
-      const calendarTimes = document.getElementById('calendar_times');
-      if (!calendarTimes) {
-        console.warn('⚠️ calendar_times saknas – renderTimes avbryts');
+      console.log('🔍 times i renderTimes:', times);
+      if (!Array.isArray(times) || times.length === 0) {
+        console.warn('⚠️ Inga tider att visa i renderTimes');
         return;
       }
-      calendarTimes.style.display = 'block';
-      calendarTimes.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      calendarTimes.innerHTML = '';
-      const selectedDateEl = document.querySelector('.calendar-day.selected');
-      if (selectedDateEl) {
-        const selectedDay = selectedDateEl.textContent.padStart(2, '0');
-        const year = currentMonth.getFullYear();
-        const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
-        const date = new Date(`${year}-${month}-${selectedDay}`);
-        const weekday = date.toLocaleDateString('sv-SE', { weekday: 'long' });
-        const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${selectedDay} ${date.toLocaleDateString('sv-SE', { month: 'short' })}`;
-        const label = document.createElement('div');
-        label.textContent = `📅 ${formatted}`;
-        calendarTimes.appendChild(label);
+      const wrapper = document.getElementById('calendar_time_wrapper');
+      const selectedDateEl = document.getElementById('selected_date');
+      const timeGrid = document.getElementById('time_grid');
+      const submitButton = document.getElementById('contact-update-button');
+
+      if (!wrapper || !selectedDateEl || !timeGrid || !submitButton) {
+        console.warn('⚠️ Nödvändiga element för tidvisning saknas');
+        return;
       }
-      times.forEach(slot => {
-        const timeEl = document.createElement('button');
-        const localTime = new Date(slot.slot_local).toLocaleTimeString('sv-SE', {
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-        timeEl.type = 'button';
-        timeEl.className = 'time-slot';
-        timeEl.textContent = localTime;
-        timeEl.addEventListener('click', () => {
-          const allTimes = calendarTimes.querySelectorAll('.time-slot');
-          allTimes.forEach(t => t.classList.remove('selected'));
-          timeEl.classList.add('selected');
+
+      // Visa wrapper
+      wrapper.style.display = 'block';
+
+      // Rensa föregående visning
+      const selectedDayEl = document.querySelector('.day.selected');
+      if (!selectedDayEl) return;
+
+      const selectedDay = selectedDayEl.textContent.padStart(2, '0');
+      const year = currentMonth.getFullYear();
+      const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
+      const date = new Date(`${year}-${month}-${selectedDay}`);
+      const weekday = date.toLocaleDateString('sv-SE', { weekday: 'long' });
+      const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${selectedDay} ${date.toLocaleDateString('sv-SE', { month: 'short' })}`;
+      selectedDateEl.textContent = `${formatted}`;
+
+      // Hämta alla .timeitems
+      const timeItems = timeGrid.querySelectorAll('.timeitems');
+
+      // Rensa alla
+      timeItems.forEach(el => {
+        let label = el.querySelector('.time-label');
+        if (!label) label = el.querySelector('span.w-form-label');
+        if (label) label.textContent = '';
+        el.classList.remove('selected');
+        el.style.display = 'none';
+      });
+
+      // Fyll tider
+      times.forEach((slot, index) => {
+        if (index >= timeItems.length) return;
+        const el = timeItems[index];
+
+        const uniqueId = `radio-${index}`;
+        const radioInput = el.querySelector('input[type="radio"]');
+        let label = el.querySelector('.time-label');
+        if (!label) label = el.querySelector('span.w-form-label');
+
+        const labelText = slot.slot_local ? slot.slot_local.slice(11, 16) : slot;
+
+        if (label) {
+          label.textContent = labelText;
+          label.setAttribute('for', uniqueId);
+        }
+
+        if (radioInput) {
+          radioInput.value = slot.slot_iso || slot;
+          radioInput.id = uniqueId;
+          radioInput.name = 'meeting_time';
+          radioInput.dataset.slotIso = slot.slot_iso || slot;
+        }
+
+        el.dataset.slotIso = slot.slot_iso || slot;
+        el.style.display = 'block';
+        el.onclick = () => {
+          timeItems.forEach(t => t.classList.remove('selected'));
+          el.classList.add('selected');
+
           if (!window.formState) window.formState = {};
-          window.formState.slot_iso = slot.slot_iso;
+          window.formState.slot_iso = slot.slot_iso || slot;
+          window.formState.meeting_time = labelText;
+
           const slotIsoEl = document.getElementById('clt_slot_iso');
-          if (slotIsoEl) slotIsoEl.textContent = slot.slot_iso;
-          const submitButton = document.getElementById('contact-update-button');
-          if (submitButton) {
-            submitButton.style.display = 'block';
-            submitButton.textContent = 'Boka möte';
-          }
-          window.formState.meeting_time = localTime;
-        });
-        calendarTimes.appendChild(timeEl);
+          if (slotIsoEl) slotIsoEl.textContent = slot.slot_iso || slot;
+
+        };
       });
     },
 

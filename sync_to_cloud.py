@@ -10,11 +10,30 @@ def fetch_pending_changes(conn):
     with conn.cursor() as cur:
         cur.execute("""
             SELECT id, table_name, record_id, operation, payload
-            FROM pending_changes
-            WHERE direction = 'out' AND processed = false
-              AND table_name IN ('contact', 'bookings')
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                FROM pending_changes
+                WHERE direction = 'out' AND processed = false
+                  AND table_name IN ('contact', 'bookings')
+            ) sub
+            WHERE rn = 1
+            ORDER BY created_at ASC, id
         """)
-        return cur.fetchall()
+        rows = cur.fetchall()
+
+        # Rensa äldre UPDATE-poster med samma record_id
+        cur.execute("""
+            DELETE FROM pending_changes
+            WHERE id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                    FROM pending_changes
+                    WHERE direction = 'out' AND processed = false
+                ) sub
+                WHERE rn = 1
+            ) AND direction = 'out' AND processed = false AND operation = 'UPDATE';
+        """)
+        return rows
 
 def mark_as_processed(conn, change_id):
     with conn.cursor() as cur:
@@ -50,20 +69,6 @@ def apply_change(conn, change, local_conn):
                 mark_as_processed(local_conn, change[0])
                 return
 
-        # Om force_resync finns i metadata, alltid kör UPDATE utan tidsjämförelse
-        if 'metadata' in data and table_name == 'contact':
-            meta = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
-            if meta.pop('force_resync', False):
-                print("🔁 Tvingad synk via force_resync – uppdaterar direkt")
-                data['metadata'] = json.dumps(meta)
-                operation = 'UPDATE'
-                data["_force_resync_applied"] = True
-            else:
-                print("ℹ️ Ingen force_resync – kör normal UPDATE om updated_at är nyare")
-
-        print(f"🟡 Försöker köra: {operation} på {table_name}")
-        print(f"➡️  Data: {data}")
-
         # Ensure all values are serializable to SQL
         for k, v in data.items():
             if isinstance(v, dict):
@@ -90,7 +95,7 @@ def apply_change(conn, change, local_conn):
                 f"{', '.join([f'{k} = EXCLUDED.{k}' for k in data.keys() if k != 'id'])}",
                 values
             )
-        if 'metadata' in data and table_name == 'contact' and not data.get("_force_resync_applied"):
+        if 'metadata' in data and table_name == 'contact':
             # Merge metadata with existing remote value and ensure JSON string
             cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))
             row = cur.fetchone()
@@ -103,38 +108,58 @@ def apply_change(conn, change, local_conn):
                 existing_metadata = {}
 
             incoming_metadata = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
-            print(f"🔍 Före merge – metadata i molnet: {json.dumps(existing_metadata)}")
-            print(f"🔍 Incoming metadata: {json.dumps(incoming_metadata)}")
+            if existing_metadata == incoming_metadata:
+                mark_as_processed(local_conn, change[0])
+                return
             existing_metadata.update(incoming_metadata)
-            print(f"🧬 Efter merge – metadata som kommer sparas: {json.dumps(existing_metadata)}")
-            # Säkerställ att metadata är JSON-sträng och inte dubbelt serialiserad
-            if isinstance(existing_metadata, str):
-                try:
-                    json.loads(existing_metadata)  # Already JSON string
-                    data['metadata'] = existing_metadata
-                except:
-                    data['metadata'] = json.dumps(existing_metadata)
-            else:
-                data['metadata'] = json.dumps(existing_metadata)
+            changed_keys = [k for k in incoming_metadata if existing_metadata.get(k) != incoming_metadata[k]]
+            if not changed_keys:
+                mark_as_processed(local_conn, change[0])
+                return
+            data['metadata'] = json.dumps(existing_metadata)
 
         if operation == 'UPDATE':
-            # Check if local updated_at is newer than remote before UPDATE
+            # Förbättrad hantering av tidsjämförelse för updated_at
             if 'updated_at' in data:
-                cur.execute(f"SELECT updated_at FROM {table_name} WHERE id = %s", (record_id,))
+                try:
+                    # Säkerställ att local_ts är datetime i UTC
+                    local_ts = data['updated_at']
+                    if isinstance(local_ts, str):
+                        local_ts = datetime.fromisoformat(local_ts)
+                    if local_ts.tzinfo is None:
+                        local_ts = local_ts.replace(tzinfo=timezone.utc)
+                    else:
+                        local_ts = local_ts.astimezone(timezone.utc)
+
+                    cur.execute(f"SELECT updated_at FROM {table_name} WHERE id = %s", (record_id,))
+                    row = cur.fetchone()
+                    if row and row[0] and isinstance(row[0], datetime):
+                        remote_ts = row[0]
+                        if remote_ts.tzinfo is None:
+                            remote_ts = remote_ts.replace(tzinfo=timezone.utc)
+                        else:
+                            remote_ts = remote_ts.astimezone(timezone.utc)
+
+                        if local_ts <= remote_ts:
+                            mark_as_processed(local_conn, change[0])
+                            return
+                except Exception:
+                    pass
+
+            if table_name == "contact" and "metadata" in data:
+                local_meta = data["metadata"]
+                if isinstance(local_meta, str):
+                    local_meta = json.loads(local_meta)
+                cur.execute("SELECT metadata FROM contact WHERE id = %s", (data["id"],))
                 row = cur.fetchone()
-                if row and row[0] and isinstance(row[0], datetime):
-                    remote_ts = row[0]
-                    local_ts = datetime.fromisoformat(data['updated_at'])
-                    print(f"🕓 local_ts (from payload): {local_ts}")
-                    print(f"🕓 remote_ts (from DB):     {remote_ts}")
-                    if local_ts <= remote_ts:
-                        print(f"↩️  Hoppar över äldre UPDATE på {table_name} (id={record_id}) – lokalt {local_ts} <= moln {remote_ts}")
+                if row:
+                    remote_meta = row[0]
+                    if isinstance(remote_meta, str):
+                        remote_meta = json.loads(remote_meta)
+                    if remote_meta == local_meta:
                         mark_as_processed(local_conn, change[0])
                         return
-                    else:
-                        print(f"✅ Lokala ändringen är nyare – uppdaterar {table_name} (id={record_id})")
-            if "_force_resync_applied" in data:
-                del data["_force_resync_applied"]
+
             columns = ', '.join(data.keys())
             placeholders = ', '.join(['%s'] * len(data))
             values = list(data.values())
@@ -146,24 +171,17 @@ def apply_change(conn, change, local_conn):
                 f"UPDATE {table_name} SET {update_set} WHERE id = %s",
                 update_values
             )
-            cur.execute(f"SELECT metadata, updated_at FROM {table_name} WHERE id = %s", (record_id,))
+            cur.execute("SELECT metadata, updated_at FROM contact WHERE id = %s", [payload["id"]])
             updated_row = cur.fetchone()
-            if updated_row is None:
-                print(f"❗ Ingen rad hittades efter UPDATE – kontrollera att id={record_id} finns i {table_name}.")
-            else:
-                updated_address = updated_row[0].get('address', 'saknas') if updated_row[0] else 'saknas'
-                print(f"🧾 Uppdaterat i moln-DB: address = {updated_address}, updated_at = {updated_row[1]}")
         elif operation == 'DELETE':
             cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
         conn.commit()
         mark_as_processed(local_conn, change[0])
-        print(f"✅ Synkade {operation} på {table_name} (id={record_id})")
 
 def sync():
     import traceback
     local_conn = connect_db(LOCAL_DB_CONFIG)
     remote_conn = connect_db(REMOTE_DB_CONFIG)
-    print("🔗 Remote anslutning:", remote_conn.get_dsn_parameters())
 
     changes = fetch_pending_changes(local_conn)
     count = 0
@@ -174,7 +192,6 @@ def sync():
         except Exception as e:
             print(f"❌ Misslyckades att applicera ändring på {change[1]} (id={change[2]}): {e}")
             traceback.print_exc()
-    print(f"✅ Totalt {count} ändring(ar) synkade till molnet.")
     
     local_conn.close()
     remote_conn.close()

@@ -1,14 +1,19 @@
 import psycopg2
 import json
 import sys
+import argparse
 from config import LOCAL_DB_CONFIG
 
-if len(sys.argv) not in [2, 3]:
-    print("Användning: python sync_force_resync <email> [--clear]")
-    sys.exit(1)
+parser = argparse.ArgumentParser(description="Hantera force_resync i metadata.")
+parser.add_argument("email", help="Kontaktens e-postadress")
+parser.add_argument("--clear", action="store_true", help="Ta bort force_resync")
+parser.add_argument("--show", action="store_true", help="Visa befintlig metadata")
 
-email = sys.argv[1]
-clear = len(sys.argv) == 3 and sys.argv[2] == "--clear"
+args = parser.parse_args()
+email = args.email
+
+clear = args.clear
+
 
 conn = psycopg2.connect(**LOCAL_DB_CONFIG)
 cur = conn.cursor()
@@ -21,6 +26,10 @@ if not row:
 
 contact_id, metadata = row
 metadata = json.loads(metadata) if isinstance(metadata, str) else metadata
+
+if args.show:
+    print(json.dumps(metadata, indent=2, ensure_ascii=False))
+    sys.exit(0)
 
 if clear:
     metadata.pop("force_resync", None)

@@ -1,23 +1,24 @@
 [
   {
-    "change_id": "9b02c3ad-b635-47b6-a8ba-d46faa3d6e54",
+    "change_id": "ed232dbd-ffbf-4266-90ea-20ea6820e9a2",
     "table": "contact",
     "operation": "UPDATE",
     "data": {
       "id": "298c095b-e866-443f-858a-b5316df2b47f",
       "metadata": {
         "city": "Stockholm",
-        "phone": "0709561480",
+        "phone": "0707000000",
         "origin": "klrab.se",
         "address": "Erik Dahlbergsgatan 35",
         "company": "AnyNode",
+        "country": "Sverige",
         "last_name": "Källberg",
         "last_sync": "2025-05-05 14:09:50.904942+02",
         "first_name": "Daniel",
-        "postal_number": "115 32"
+        "postal_code": "115 32"
       },
       "created_at": "2025-04-23T17:12:02.554503+02:00",
-      "updated_at": "2025-05-05T15:11:21.17538+02:00",
+      "updated_at": "2025-05-14T14:46:24.81086+02:00",
       "booking_email": "daniel@anynode.se"
     }
   }
