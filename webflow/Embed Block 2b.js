@@ -46,33 +46,29 @@
         label.textContent = `📅 ${formatted}`;
         calendarTimes.appendChild(label);
       }
-      times.forEach(time => {
+      times.forEach(slot => {
         const timeEl = document.createElement('button');
+        const localTime = new Date(slot.slot_local).toLocaleTimeString('sv-SE', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
         timeEl.type = 'button';
         timeEl.className = 'time-slot';
-        timeEl.textContent = time;
+        timeEl.textContent = localTime;
         timeEl.addEventListener('click', () => {
           const allTimes = calendarTimes.querySelectorAll('.time-slot');
           allTimes.forEach(t => t.classList.remove('selected'));
           timeEl.classList.add('selected');
           if (!window.formState) window.formState = {};
-          const selectedDateEl = document.querySelector('.calendar-day.selected');
-          if (selectedDateEl) {
-            const selectedDay = selectedDateEl.textContent.padStart(2, '0');
-            const year = currentMonth.getFullYear();
-            const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
-            const dateIso = `${year}-${month}-${selectedDay}`;
-            const isoTime = `${dateIso}T${time}:00.000Z`;
-            window.formState.slot_iso = isoTime;
-            const slotIsoEl = document.getElementById('clt_slot_iso');
-            if (slotIsoEl) slotIsoEl.textContent = isoTime;
-            const submitButton = document.getElementById('contact-update-button');
-            if (submitButton) {
-              submitButton.style.display = 'block';
-              submitButton.textContent = 'Boka möte';
-            }
+          window.formState.slot_iso = slot.slot_iso;
+          const slotIsoEl = document.getElementById('clt_slot_iso');
+          if (slotIsoEl) slotIsoEl.textContent = slot.slot_iso;
+          const submitButton = document.getElementById('contact-update-button');
+          if (submitButton) {
+            submitButton.style.display = 'block';
+            submitButton.textContent = 'Boka möte';
           }
-          window.formState.meeting_time = time;
+          window.formState.meeting_time = localTime;
         });
         calendarTimes.appendChild(timeEl);
       });

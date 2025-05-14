@@ -247,7 +247,7 @@ module.exports = async function (context, req) {
 
           await Promise.all([10, 14].map(async (hour) => {
             debugLog(`🕑 Bearbetar datum ${dateStr}, timmar: 10 och 14`);
-            const slotTime = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:00:00Z`);
+            const slotTime = DateTime.fromISO(`${dateStr}T${hour.toString().padStart(2, '0')}:00`, { zone: timezone }).toUTC().toJSDate();
 
             const openTime = DateTime.fromISO(`${dateStr}T${settings.open_time}`, { zone: timezone }).toUTC().toJSDate();
             const closeTime = DateTime.fromISO(`${dateStr}T${settings.close_time}`, { zone: timezone }).toUTC().toJSDate();
