@@ -213,32 +213,11 @@
     const cltMeetingType = document.getElementById('clt_meetingtype');
     const cltMeetingLength = document.getElementById('clt_meetinglength');
     const cltReady = document.getElementById('clt_ready');
-
     const addressField = document.querySelector('#address_fields');
-    if (!addressField) {
-      console.warn('⚠️ #address_fields hittades inte i DOM');
-    }
-
-    // Lägg till guard för att vänta på mötestyp och mötestid innan validering av namn
     if (!meetingType || !meetingLength) {
       console.log('⏳ Väntar på mötestyp och mötestid innan validering av namn');
       return;
     }
-
-    // Sätt dolda fält
-    if (cltEmail) {
-      cltEmail.value = email;
-      console.log('📥 Satt #clt_email:', email);
-    }
-    if (cltMeetingType) {
-      cltMeetingType.value = meetingType;
-      console.log('📥 Satt #clt_meetingtype:', meetingType);
-    }
-    if (cltMeetingLength) {
-      cltMeetingLength.value = meetingLength;
-      console.log('📥 Satt #clt_meetinglength:', meetingLength);
-    }
-
     // Om email eller mötestyp saknas, göm fält och knapp
     if (!email || !meetingType) {
       console.log('⚠️ E-post eller mötestyp saknas, gömmer fält och knapp');
@@ -252,7 +231,6 @@
       if (cltReady) cltReady.value = 'false';
       return;
     }
-
     try {
       const url = 'https://macspotbackend.azurewebsites.net/api/validate_contact';
       const response = await fetch(url, {
@@ -260,145 +238,12 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, meeting_type: meetingType })
       });
-      console.log('📡 validate_contact status:', response.status);
-      if (!response.ok) throw new Error('Failed to validate contact');
       const data = await response.json();
-      console.log('✅ API JSON:', data);
+      console.log('📡 validate_contact status:', response.status);
+      console.log('🔍 API-svar – söker contact_id:', data);
 
-      const allFieldIds = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
-      const fieldLabels = {
-        first_name: 'Förnamn',
-        last_name: 'Efternamn',
-        phone: 'Telefonnummer',
-        company: 'Företag',
-        address: 'Gatuadress',
-        postal_code: 'Postnummer',
-        city: 'Stad',
-        country: 'Land'
-      };
-      const allFields = allFieldIds.map(id => document.getElementById(id)).filter(Boolean);
-      const missingFieldsContainer = document.getElementById('missing_fields_messages');
-      if (missingFieldsContainer) missingFieldsContainer.innerHTML = '';
-
-      // Börja med att dölja alla fält och #address_fields
-      allFields.forEach(f => {
-        f.classList.add('hidden');
-        f.classList.remove('needs-filling');
-        f.style.display = 'none';
-      });
-      if (addressField) addressField.style.display = 'none';
-
-      // Visa alltid dessa fält om kunden är ny eller har missing_fields
-      const alwaysShow = ['first_name', 'last_name', 'phone', 'company'];
-      allFields.forEach(input => {
-        const fieldName = input.id;
-        const isAddressField = ['address', 'postal_code', 'city', 'country'].includes(fieldName);
-        const shouldShow = data.status === 'new_customer' && alwaysShow.includes(fieldName);
-        const isMissing = data.missing_fields && data.missing_fields.includes(fieldName);
-        const showField = shouldShow || isMissing;
-
-        if (showField) {
-          input.classList.remove('hidden');
-          input.classList.add('needs-filling');
-          input.style.display = 'block';
-          if (missingFieldsContainer && isMissing) {
-            const p = document.createElement('p');
-            p.className = 'missing-field-message';
-            p.textContent = `Saknat fält: ${fieldLabels[fieldName] || fieldName}`;
-            missingFieldsContainer.appendChild(p);
-          }
-        }
-      });
-
-      // Visa #address_fields om meetingType === 'atclient' och (ny kund eller någon adress i missing_fields)
-      const addressFieldIds = ['address', 'postal_code', 'city', 'country'];
-      const addressRequired =
-        meetingType === 'atclient' &&
-        (
-          data.status === 'new_customer' ||
-          (data.missing_fields && addressFieldIds.some(id => data.missing_fields.includes(id)))
-        );
-
-      if (addressRequired && addressField) {
-        addressField.style.display = 'block';
-        console.log('✅ Visar #address_fields pga atclient + ny kund eller missing_fields');
-      }
-
-      // Visa knapp baserat på status och om alla synliga fält är ifyllda
-      if (submitButton) {
-        if (data.status === 'new_customer') {
-          submitButton.style.display = 'block';
-          submitButton.textContent = 'Skapa';
-          console.log('🆕 Ny kund – visa "Skapa" knapp');
-        } else if (data.status === 'existing_customer' && data.missing_fields.length > 0) {
-          submitButton.style.display = 'block';
-          submitButton.textContent = 'Uppdatera';
-          console.log('✏️ Befintlig kund med saknade fält – visa "Uppdatera" knapp');
-        } else {
-          submitButton.style.display = 'none';
-          console.log('✅ Befintlig kund komplett – göm knapp');
-        }
-      }
-
-      // Kontrollera att alla dolda fält är ifyllda
-      const allCltFieldsFilled =
-        cltEmail && cltEmail.value.trim() &&
-        cltMeetingType && cltMeetingType.value.trim() &&
-        cltMeetingLength && cltMeetingLength.value.trim();
-
-      // Kontrollera att alla synliga kontaktfält är ifyllda
-      // Använd getComputedStyle för att säkert avgöra synlighet
-      const visibleInputs = allFields.filter(el => el && window.getComputedStyle(el).display !== 'none');
-      const allVisibleContactFieldsFilled = visibleInputs.every(input => input.value.trim());
-      // Logga varje synligt inputfält och dess trimmade värde
-      visibleInputs.forEach(input => {
-        console.log(`🔍 Synligt fält: #${input.id} = "${input.value.trim()}"`);
-      });
-
-      if (allCltFieldsFilled && allVisibleContactFieldsFilled) {
-        if (cltReady) {
-          cltReady.value = 'true';
-          // Sätt window.formState så att det alltid finns vid knapptryckning
-          window.formState = {
-            email,
-            meeting_type: meetingType,
-            meeting_length: parseInt(meetingLength, 10),
-            metadata: {
-              first_name: document.getElementById('first_name')?.value || '',
-              last_name: document.getElementById('last_name')?.value || '',
-              phone: document.getElementById('phone')?.value || '',
-              company: document.getElementById('company')?.value || '',
-              address: document.getElementById('address')?.value || '',
-              postal_code: document.getElementById('postal_code')?.value || '',
-              city: document.getElementById('city')?.value || '',
-              country: document.getElementById('country')?.value || ''
-            }
-          };
-          console.log('✅ formState satt:', window.formState);
-          console.log('✅ Alla kund- och kontaktfält ifyllda, satt #clt_ready = true');
-          // KOPPLAR Block 1 till Block 2: initiera slot-fetch om funktionen finns
-          if (window.initAvailableSlotFetch) {
-            window.initAvailableSlotFetch();
-            console.log('📡 initAvailableSlotFetch() anropad från Block 1');
-          } else {
-            console.warn('⚠️ initAvailableSlotFetch() saknas – se till att Block 2 är laddad');
-            setTimeout(() => {
-              if (window.initAvailableSlotFetch) {
-                window.initAvailableSlotFetch();
-                console.log('📡 initAvailableSlotFetch() kördes via fallback');
-              } else {
-                console.warn('❌ initAvailableSlotFetch() saknas fortfarande efter timeout');
-              }
-            }, 500);
-          }
-        }
-      } else {
-        if (cltReady) {
-          cltReady.value = 'false';
-          console.log('⚠️ Saknas ifyllda kontaktfält, satt #clt_ready = false');
-        }
-      }
-
+      await fetchAndUpdateCustomerState(email, meetingType);
+      updateCustomerFieldVisibilityAndState(data, meetingType);
     } catch (err) {
       console.error('❌ Fel vid validering av kontakt:', err);
     }
@@ -406,6 +251,10 @@
 
   // Kontrollera att validateEmail() kopplas vid input
   document.addEventListener('DOMContentLoaded', () => {
+    // Sätt clt_ready till 'false' vid sidladdning
+    const cltReady = document.getElementById('clt_ready');
+    if (cltReady) cltReady.value = 'false';
+
     const emailEl = document.querySelector('#booking_email');
     if (emailEl) {
       emailEl.addEventListener('input', validateEmail);
@@ -415,7 +264,7 @@
     }
     // Lägg till lyssnare på alla kontaktfält så att validateAndRenderCustomerFields() körs vid input
     [
-      'first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'
+      'first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country', 'clt_contact_id'
     ].forEach(id => {
       const el = document.getElementById(id);
       if (el) {
@@ -474,4 +323,211 @@
       });
     }
   });
+
+  // --- Nya funktioner för API-anrop och fälthantering ---
+  async function fetchAndUpdateCustomerState(email, meetingType) {
+    const cltEmail = document.getElementById('clt_email');
+    const cltMeetingType = document.getElementById('clt_meetingtype');
+    const cltMeetingLength = document.getElementById('clt_meetinglength');
+    const cltContactId = document.getElementById('clt_contact_id');
+
+    if (cltEmail) cltEmail.value = email;
+    if (cltMeetingType) cltMeetingType.value = meetingType;
+
+    const response = await fetch('https://macspotbackend.azurewebsites.net/api/validate_contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, meeting_type: meetingType })
+    });
+    const data = await response.json();
+
+    const idFromResponse = [data.contact_id, data.id].find(v => typeof v === 'string' && v.length > 10) || '';
+    if (cltContactId) cltContactId.value = idFromResponse;
+
+    return data;
+  }
+
+  function updateCustomerFieldVisibilityAndState(data, meetingType) {
+    const submitButton = document.getElementById('contact-update-button');
+    const cltEmail = document.getElementById('clt_email');
+    const cltMeetingType = document.getElementById('clt_meetingtype');
+    const cltMeetingLength = document.getElementById('clt_meetinglength');
+    const cltContactId = document.getElementById('clt_contact_id');
+    const cltReady = document.getElementById('clt_ready');
+    const emailEl = document.querySelector('#booking_email');
+    const meetingLengthEl = document.querySelector('input[name="meeting_length"]:checked');
+    const meetingLength = meetingLengthEl ? meetingLengthEl.value : '';
+    const addressField = document.querySelector('#address_fields');
+    const allFieldIds = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    const fieldLabels = {
+      first_name: 'Förnamn',
+      last_name: 'Efternamn',
+      phone: 'Telefonnummer',
+      company: 'Företag',
+      address: 'Gatuadress',
+      postal_code: 'Postnummer',
+      city: 'Stad',
+      country: 'Land'
+    };
+    const allFields = allFieldIds.map(id => document.getElementById(id)).filter(Boolean);
+    const missingFieldsContainer = document.getElementById('missing_fields_messages');
+    if (missingFieldsContainer) missingFieldsContainer.innerHTML = '';
+
+    // Döljer alla kontaktfält och address_fields
+    allFields.forEach(f => {
+      f.classList.add('hidden');
+      f.classList.remove('needs-filling');
+      f.style.display = 'none';
+    });
+    if (addressField) addressField.style.display = 'none';
+
+    // Visa alltid dessa fält om kunden är ny eller har missing_fields
+    const alwaysShow = ['first_name', 'last_name', 'phone', 'company'];
+    allFields.forEach(input => {
+      const fieldName = input.id;
+      const isAddressField = ['address', 'postal_code', 'city', 'country'].includes(fieldName);
+      const shouldShow = data.status === 'new_customer' && alwaysShow.includes(fieldName);
+      const isMissing = data.missing_fields && data.missing_fields.includes(fieldName);
+      const showField = shouldShow || isMissing;
+      if (showField) {
+        input.classList.remove('hidden');
+        input.classList.add('needs-filling');
+        input.style.display = 'block';
+        if (missingFieldsContainer && isMissing) {
+          const p = document.createElement('p');
+          p.className = 'missing-field-message';
+          p.textContent = `Saknat fält: ${fieldLabels[fieldName] || fieldName}`;
+          missingFieldsContainer.appendChild(p);
+        }
+      }
+    });
+
+    // Visa #address_fields om meetingType === 'atclient' och (ny kund eller någon adress i missing_fields)
+    const addressFieldIds = ['address', 'postal_code', 'city', 'country'];
+    const addressRequired =
+      meetingType === 'atclient' &&
+      (
+        data.status === 'new_customer' ||
+        (data.missing_fields && addressFieldIds.some(id => data.missing_fields.includes(id)))
+      );
+    if (addressRequired && addressField) {
+      addressField.style.display = 'block';
+      console.log('✅ Visar #address_fields pga atclient + ny kund eller missing_fields');
+    }
+
+    // Visa knapp baserat på status och om alla synliga fält är ifyllda
+    if (submitButton) {
+      if (data.status === 'new_customer') {
+        submitButton.style.display = 'block';
+        submitButton.textContent = 'Skapa';
+        console.log('🆕 Ny kund – visa "Skapa" knapp');
+      } else if (data.status === 'existing_customer' && data.missing_fields.length > 0) {
+        submitButton.style.display = 'block';
+        submitButton.textContent = 'Uppdatera';
+        console.log('✏️ Befintlig kund med saknade fält – visa "Uppdatera" knapp');
+      } else {
+        submitButton.style.display = 'none';
+        console.log('✅ Befintlig kund komplett – göm knapp');
+      }
+    }
+
+    // Kontrollera att alla dolda fält är ifyllda
+    const allCltFieldsFilled =
+      cltEmail && String(cltEmail.value).trim() &&
+      cltMeetingType && String(cltMeetingType.value).trim() &&
+      cltMeetingLength && String(cltMeetingLength.value).trim() &&
+      cltContactId && typeof cltContactId.value === 'string' && cltContactId.value.trim();
+    if (!allCltFieldsFilled) {
+      // Specifik logg när cltContactId.value saknas
+      if (!cltContactId || !cltContactId.value.trim()) {
+        console.warn('⚠️ clt_ready = false p.g.a: cltContactId.value saknas', {
+          cltEmail: cltEmail?.value,
+          cltMeetingType: cltMeetingType?.value,
+          cltMeetingLength: cltMeetingLength?.value,
+          cltContactId: cltContactId?.value
+        });
+      } else {
+        console.warn('⚠️ clt_ready = false p.g.a: clt-fält saknas – detaljer:', {
+          cltEmail: cltEmail?.value,
+          cltMeetingType: cltMeetingType?.value,
+          cltMeetingLength: cltMeetingLength?.value,
+          cltContactId: cltContactId?.value
+        });
+      }
+    }
+    console.log('🧪 Kontroll av clt-fält:',
+      {
+        cltEmail: cltEmail?.value,
+        cltMeetingType: cltMeetingType?.value,
+        cltMeetingLength: cltMeetingLength?.value,
+        cltContactId: cltContactId?.value
+      }
+    );
+
+    // Kontrollera att alla synliga kontaktfält är ifyllda
+    // Använd getComputedStyle för att säkert avgöra synlighet
+    const visibleInputs = allFields.filter(el => el && window.getComputedStyle(el).display !== 'none');
+    const allVisibleContactFieldsFilled = visibleInputs.every(input => input.value.trim());
+    visibleInputs.forEach(input => {
+      console.log(`🔍 Synligt fält: #${input.id} = "${input.value.trim()}"`);
+    });
+
+    if (allCltFieldsFilled && allVisibleContactFieldsFilled) {
+      if (cltReady) {
+        cltReady.value = 'true';
+        // Sätt window.formState så att det alltid finns vid knapptryckning
+        window.formState = {
+          email: emailEl ? emailEl.value.trim() : '',
+          meeting_type: meetingType,
+          meeting_length: parseInt(meetingLength, 10),
+          contact_id: cltContactId?.value || '',
+          metadata: {
+            first_name: document.getElementById('first_name')?.value || '',
+            last_name: document.getElementById('last_name')?.value || '',
+            phone: document.getElementById('phone')?.value || '',
+            company: document.getElementById('company')?.value || '',
+            address: document.getElementById('address')?.value || '',
+            postal_code: document.getElementById('postal_code')?.value || '',
+            city: document.getElementById('city')?.value || '',
+            country: document.getElementById('country')?.value || ''
+          }
+        };
+        console.log('✅ formState satt:', window.formState);
+        console.log('✅ Alla kund- och kontaktfält ifyllda, satt #clt_ready = true');
+        // KOPPLAR Block 1 till Block 2: initiera slot-fetch om funktionen finns
+        if (window.initAvailableSlotFetch) {
+          window.initAvailableSlotFetch();
+          console.log('📡 initAvailableSlotFetch() anropad från Block 1');
+        } else {
+          console.warn('⚠️ initAvailableSlotFetch() saknas – se till att Block 2 är laddad');
+          setTimeout(() => {
+            if (window.initAvailableSlotFetch) {
+              window.initAvailableSlotFetch();
+              console.log('📡 initAvailableSlotFetch() kördes via fallback');
+            } else {
+              console.warn('❌ initAvailableSlotFetch() saknas fortfarande efter timeout');
+            }
+          }, 500);
+        }
+      }
+    } else {
+      const debugMissing = [];
+      if (!allCltFieldsFilled) debugMissing.push('clt-fält saknas');
+      if (!allVisibleContactFieldsFilled) debugMissing.push('synliga kontaktfält saknas');
+      console.warn('⚠️ clt_ready = false p.g.a:', debugMissing.join(' + '));
+      if (cltReady) {
+        cltReady.value = 'false';
+        console.log('⚠️ Saknas ifyllda kontaktfält, satt #clt_ready = false');
+      }
+    }
+
+    // Lägg till logg för slutstatus för clt-fält
+    console.log('🧪 Slutstatus clt-fält:', {
+      clt_email: cltEmail?.value,
+      clt_meetingtype: cltMeetingType?.value,
+      clt_meetinglength: cltMeetingLength?.value,
+      clt_contact_id: cltContactId?.value,
+      clt_ready: cltReady?.value
+    });
+  }
 </script>

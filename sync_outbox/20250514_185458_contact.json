@@ -1,0 +1,23 @@
+[
+  {
+    "change_id": "d88a8c34-35a5-4b3c-ba5f-ce5e57832bfe",
+    "table": "contact",
+    "operation": "INSERT",
+    "data": {
+      "id": "70a755b9-7f66-488e-a2c8-bdfdd4fcf2e8",
+      "metadata": {
+        "city": "Töreboda",
+        "phone": "0709561480898",
+        "address": "Bjökliden",
+        "company": "Test ab",
+        "country": "Svergie ",
+        "last_name": "Källberg",
+        "first_name": "Daniel",
+        "postal_code": "54590"
+      },
+      "created_at": "2025-05-14T15:53:47.738421+02:00",
+      "updated_at": "2025-05-14T15:53:47.738421+02:00",
+      "booking_email": "daniel.kallberg@mac.com"
+    }
+  }
+]

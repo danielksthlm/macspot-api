@@ -95,7 +95,10 @@ module.exports = async function (context, req) {
     } else {
       context.res = {
         status: 200,
-        body: { status: "ok" }
+        body: {
+          status: "existing_customer",
+          contact_id: contact.id
+        }
       };
     }
 
