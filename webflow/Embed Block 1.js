@@ -55,7 +55,10 @@
       const res = await fetch('https://macspotbackend.azurewebsites.net/api/meeting_types');
       if (!res.ok) throw new Error('Failed to fetch meeting types');
       const { types, lengths: loadedLengths } = await res.json();
-      window.lengths = loadedLengths || {};
+      window.lengths = {};
+      Object.entries(loadedLengths || {}).forEach(([key, val]) => {
+        window.lengths[key.toLowerCase()] = val;
+      });
       console.log('📡 Hämtade mötestyper och längder:', types, window.lengths);
       console.log('📊 Mötestyper:', types);
       console.log('📊 Längder per typ:', window.lengths);
@@ -421,7 +424,7 @@
         submitButton.style.display = 'block';
         submitButton.textContent = 'Skapa';
         console.log('🆕 Ny kund – visa "Skapa" knapp');
-      } else if (data.status === 'existing_customer' && data.missing_fields.length > 0) {
+      } else if (data.status === 'existing_customer' && Array.isArray(data.missing_fields) && data.missing_fields.length > 0) {
         submitButton.style.display = 'block';
         submitButton.textContent = 'Uppdatera';
         console.log('✏️ Befintlig kund med saknade fält – visa "Uppdatera" knapp');
@@ -492,6 +495,13 @@
             country: document.getElementById('country')?.value || ''
           }
         };
+        // Lägg till källa för formState
+        window.formState.source = 'frontend';
+        // Döljer submit-knappen direkt när clt_ready = true (skapande/uppdatering klar)
+        if (submitButton) {
+          submitButton.style.display = 'none';
+          console.log('🚫 Gömmer knapp efter skapande eller uppdatering');
+        }
         console.log('✅ formState satt:', window.formState);
         console.log('✅ Alla kund- och kontaktfält ifyllda, satt #clt_ready = true');
         // KOPPLAR Block 1 till Block 2: initiera slot-fetch om funktionen finns

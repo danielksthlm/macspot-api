@@ -24,7 +24,7 @@ module.exports = async function (context, req) {
 
   try {
     const settingsRes = await pool.query(
-      "SELECT key, value FROM booking_settings WHERE key IN ('meeting_types', 'default_meeting_length_atClient', 'default_meeting_length_atOffice', 'default_meeting_length_digital')"
+      "select key, value from booking_settings where key in ('meeting_types', 'default_meeting_length_atclient', 'default_meeting_length_atoffice', 'default_meeting_length_digital')"
     );
 
     const settings = {};
@@ -41,8 +41,8 @@ module.exports = async function (context, req) {
       zoom: settings['default_meeting_length_digital'],
       facetime: settings['default_meeting_length_digital'],
       teams: settings['default_meeting_length_digital'],
-      atclient: settings['default_meeting_length_atClient'],
-      atoffice: settings['default_meeting_length_atOffice']
+      atclient: settings['default_meeting_length_atclient'],
+      atoffice: settings['default_meeting_length_atoffice']
     };
 
     context.res = {
