@@ -169,6 +169,13 @@
         if (cltMeetingLength) {
           cltMeetingLength.value = value;
           console.log('📥 Satt #clt_meetinglength:', value);
+          // Kopiera radioknappens mötestyp till #clt_meetingtype om möjligt
+          const cltMeetingType = document.getElementById('clt_meetingtype');
+          const meetingTypeEl = document.querySelector('input[name="meeting_type"]:checked');
+          if (cltMeetingType && meetingTypeEl) {
+            cltMeetingType.value = meetingTypeEl.value;
+            console.log('📥 Bekräftat #clt_meetingtype från radioknapp:', cltMeetingType.value);
+          }
         }
         validateAndRenderCustomerFields();
       });
@@ -216,6 +223,7 @@
     const cltMeetingType = document.getElementById('clt_meetingtype');
     const cltMeetingLength = document.getElementById('clt_meetinglength');
     const cltReady = document.getElementById('clt_ready');
+    const cltContactId = document.getElementById('clt_contact_id');
     const addressField = document.querySelector('#address_fields');
     if (!meetingType || !meetingLength) {
       console.log('⏳ Väntar på mötestyp och mötestid innan validering av namn');
@@ -244,6 +252,16 @@
       const data = await response.json();
       console.log('📡 validate_contact status:', response.status);
       console.log('🔍 API-svar – söker contact_id:', data);
+
+      // --- LOGGAR: Kontrollmötestyp och clt-fält ---
+      console.log('📋 Kontrollmötestyp:', meetingType);
+      console.log('📊 Kontroll clt-fält:', {
+        cltEmail: cltEmail?.value,
+        cltMeetingType: cltMeetingType?.value,
+        cltMeetingLength: cltMeetingLength?.value,
+        cltContactId: cltContactId?.value,
+        cltReady: cltReady?.value
+      });
 
       await fetchAndUpdateCustomerState(email, meetingType);
       updateCustomerFieldVisibilityAndState(data, meetingType);
@@ -300,8 +318,32 @@
         console.log('🧪 clt_ready:', document.getElementById('clt_ready')?.value);
         // -------------------------------------------------------------------------------
         e.preventDefault();
-        if (!window.formState || !['Skapa', 'Uppdatera'].includes(submitButton.textContent)) {
+        const label = submitButton.tagName === 'INPUT' ? submitButton.value : submitButton.textContent;
+        if (!['Skapa', 'Uppdatera'].includes(label)) {
+          console.warn('⚠️ Avbryter klick – ogiltig knappetikett:', label);
           return;
+        }
+
+        if (!window.formState) {
+          const metadata = {};
+          ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'].forEach(id => {
+            const el = document.getElementById(id);
+            metadata[id] = el?.value || '';
+          });
+
+          const emailEl = document.querySelector('#booking_email');
+          const meetingTypeEl = document.querySelector('input[name="meeting_type"]:checked');
+          const meetingLengthEl = document.querySelector('input[name="meeting_length"]:checked');
+          const contactIdEl = document.getElementById('clt_contact_id');
+
+          window.formState = {
+            email: emailEl?.value.trim() || '',
+            meeting_type: meetingTypeEl?.value || '',
+            meeting_length: parseInt(meetingLengthEl?.value || '90', 10),
+            contact_id: contactIdEl?.value || '',
+            metadata
+          };
+          console.log('📥 Återskapade window.formState vid klick:', window.formState);
         }
 
         const body = {
@@ -320,6 +362,32 @@
           });
           const result = await res.json();
           console.log('✅ Kontaktdata sparad via validate_contact:', result);
+          // --- NY LOGIK: Sätt clt_contact_id och trigga slot-fetch om contact_id finns ---
+          if (result.contact_id) {
+            const cltContactId = document.getElementById('clt_contact_id');
+            if (cltContactId) cltContactId.value = result.contact_id;
+
+            if (window.formState) {
+              window.formState.contact_id = result.contact_id;
+            }
+
+            const cltReady = document.getElementById('clt_ready');
+            if (cltReady) cltReady.value = 'true';
+
+            if (window.initAvailableSlotFetch) {
+              window.initAvailableSlotFetch();
+              console.log('📡 initAvailableSlotFetch() anropad från Skapa/Uppdatera');
+            }
+            // --- Lägg till validateAndRenderCustomerFields() efter skapande/uppdatering ---
+            validateAndRenderCustomerFields();
+            console.log('🔁 Kör validateAndRenderCustomerFields() efter skapande');
+            // Dölj knappen efter lyckad uppdatering
+            submitButton.style.display = 'none';
+            submitButton.style.opacity = '0';
+            submitButton.style.pointerEvents = 'none';
+            submitButton.style.visibility = 'hidden';
+            console.log('🚫 Gömmer kontaktknapp efter att kunden skapats');
+          }
         } catch (err) {
           console.error('❌ Misslyckades spara kontaktdata:', err);
         }
@@ -335,7 +403,10 @@
     const cltContactId = document.getElementById('clt_contact_id');
 
     if (cltEmail) cltEmail.value = email;
-    if (cltMeetingType) cltMeetingType.value = meetingType;
+    if (cltMeetingType) {
+      cltMeetingType.value = meetingType;
+      console.log('📥 Satt cltMeetingType från fetchAndUpdateCustomerState:', cltMeetingType.value);
+    }
 
     const response = await fetch('https://macspotbackend.azurewebsites.net/api/validate_contact', {
       method: 'POST',
@@ -432,14 +503,22 @@
         submitButton.style.opacity = '1';
         submitButton.style.pointerEvents = 'auto';
         submitButton.style.visibility = 'visible';
-        submitButton.textContent = 'Skapa';
+        if (submitButton.tagName === 'INPUT') {
+          submitButton.value = 'Skapa';
+        } else {
+          submitButton.textContent = 'Skapa';
+        }
         console.log('🆕 Ny kund – visa "Skapa" knapp');
       } else if (data.status === 'existing_customer' && Array.isArray(data.missing_fields) && data.missing_fields.length > 0) {
         submitButton.style.display = 'flex';
         submitButton.style.opacity = '1';
         submitButton.style.pointerEvents = 'auto';
         submitButton.style.visibility = 'visible';
-        submitButton.textContent = 'Uppdatera';
+        if (submitButton.tagName === 'INPUT') {
+          submitButton.value = 'Uppdatera';
+        } else {
+          submitButton.textContent = 'Uppdatera';
+        }
         console.log('✏️ Befintlig kund med saknade fält – visa "Uppdatera" knapp');
       } else {
         // submitButton already hidden above

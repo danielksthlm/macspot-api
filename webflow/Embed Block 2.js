@@ -29,9 +29,11 @@ window.initAvailableSlotFetch = function() {
         const localMonth = String(localDate.getMonth() + 1).padStart(2, '0');
         const localDay = String(localDate.getDate()).padStart(2, '0');
         const date = `${localYear}-${localMonth}-${localDay}`;
-        const time = localDate.toTimeString().slice(0, 5);
         if (!grouped[date]) grouped[date] = [];
-        grouped[date].push(time);
+        grouped[date].push({
+          slot_iso: slot.slot_iso,
+          slot_local: slot.slot_local || slot.slot_iso
+        });
       });
       console.log('📦 Skickar grouped slots till setAvailableSlots:', grouped);
       if (typeof window.setAvailableSlots === 'function') {
@@ -47,5 +49,21 @@ window.initAvailableSlotFetch = function() {
     console.error('❌ Fetch error in getavailableslots:', err.message || err);
     alert('Fel vid hämtning av tider. Kontrollera din internetanslutning eller att servern är tillgänglig.');
   });
+};
+
+window.setAvailableSlots = function(groupedSlots) {
+  console.log('🧠 [Kod 2b] setAvailableSlots anropad med:', groupedSlots);
+  console.log('🧠 [Kod 2b] window.formState:', window.formState);
+  if (!window.CalendarModule || typeof window.CalendarModule.renderCalendar !== 'function') {
+    return;
+  }
+
+  // Konvertera groupedSlots från {datum: [{slot_iso, slot_local}]} till {datum: [slot_local]}
+  const reformatted = {};
+  for (const [date, slots] of Object.entries(groupedSlots)) {
+    reformatted[date] = slots.map(slot => slot.slot_local || slot.slot_iso);
+  }
+
+  window.CalendarModule.renderCalendar(reformatted);
 };
 </script>

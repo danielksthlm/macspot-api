@@ -27,10 +27,19 @@
 
     renderTimes: function(times, currentMonth) {
       console.log('🔍 times i renderTimes:', times);
+      console.log('🧠 Kontrollera clt_ready vid slot-rendering:', document.getElementById('clt_ready')?.value);
       if (!Array.isArray(times) || times.length === 0) {
         console.warn('⚠️ Inga tider att visa i renderTimes');
         return;
       }
+      // Sort times array before rendering
+      times = times.sort((a, b) => {
+        // If slot_local exists, compare those, otherwise compare as strings
+        const aStr = a.slot_local || (typeof a === 'string' ? a : '');
+        const bStr = b.slot_local || (typeof b === 'string' ? b : '');
+        return aStr.localeCompare(bStr);
+      });
+
       const wrapper = document.getElementById('calendar_time_wrapper');
       const selectedDateEl = document.getElementById('selected_date');
       const timeGrid = document.getElementById('time_grid');
@@ -107,6 +116,9 @@
           window.formState.slot_iso = slot.slot_iso || slot;
           window.formState.meeting_time = labelText;
 
+          console.log('🧠 [Kod 2b] Slot valdes:', slot);
+          console.log('🧠 [Kod 2b] clt_ready just nu:', document.getElementById('clt_ready')?.value);
+
           const slotIsoEl = document.getElementById('clt_slot_iso');
           if (slotIsoEl) slotIsoEl.textContent = slot.slot_iso || slot;
 
@@ -125,6 +137,20 @@
             console.log('✅ submit-booking-button VISAS via display:flex + opacity');
           }
         };
+      });
+
+      // Visa bokningsknappen när en slot väljs via radio
+      document.querySelectorAll('input[name="meeting_time"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          console.log('🧠 meeting_time ändrad – clt_ready:', window.formState?.clt_ready);
+          const btn = document.getElementById('submit-booking-button');
+          if (btn && window.formState?.clt_ready === 'true') {
+            btn.style.display = 'flex';
+            btn.style.opacity = 1;
+            btn.style.pointerEvents = 'auto';
+            btn.style.visibility = 'visible';
+          }
+        });
       });
     },
 
@@ -303,28 +329,30 @@
     }
   };
 
-  window.setAvailableSlots = function(groupedSlots) {
-    if (!window.CalendarModule || typeof window.CalendarModule.renderCalendar !== 'function') {
-      return;
-    }
-    if (Object.keys(groupedSlots).length === 0) {
-      return;
-    }
-    window.initialSlotRendered = false;
-    window.latestAvailableSlots = groupedSlots;
-    const firstAvailableDateStr = Object.keys(groupedSlots).sort()[0];
-    const firstAvailableDate = new Date(firstAvailableDateStr);
-    window.firstAvailableDate = firstAvailableDate;
-    const monthLabel = document.getElementById('calendar_month');
-    if (monthLabel) {
-      monthLabel.textContent = firstAvailableDate.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
-    }
-    window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
-    const wrapper = document.getElementById('calendar_wrapper');
-    if (wrapper) {
-      wrapper.style.display = 'flex';
-    }
-  };
+window.setAvailableSlots = function(groupedSlots) {
+  console.log('🧠 [Kod 2b] setAvailableSlots anropad med:', groupedSlots);
+  console.log('🧠 [Kod 2b] window.formState:', window.formState);
+  if (!window.CalendarModule || typeof window.CalendarModule.renderCalendar !== 'function') {
+    return;
+  }
+  if (Object.keys(groupedSlots).length === 0) {
+    return;
+  }
+  window.initialSlotRendered = false;
+  window.latestAvailableSlots = groupedSlots;
+  const firstAvailableDateStr = Object.keys(groupedSlots).sort()[0];
+  const firstAvailableDate = new Date(firstAvailableDateStr);
+  window.firstAvailableDate = firstAvailableDate;
+  const monthLabel = document.getElementById('calendar_month');
+  if (monthLabel) {
+    monthLabel.textContent = firstAvailableDate.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
+  }
+  window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
+  const wrapper = document.getElementById('calendar_wrapper');
+  if (wrapper) {
+    wrapper.style.display = 'flex';
+  }
+};
 
   // Vänta på att #calendar_wrapper laddas in i DOM
   let waitForCalendarWrapper2b = setInterval(() => {
