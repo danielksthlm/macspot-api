@@ -1,0 +1,61 @@
+[
+  {
+    "change_id": "7566e2af-a1de-4197-a6b3-b03f5ebc5ba4",
+    "table": "contact",
+    "operation": "INSERT",
+    "data": {
+      "id": "1444a75a-f7fe-44da-9a43-1ba7b5d77b21",
+      "metadata": {
+        "city": "Stockholm",
+        "phone": "0701234567",
+        "address": "Storgatan 1",
+        "company": "Nybolaget AB",
+        "country": "Sverige",
+        "last_name": "Nyberg",
+        "first_name": "Nina",
+        "postal_code": "12345"
+      },
+      "created_at": "2025-05-15T09:34:18.496878+02:00",
+      "updated_at": "2025-05-15T09:34:18.496878+02:00",
+      "booking_email": "nykund@example.com"
+    }
+  },
+  {
+    "change_id": "9157a621-4580-46a8-842e-dec4347f7fa7",
+    "table": "contact",
+    "operation": "INSERT",
+    "data": {
+      "id": "a05a47bb-a637-4336-8137-50ebe7dc1630",
+      "metadata": {
+        "phone": "0702223344",
+        "company": "Digital AB",
+        "last_name": "Berg",
+        "first_name": "Björn"
+      },
+      "created_at": "2025-05-15T09:48:29.833137+02:00",
+      "updated_at": "2025-05-15T09:48:29.833137+02:00",
+      "booking_email": "kund2@example.com"
+    }
+  },
+  {
+    "change_id": "d02a234e-4b2b-477c-b723-92e5f8162075",
+    "table": "contact",
+    "operation": "INSERT",
+    "data": {
+      "id": "b848ff4b-5fa0-4428-b1fc-882fd832b1c1",
+      "metadata": {
+        "city": "Göteborg",
+        "phone": "0701112233",
+        "address": "Gatan 1",
+        "company": "Företag AB",
+        "country": "Sverige",
+        "last_name": "Andersson",
+        "first_name": "Anna",
+        "postal_code": "12345"
+      },
+      "created_at": "2025-05-15T09:48:19.297861+02:00",
+      "updated_at": "2025-05-15T09:48:19.297861+02:00",
+      "booking_email": "kund1@example.com"
+    }
+  }
+]
