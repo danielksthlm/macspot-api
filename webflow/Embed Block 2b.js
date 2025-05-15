@@ -26,10 +26,16 @@
     },
 
     renderTimes: function(times, currentMonth) {
+      console.log('🔁 renderTimes anropades med:', times);
       console.log('🔍 times i renderTimes:', times);
       console.log('🧠 Kontrollera clt_ready vid slot-rendering:', document.getElementById('clt_ready')?.value);
       if (!Array.isArray(times) || times.length === 0) {
         console.warn('⚠️ Inga tider att visa i renderTimes');
+        return;
+      }
+      // Kontrollera att currentMonth är ett giltigt Date-objekt
+      if (!(currentMonth instanceof Date) || isNaN(currentMonth.getTime())) {
+        console.warn('❌ currentMonth är inte ett giltigt Date-objekt i renderTimes:', currentMonth);
         return;
       }
       // Sort times array before rendering
@@ -45,22 +51,30 @@
       const timeGrid = document.getElementById('time_grid');
       const submitButton = document.getElementById('submit-booking-button');
 
+      if (!wrapper || !selectedDateEl || !timeGrid || !submitButton) {
+        console.warn('⚠️ Något DOM-element saknas i renderTimes:', {
+          wrapper, selectedDateEl, timeGrid, submitButton
+        });
+        return;
+      }
+
+      // Extra skydd: om submitButton är null, returnera tidigt (redan täckt ovan)
+      // Sätt submitButton till hidden
       submitButton.style.display = 'none';
       submitButton.style.opacity = '0';
       submitButton.style.pointerEvents = 'none';
       submitButton.style.visibility = 'hidden';
-
-      if (!wrapper || !selectedDateEl || !timeGrid || !submitButton) {
-        console.warn('⚠️ Nödvändiga element för tidvisning saknas');
-        return;
-      }
 
       // Visa wrapper
       wrapper.style.display = 'block';
 
       // Rensa föregående visning
       const selectedDayEl = document.querySelector('.day.selected');
-      if (!selectedDayEl) return;
+      if (!selectedDayEl) {
+        console.warn('⚠️ Ingen .day.selected hittades – fortsätter ändå utan highlight');
+      } else {
+        selectedDayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
 
       const selectedDay = selectedDayEl.textContent.padStart(2, '0');
       const year = currentMonth.getFullYear();
@@ -92,11 +106,25 @@
         let label = el.querySelector('.time-label');
         if (!label) label = el.querySelector('span.w-form-label');
 
-        const labelText = slot.slot_local ? slot.slot_local.slice(11, 16) : slot;
+        const labelText = typeof slot === 'object' && slot.slot_local
+          ? slot.slot_local.slice(11, 16)
+          : typeof slot === 'string'
+          ? slot.slice(11, 16)
+          : '';
+
+        console.log('⏰ Skapar labelText:', { slot, labelText });
+        if (!labelText || labelText === 'Radio') {
+          console.warn('⚠️ labelText saknas eller är "Radio":', labelText);
+        }
 
         if (label) {
+          // Ensure the label has the 'time-label' class
+          if (!label.classList.contains('time-label')) {
+            label.classList.add('time-label');
+          }
           label.textContent = labelText;
           label.setAttribute('for', uniqueId);
+          label.classList.add('time-label');
         }
 
         if (radioInput) {
@@ -136,29 +164,46 @@
             }
             console.log('✅ submit-booking-button VISAS via display:flex + opacity');
           }
+          // --- Set clt_ready and clt_meetingtime hidden fields ---
+          const cltReadyEl = document.getElementById('clt_ready');
+          const cltMeetingTimeEl = document.getElementById('clt_meetingtime');
+          if (cltMeetingTimeEl) cltMeetingTimeEl.value = slot.slot_iso || slot; // Always set to ISO!
+          if (cltReadyEl) cltReadyEl.value = 'true'; // Always run last
+
+          // --- [Kod 2b] Logga data som skickas till submitBooking ---
+          console.log('[Kod 2b] Skickar data till submitBooking:');
+          console.log('clt_email:', document.getElementById('clt_email')?.value);
+          console.log('clt_meetingtype:', document.getElementById('clt_meetingtype')?.value);
+          console.log('clt_meetinglength:', document.getElementById('clt_meetinglength')?.value);
+          console.log('clt_meetingtime:', document.getElementById('clt_meetingtime')?.value);
+          console.log('clt_contact_id:', document.getElementById('clt_contact_id')?.value);
+          console.log('clt_ready:', document.getElementById('clt_ready')?.value);
         };
       });
 
       // Visa bokningsknappen när en slot väljs via radio
-      document.querySelectorAll('input[name="meeting_time"]').forEach(radio => {
-        radio.addEventListener('change', () => {
-          console.log('🧠 meeting_time ändrad – clt_ready:', window.formState?.clt_ready);
-          const btn = document.getElementById('submit-booking-button');
-          if (btn && window.formState?.clt_ready === 'true') {
-            btn.style.display = 'flex';
-            btn.style.opacity = 1;
-            btn.style.pointerEvents = 'auto';
-            btn.style.visibility = 'visible';
-          }
-        });
-      });
+      // (Eventlistener för radio borttagen då den är redundant och felaktig)
     },
 
     renderCalendar: function(availableSlots, currentMonth) {
-      // Add currentMonthKey at top of renderCalendar
+      // Kontrollera att currentMonth är ett giltigt Date-objekt innan användning
+      if (!(currentMonth instanceof Date) || isNaN(currentMonth.getTime())) {
+        console.warn('❌ currentMonth är inte ett giltigt Date-objekt i renderCalendar:', currentMonth);
+        return;
+      }
       const currentMonthKey = currentMonth.getFullYear() + '-' + currentMonth.getMonth();
       const calendarWrapper = document.getElementById('calendar_wrapper');
       if (!calendarWrapper) return;
+      // Om availableSlots saknar någon nyckel som matchar currentMonth, logga en varning
+      const monthStr = String(currentMonth.getMonth() + 1).padStart(2, '0');
+      const yearStr = String(currentMonth.getFullYear());
+      const hasAnySlotInMonth = Object.keys(availableSlots || {}).some(key => {
+        // key format: YYYY-MM-DD
+        return key.startsWith(`${yearStr}-${monthStr}`);
+      });
+      if (!hasAnySlotInMonth) {
+        console.warn(`⚠️ availableSlots saknar någon nyckel för månaden ${yearStr}-${monthStr} – kalendern kan bli tom`);
+      }
 
 
       // Preserve calendar_times before resetting innerHTML
@@ -274,6 +319,11 @@
             continue;
           } else {
             const isoDate = window.CalendarModule.formatDate(cellDate);
+            // Kontrollera om availableSlots finns
+            if (!availableSlots) {
+              console.warn('⚠️ availableSlots saknas helt – renderCalendar körs utan data');
+              return;
+            }
             dayEl.textContent = cellDate.getDate();
             dayEl.dataset.date = isoDate;
 
@@ -282,18 +332,39 @@
 
             const isAvailable = availableSlots[isoDate]?.length > 0;
             dayEl.classList.toggle('available', isAvailable);
+            if (isAvailable) {
+              console.log('🧠 Tillgängligt datum hittat:', isoDate);
+            }
+            // Logga om det inte finns entry för isoDate
+            if (!availableSlots[isoDate]) {
+              console.log(`ℹ️ Inget entry i availableSlots för datum ${isoDate}`);
+            }
 
             if (isAvailable) {
-              dayEl.addEventListener('click', () => {
-                window.CalendarModule.highlightDate(dayEl);
+              const cloned = dayEl.cloneNode(true);
+              dayEl.replaceWith(cloned);
+
+              cloned.addEventListener('click', () => {
+                window.CalendarModule.highlightDate(cloned);
                 window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
                 window.userHasManuallySelectedDate = true;
               });
+
+              // Förvälj första tillgängliga dag om ingen är vald
+              if (!document.querySelector('.day.selected')) {
+                cloned.classList.add('selected');
+                cloned.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                window.CalendarModule.renderTimes(availableSlots[isoDate], currentMonth);
+                window.initialSlotRendered = true;
+                window.lastRenderedMonth = currentMonthKey;
+                console.log('🧪 Förvald första tillgängliga dag:', isoDate);
+              }
 
               if (
                 !window.userHasManuallySelectedDate &&
                 (!window.initialSlotRendered || window.lastRenderedMonth !== currentMonthKey)
               ) {
+                console.log('🧪 Auto-trigger renderTimes för datum:', isoDate, 'med slots:', availableSlots[isoDate]);
                 window.initialSlotRendered = true;
                 window.lastRenderedMonth = currentMonthKey;
                 window.CalendarModule.highlightDate(dayEl);
@@ -333,24 +404,43 @@ window.setAvailableSlots = function(groupedSlots) {
   console.log('🧠 [Kod 2b] setAvailableSlots anropad med:', groupedSlots);
   console.log('🧠 [Kod 2b] window.formState:', window.formState);
   if (!window.CalendarModule || typeof window.CalendarModule.renderCalendar !== 'function') {
+    console.warn('❌ window.CalendarModule.renderCalendar() saknas eller inte en funktion');
     return;
   }
   if (Object.keys(groupedSlots).length === 0) {
+    console.warn('❌ groupedSlots är tomt – inga tider att visa');
     return;
   }
+
   window.initialSlotRendered = false;
   window.latestAvailableSlots = groupedSlots;
+
   const firstAvailableDateStr = Object.keys(groupedSlots).sort()[0];
   const firstAvailableDate = new Date(firstAvailableDateStr);
   window.firstAvailableDate = firstAvailableDate;
+
   const monthLabel = document.getElementById('calendar_month');
   if (monthLabel) {
     monthLabel.textContent = firstAvailableDate.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
   }
-  window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
+
   const wrapper = document.getElementById('calendar_wrapper');
-  if (wrapper) {
-    wrapper.style.display = 'flex';
+  if (wrapper) wrapper.style.display = 'flex';
+
+  const grid = document.getElementById('calendar_grid');
+  if (grid) {
+    console.log('✅ calendar_grid redan i DOM – renderCalendar körs direkt');
+    window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
+  } else {
+    console.log('⏳ Väntar på calendar_grid...');
+    const waitForCalendarGrid = setInterval(() => {
+      const g = document.getElementById('calendar_grid');
+      if (g) {
+        clearInterval(waitForCalendarGrid);
+        console.log('✅ calendar_grid hittades av waitForCalendarGrid');
+        window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
+      }
+    }, 100);
   }
 };
 
