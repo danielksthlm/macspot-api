@@ -42,7 +42,7 @@ module.exports = async function (context, req) {
     const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
     const raw = settingsRes.rows[0]?.value;
     const digitalTypes = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
-    const isDigital = digitalTypes.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atOffice';
+    const isDigital = digitalTypes.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atoffice';
 
     const alwaysRequired = ['first_name', 'last_name', 'phone', 'company'];
     const addressRequired = ['address', 'postal_code', 'city', 'country'];

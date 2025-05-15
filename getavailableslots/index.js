@@ -15,8 +15,8 @@ function verifyBookingSettings(settings, context) {
     default_home_address: 'string',
     fallback_travel_time_minutes: 'number',
     buffer_between_meetings: 'number',
-    default_meeting_length_atOffice: 'object',
-    default_meeting_length_atClient: 'object',
+    default_meeting_length_atoffice: 'object',
+    default_meeting_length_atclient: 'object',
     default_meeting_length_digital: 'object',
     meeting_types: 'object',
     block_weekends: 'boolean',
@@ -30,7 +30,7 @@ function verifyBookingSettings(settings, context) {
     max_days_in_advance: 'number',
     max_weekly_booking_minutes: 'number',
     cache_ttl_minutes: 'number',
-    allowed_atClient_meeting_days: 'array',
+    allowed_atclient_meeting_days: 'array',
     timezone: 'string'
   };
 
@@ -39,7 +39,7 @@ function verifyBookingSettings(settings, context) {
     const val = settings[key];
     if (val === undefined || val === null || (key === 'timezone' && String(val).trim() === '')) {
       issues.push(`❌ Saknar inställning: ${key}`);
-    } else if (key === 'allowed_atClient_meeting_days') {
+    } else if (key === 'allowed_atclient_meeting_days') {
       if (!Array.isArray(val) || !val.every(v => typeof v === 'string')) {
         issues.push(`⚠️ Typfel för ${key}: ska vara array av strängar`);
       }

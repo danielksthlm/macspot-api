@@ -12,6 +12,18 @@ module.exports = async function (context, req) {
 
   const { email, meeting_type, meeting_length, slot_iso, metadata = {} } = req.body;
 
+  const parsedLength = parseInt(meeting_length, 10);
+  if (isNaN(parsedLength) || parsedLength <= 0) {
+    context.res = { status: 400, body: { error: "Invalid meeting_length" } };
+    return;
+  }
+
+  const parsedStart = new Date(slot_iso);
+  if (isNaN(parsedStart.getTime())) {
+    context.res = { status: 400, body: { error: "Invalid slot_iso datetime" } };
+    return;
+  }
+
   const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
   for (const key of requiredEnv) {
     if (!process.env[key]) {
@@ -51,10 +63,32 @@ module.exports = async function (context, req) {
     }
 
     const id = uuidv4();
-    const startTime = new Date(slot_iso);
-    const endTime = new Date(startTime.getTime() + meeting_length * 60000);
+    // Kontrollera om en bokning redan finns
+    const existing = await db.query(
+      'SELECT id FROM bookings WHERE contact_id = $1 AND start_time = $2',
+      [metadata.contact_id || null, parsedStart.toISOString()]
+    );
+    if (existing.rowCount > 0) {
+      context.res = {
+        status: 409,
+        body: { error: 'Booking already exists for this time.' }
+      };
+      return;
+    }
+    const startTime = parsedStart;
+    const endTime = new Date(startTime.getTime() + parsedLength * 60000);
     const created_at = new Date();
     const updated_at = created_at;
+
+    // Bygg meeting_link dynamiskt
+    let meeting_link = null;
+    if (meeting_type.toLowerCase() === 'teams') {
+      meeting_link = 'https://teams.microsoft.com/l/meetup-join/...'; // placeholder
+    } else if (meeting_type.toLowerCase() === 'zoom') {
+      meeting_link = 'https://zoom.us/j/1234567890'; // placeholder
+    } else if (meeting_type.toLowerCase() === 'facetime' && metadata.phone) {
+      meeting_link = `facetime:${metadata.phone}`;
+    }
 
     const fields = {
       id,
@@ -67,7 +101,7 @@ module.exports = async function (context, req) {
       city: metadata.city || null,
       country: metadata.country || settings.country || 'SE',
       participant_count: 1,
-      meeting_link: null,
+      meeting_link: meeting_link,
       status: 'confirmed',
       require_approval: metadata.require_approval === true,
       language: settings.language || 'sv',
@@ -108,6 +142,12 @@ module.exports = async function (context, req) {
 
     const values = Object.values(fields);
     await db.query(query, values);
+    // Simulera att kalendern synkades för denna demo
+    fields.synced_to_calendar = true;
+    await db.query(
+      'INSERT INTO event_log (event_type, booking_id, created_at) VALUES ($1, $2, NOW())',
+      ['booking_created', id]
+    );
 
     context.res = {
       status: 200,
