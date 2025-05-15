@@ -352,6 +352,13 @@
 
   function updateCustomerFieldVisibilityAndState(data, meetingType) {
     const submitButton = document.getElementById('contact-update-button');
+    // Dölj submit-knappen direkt efter den definierats
+    if (submitButton) {
+      submitButton.style.display = 'none';
+      submitButton.style.opacity = '0';
+      submitButton.style.pointerEvents = 'none';
+      submitButton.style.visibility = 'hidden';
+    }
     const cltEmail = document.getElementById('clt_email');
     const cltMeetingType = document.getElementById('clt_meetingtype');
     const cltMeetingLength = document.getElementById('clt_meetinglength');
@@ -421,15 +428,21 @@
     // Visa knapp baserat på status och om alla synliga fält är ifyllda
     if (submitButton) {
       if (data.status === 'new_customer') {
-        submitButton.style.display = 'block';
+        submitButton.style.display = 'flex';
+        submitButton.style.opacity = '1';
+        submitButton.style.pointerEvents = 'auto';
+        submitButton.style.visibility = 'visible';
         submitButton.textContent = 'Skapa';
         console.log('🆕 Ny kund – visa "Skapa" knapp');
       } else if (data.status === 'existing_customer' && Array.isArray(data.missing_fields) && data.missing_fields.length > 0) {
-        submitButton.style.display = 'block';
+        submitButton.style.display = 'flex';
+        submitButton.style.opacity = '1';
+        submitButton.style.pointerEvents = 'auto';
+        submitButton.style.visibility = 'visible';
         submitButton.textContent = 'Uppdatera';
         console.log('✏️ Befintlig kund med saknade fält – visa "Uppdatera" knapp');
       } else {
-        submitButton.style.display = 'none';
+        // submitButton already hidden above
         console.log('✅ Befintlig kund komplett – göm knapp');
       }
     }
@@ -500,6 +513,9 @@
         // Döljer submit-knappen direkt när clt_ready = true (skapande/uppdatering klar)
         if (submitButton) {
           submitButton.style.display = 'none';
+          submitButton.style.opacity = '0';
+          submitButton.style.pointerEvents = 'none';
+          submitButton.style.visibility = 'hidden';
           console.log('🚫 Gömmer knapp efter skapande eller uppdatering');
         }
         console.log('✅ formState satt:', window.formState);

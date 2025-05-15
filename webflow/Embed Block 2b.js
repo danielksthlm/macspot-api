@@ -34,7 +34,12 @@
       const wrapper = document.getElementById('calendar_time_wrapper');
       const selectedDateEl = document.getElementById('selected_date');
       const timeGrid = document.getElementById('time_grid');
-      const submitButton = document.getElementById('contact-update-button');
+      const submitButton = document.getElementById('submit-booking-button');
+
+      submitButton.style.display = 'none';
+      submitButton.style.opacity = '0';
+      submitButton.style.pointerEvents = 'none';
+      submitButton.style.visibility = 'hidden';
 
       if (!wrapper || !selectedDateEl || !timeGrid || !submitButton) {
         console.warn('⚠️ Nödvändiga element för tidvisning saknas');
@@ -105,6 +110,20 @@
           const slotIsoEl = document.getElementById('clt_slot_iso');
           if (slotIsoEl) slotIsoEl.textContent = slot.slot_iso || slot;
 
+          const bookingButton = document.getElementById('submit-booking-button');
+          if (bookingButton) {
+            bookingButton.style.display = 'flex';
+            bookingButton.style.opacity = '1';
+            bookingButton.style.pointerEvents = 'auto';
+            bookingButton.style.visibility = 'visible';
+            // Set button label to "Boka"
+            if (bookingButton.tagName === 'INPUT') {
+              bookingButton.value = 'Boka';
+            } else {
+              bookingButton.textContent = 'Boka';
+            }
+            console.log('✅ submit-booking-button VISAS via display:flex + opacity');
+          }
         };
       });
     },

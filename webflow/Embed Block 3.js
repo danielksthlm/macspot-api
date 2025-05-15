@@ -24,14 +24,15 @@
     }
   }
 
-  // Exempel på hur du kan använda funktionen med data från ett formulär eller liknande
-  // Kontrollera att clt_ready är "true" innan anropet görs
-  const clt_ready = String(document.querySelector('[name="clt_ready"]')?.value || '').toLowerCase();
-  if (clt_ready === 'true') {
-    const form = window.formState || {};
-    if (!form.contact_id || !form.slot_iso) {
-      console.warn('⛔ Bokning nekad – contact_id eller slot_iso saknas');
-    } else {
+  // Koppla submit-booking-button till submitBooking
+  const bookingButton = document.getElementById('submit-booking-button');
+  if (bookingButton) {
+    bookingButton.addEventListener('click', () => {
+      const form = window.formState || {};
+      if (!form.contact_id || !form.slot_iso) {
+        console.warn('⛔ Bokning nekad – contact_id eller slot_iso saknas');
+        return;
+      }
       submitBooking({
         email: form.email,
         contact_id: form.contact_id,
@@ -39,8 +40,6 @@
         meeting_length: form.meeting_length,
         slot_iso: form.slot_iso
       });
-    }
-  } else {
-    console.warn('⛔ Bokning nekad – clt_ready är inte true');
+    });
   }
 </script>
