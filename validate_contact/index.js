@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { v4: uuidv4 } = require('uuid');
 const pool = new Pool({
   user: process.env.PGUSER,
   host: process.env.PGHOST,
@@ -61,11 +62,21 @@ module.exports = async function (context, req) {
       }
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
         if (!contact) {
+          const newId = uuidv4();
           await pool.query(
-            `INSERT INTO contact (booking_email, metadata, created_at) VALUES ($1, $2, NOW())`,
-            [email, metadataFromClient]
+            `INSERT INTO contact (id, booking_email, metadata, created_at) VALUES ($1, $2, $3, NOW())`,
+            [newId, email, metadataFromClient]
           );
           context.log.info('✅ Ny kontakt skapad via validate_contact');
+
+          context.res = {
+            status: 200,
+            body: {
+              status: "created",
+              contact_id: newId
+            }
+          };
+          return;
         } else {
           await pool.query(
             `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
