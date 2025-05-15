@@ -46,8 +46,8 @@ module.exports = async function (context, req) {
 
     const alwaysRequired = ['first_name', 'last_name', 'phone', 'company'];
     const addressRequired = ['address', 'postal_code', 'city', 'country'];
-
-    const missingFields = [...alwaysRequired, ...(isDigital ? [] : addressRequired)].filter(
+    const requiredFields = [...alwaysRequired, ...(isDigital ? [] : addressRequired)];
+    const missingFields = requiredFields.filter(
       field => !metadata[field] || typeof metadata[field] !== 'string' || metadata[field].trim() === ''
     );
 
