@@ -224,7 +224,7 @@ module.exports = async function (context, req) {
         chunk.map(async (day) => {
           const dateStr = day.toISOString().split('T')[0];
           const weekdayName = day.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-          debugLog(`🧪 Kontroll av veckodag '${weekdayName}' mot ${JSON.stringify(settings.allowed_atClient_meeting_days)} för mötestyp: ${meeting_type}`);
+          debugLog(`🧪 Kontroll av veckodag '${weekdayName}' mot ${JSON.stringify(settings.allowed_atclient_meeting_days)} för mötestyp: ${meeting_type}`);
 
           if (settings.block_weekends && (day.getDay() === 0 || day.getDay() === 6)) {
             // context.log(`⏭️ Skipper ${dateStr} (helg)`);
@@ -233,14 +233,14 @@ module.exports = async function (context, req) {
 
           if (
             meeting_type === 'atclient' &&
-            Array.isArray(settings.allowed_atClient_meeting_days) &&
-            !settings.allowed_atClient_meeting_days.includes(weekdayName)
+            Array.isArray(settings.allowed_atclient_meeting_days) &&
+            !settings.allowed_atclient_meeting_days.includes(weekdayName)
           ) {
-            context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atClient. Tillåtna: ${JSON.stringify(settings.allowed_atClient_meeting_days)}`);
+            context.log(`⏭️ Skipper ${dateStr} – ej tillåten veckodag (${weekdayName}) för atclient. Tillåtna: ${JSON.stringify(settings.allowed_atclient_meeting_days)}`);
             return;
           } else if (
             meeting_type !== 'atclient' &&
-            settings.allowed_atClient_meeting_days
+            settings.allowed_atclient_meeting_days
           ) {
             debugLog(`🧪 Hoppar veckodagskontroll – meeting_type är ${meeting_type}, ej atClient`);
           }

@@ -14,7 +14,8 @@ window.initAvailableSlotFetch = function() {
     body: JSON.stringify({
       email: window.formState.email,
       meeting_type: window.formState.meeting_type,
-      meeting_length: window.formState.meeting_length
+      meeting_length: window.formState.meeting_length,
+      contact_id: window.formState.contact_id
     })
   })
   .then(res => res.json())

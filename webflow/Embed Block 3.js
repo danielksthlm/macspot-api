@@ -18,7 +18,7 @@
       }
 
       const result = await response.json();
-      console.log('✅ Bokning skapad med ID:', result.bookingId);
+      console.log('✅ Bokning skapad med ID:', result.booking_id);
     } catch (error) {
       console.error('❌ Fel vid bokning:', error);
     }
@@ -28,24 +28,16 @@
   // Kontrollera att clt_ready är "true" innan anropet görs
   const clt_ready = String(document.querySelector('[name="clt_ready"]')?.value || '').toLowerCase();
   if (clt_ready === 'true') {
-    const email = document.querySelector('[name="email"]')?.value || '';
-    const contact_id = document.querySelector('[name="contact_id"]')?.value || '';
-    const meeting_type = document.querySelector('[name="meeting_type"]')?.value || '';
-    const meeting_length = document.querySelector('[name="meeting_length"]')?.value || '';
-    const meeting_date = document.querySelector('[name="meeting_date"]')?.value || '';
-    const meeting_time = document.querySelector('[name="meeting_time"]')?.value || '';
-
-    if (!contact_id) {
-      console.warn('⛔ Bokning nekad – contact_id saknas');
+    const form = window.formState || {};
+    if (!form.contact_id || !form.slot_iso) {
+      console.warn('⛔ Bokning nekad – contact_id eller slot_iso saknas');
     } else {
       submitBooking({
-        email,
-        contact_id,
-        meeting_type,
-        meeting_length,
-        meeting_date,
-        meeting_time,
-        clt_ready
+        email: form.email,
+        contact_id: form.contact_id,
+        meeting_type: form.meeting_type,
+        meeting_length: form.meeting_length,
+        slot_iso: form.slot_iso
       });
     }
   } else {

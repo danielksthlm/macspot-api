@@ -36,7 +36,8 @@ module.exports = async function (context, req) {
       }
     }
 
-    const meetingTypes = settings['meeting_types'];
+    const rawTypes = settings['meeting_types'];
+    const meetingTypes = Array.isArray(rawTypes) ? rawTypes.map(t => t.toLowerCase()) : [];
     const lengths = {
       zoom: settings['default_meeting_length_digital'],
       facetime: settings['default_meeting_length_digital'],
