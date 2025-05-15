@@ -95,6 +95,17 @@ def apply_change(conn, change, local_conn):
                 f"{', '.join([f'{k} = EXCLUDED.{k}' for k in data.keys() if k != 'id'])}",
                 values
             )
+            if table_name == 'bookings':
+                with local_conn.cursor() as local_cur:
+                    local_cur.execute(
+                        """
+                        UPDATE pending_changes
+                        SET booking_id = %s
+                        WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
+                        """,
+                        (record_id, record_id)
+                    )
+                    local_conn.commit()
         if 'metadata' in data and table_name == 'contact':
             # Merge metadata with existing remote value and ensure JSON string
             cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))

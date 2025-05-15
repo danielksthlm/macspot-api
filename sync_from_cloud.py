@@ -96,6 +96,16 @@ def sync():
             if not isinstance(payload.get("id"), str) or "your-generated-id" in payload.get("id"):
                 continue
             apply_change(local_cur, table, operation, payload)
+            if table == "bookings" and operation == "INSERT":
+                local_cur.execute(
+                    """
+                    UPDATE pending_changes
+                    SET booking_id = %s
+                    WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
+                    """,
+                    (record_id, record_id)
+                )
+                local_conn.commit()
             if table == "contact":
                 email = payload.get("booking_email", "(okänd e-post)")
                 meta = payload.get("metadata")

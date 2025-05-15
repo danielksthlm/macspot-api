@@ -142,6 +142,21 @@ module.exports = async function (context, req) {
 
     const values = Object.values(fields);
     await db.query(query, values);
+    // Logga pending change för denna bokning
+    await db.query(
+      `INSERT INTO pending_changes (id, table_name, record_id, change_type, direction, processed, created_at, booking_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        uuidv4(),
+        'bookings',
+        id,
+        'INSERT',
+        'cloud_to_local',
+        false,
+        new Date(),
+        id
+      ]
+    );
     // Simulera att kalendern synkades för denna demo
     fields.synced_to_calendar = true;
     await db.query(
@@ -166,3 +181,73 @@ module.exports = async function (context, req) {
     db.release();
   }
 };
+
+// --- Send confirmation email via Microsoft Graph ---
+const fetch = require('node-fetch');
+
+async function sendConfirmationEmail({ to, startTime, endTime, meeting_type, meeting_link, first_name, sender_email }) {
+  const token = await getGraphAccessToken();
+
+  const subject = `Din bokning är bekräftad – ${meeting_type}`;
+  const content = `
+    <p>Hej ${first_name || ''},</p>
+    <p>Din bokning den ${startTime.toLocaleDateString()} kl ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} är nu bekräftad.</p>
+    <p><strong>Mötestyp:</strong> ${meeting_type}</p>
+    <p><strong>Länk:</strong> <a href="${meeting_link}">${meeting_link}</a></p>
+    <p>Vi ser fram emot att ses!</p>
+    <p>Vänligen,<br/>Daniel</p>
+  `;
+
+  const body = {
+    message: {
+      subject,
+      body: {
+        contentType: 'HTML',
+        content
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            address: to
+          }
+        }
+      ]
+    },
+    saveToSentItems: true
+  };
+
+  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender_email)}/sendMail`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`E-postmisslyckande: ${err}`);
+  }
+}
+
+async function getGraphAccessToken() {
+  const params = new URLSearchParams();
+  params.append('client_id', process.env.GRAPH_CLIENT_ID);
+  params.append('client_secret', process.env.GRAPH_CLIENT_SECRET);
+  params.append('scope', 'https://graph.microsoft.com/.default');
+  params.append('grant_type', 'client_credentials');
+  const response = await fetch(`https://login.microsoftonline.com/${process.env.GRAPH_TENANT_ID}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Misslyckad tokenhämtning: ${err}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
