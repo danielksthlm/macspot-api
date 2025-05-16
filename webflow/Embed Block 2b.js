@@ -64,6 +64,10 @@
         selectedDayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
 
+      if (!selectedDayEl || !selectedDayEl.textContent) {
+        console.warn('⚠️ selectedDayEl saknas eller saknar textContent');
+        return;
+      }
       const selectedDay = selectedDayEl.textContent.padStart(2, '0');
       const year = currentMonth.getFullYear();
       const month = String(currentMonth.getMonth() + 1).padStart(2, '0');

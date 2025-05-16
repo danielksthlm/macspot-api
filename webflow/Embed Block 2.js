@@ -7,6 +7,9 @@ window.initAvailableSlotFetch = function() {
   }
 
   console.log('📡 Hämtar tillgängliga tider för:', window.formState);
+  if (!window.formState.contact_id) {
+    console.warn('⚠️ contact_id saknas i formState – fetch avbryts');
+  }
 
   fetch('https://macspotbackend.azurewebsites.net/api/getavailableslots', {
     method: 'POST',
@@ -21,6 +24,9 @@ window.initAvailableSlotFetch = function() {
   .then(res => res.json())
   .then(data => {
     console.log('🧪 Rått slotData från API:', data);
+    if (!Array.isArray(data.slots)) {
+      console.warn('⚠️ API svarar utan slot-array:', data);
+    }
     if (Array.isArray(data.slots)) {
       const grouped = {};
       data.slots.forEach(slot => {

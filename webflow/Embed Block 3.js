@@ -1,6 +1,6 @@
 <script>
   async function submitBooking(data) {
-    if (!data.contact_id || !data.slot_iso || !data.email || !data.meeting_type || !data.meeting_length) {
+    if (!data.contact_id || !data.slot_iso || !data.meeting_type || !data.meeting_length) {
       return;
     }
 
@@ -8,7 +8,6 @@
     const endTime = new Date(startTime.getTime() + data.meeting_length * 60000);
 
     const payload = {
-      email: data.email,
       contact_id: data.contact_id,
       meeting_type: data.meeting_type,
       meeting_length: data.meeting_length,
@@ -47,25 +46,22 @@
       e.preventDefault();
 
       const cltReadyEl = document.getElementById('clt_ready');
-      const cltEmailEl = document.getElementById('clt_email');
       const cltContactIdEl = document.getElementById('clt_contact_id');
       const cltMeetingTypeEl = document.getElementById('clt_meetingtype');
       const cltMeetingLengthEl = document.getElementById('clt_meetinglength');
       const cltSlotIsoEl = document.getElementById('clt_meetingtime');
 
-      const cltEmail = cltEmailEl?.value.trim();
       const cltContactId = cltContactIdEl?.value.trim();
       const cltMeetingType = cltMeetingTypeEl?.value.trim();
       const cltMeetingLength = parseInt(cltMeetingLengthEl?.value, 10);
       const cltSlotIso = cltSlotIsoEl?.value.trim();
       const cltReady = cltReadyEl?.value.trim();
 
-      if (!cltEmail || !cltContactId || !cltMeetingType || isNaN(cltMeetingLength) || !cltSlotIso || cltReady !== 'true') {
+      if (!cltContactId || !cltMeetingType || isNaN(cltMeetingLength) || !cltSlotIso || cltReady !== 'true') {
         return;
       }
 
       const bookingPayload = {
-        email: cltEmail,
         contact_id: cltContactId,
         meeting_type: cltMeetingType,
         meeting_length: cltMeetingLength,
