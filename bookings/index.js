@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 
 module.exports = async function (context, req) {
-  const requiredFields = ['email', 'meeting_type', 'meeting_length', 'slot_iso'];
+  const requiredFields = ['meeting_type', 'meeting_length', 'slot_iso'];
   const missing = requiredFields.filter(k => !req.body?.[k]);
 
   if (missing.length > 0) {
