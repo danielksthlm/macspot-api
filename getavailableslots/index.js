@@ -61,6 +61,7 @@ function verifyBookingSettings(settings, context) {
 }
 
 module.exports = async function (context, req) {
+  let msGraphAccessToken = null;
   const isDebug = process.env.DEBUG === 'true';
   let debugLog = (msg) => {
     if (isDebug && context && context.log) {
@@ -90,32 +91,8 @@ module.exports = async function (context, req) {
   try {
     // Pool återanvänds från global instans
     const fetch = require('node-fetch');
-    // Inlinefunktion för getLatestMs365Event (MS Graph)
-    async function getLatestMs365Event(dateTime) {
-      const jwt = require('jsonwebtoken');
-      const fetch = require('node-fetch');
-
-      const tokenEndpoint = `https://login.microsoftonline.com/${process.env.MS365_TENANT_ID}/oauth2/v2.0/token`;
-
-      const params = new URLSearchParams();
-      params.append('client_id', process.env.MS365_CLIENT_ID);
-      params.append('client_secret', process.env.MS365_CLIENT_SECRET);
-      params.append('scope', 'https://graph.microsoft.com/.default');
-      params.append('grant_type', 'client_credentials');
-
-      const tokenRes = await fetch(tokenEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params
-      });
-
-      if (!tokenRes.ok) {
-        throw new Error(`Kunde inte hämta Graph-token: ${tokenRes.statusText}`);
-      }
-
-      const tokenData = await tokenRes.json();
-      const accessToken = tokenData.access_token;
-
+    // Funktion för att hämta senaste MS365-event med token som parameter
+    async function getLatestMs365Event(dateTime, accessToken) {
       const fromDateTime = new Date(dateTime.getTime() - 3 * 60 * 60 * 1000).toISOString(); // 3h bakåt
       const untilDateTime = dateTime.toISOString();
 
@@ -198,7 +175,7 @@ module.exports = async function (context, req) {
       try {
         let address = null;
 
-        const msEvent = await getLatestMs365Event(dateTime);
+        const msEvent = await getLatestMs365Event(dateTime, msGraphAccessToken);
         const appleEvent = await getLatestAppleEvent(dateTime);
 
         if (msEvent?.location?.address) {
@@ -237,6 +214,31 @@ module.exports = async function (context, req) {
     debugLog(`📨 Begäran mottagen med meeting_type: ${meeting_type}, meeting_length: ${meeting_length}, contact_id: ${contact_id}, email: ${email}`);
 
     const db = await pool.connect();
+
+    // Hämta MS Graph-token en gång
+    try {
+      const tokenEndpoint = `https://login.microsoftonline.com/${process.env.MS365_TENANT_ID}/oauth2/v2.0/token`;
+      const params = new URLSearchParams();
+      params.append('client_id', process.env.MS365_CLIENT_ID);
+      params.append('client_secret', process.env.MS365_CLIENT_SECRET);
+      params.append('scope', 'https://graph.microsoft.com/.default');
+      params.append('grant_type', 'client_credentials');
+
+      const tokenRes = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params
+      });
+
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        msGraphAccessToken = tokenData.access_token;
+      } else {
+        context.log(`⚠️ Misslyckades hämta Graph-token: ${tokenRes.statusText}`);
+      }
+    } catch (err) {
+      context.log(`⚠️ Fel vid Graph-tokenhämtning: ${err.message}`);
+    }
 
     const contactRes = await db.query('SELECT * FROM contact WHERE id = $1', [contact_id]);
     const contact = contactRes.rows[0];
