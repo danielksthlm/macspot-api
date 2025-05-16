@@ -171,27 +171,27 @@ module.exports = async function (context, req) {
         return null;
       }
     }
-    // Declare originSource and originEndTime outside for slot loop access
+    // Globala variabler för loggning av ursprung
     let originSource = null;
     let originEndTime = null;
     const resolveOriginAddress = async ({ dateTime, context }) => {
       try {
         let address = null;
-        // Fetch latest events
+        // Hämta senaste events
         let msEvent = null;
+        let appleEvent = null;
         try {
           msEvent = await getLatestMs365Event(dateTime, msGraphAccessToken);
         } catch (err) {
           context.log(`⚠️ MS Graph misslyckades (rate limit eller fel): ${err.message}`);
         }
-        let appleEvent = null;
         try {
           appleEvent = await getLatestAppleEvent(dateTime);
         } catch (err) {
           context.log(`⚠️ Apple Calendar misslyckades: ${err.message}`);
         }
 
-        // Logging for fetched events
+        // Logging för hämtade events
         if (msEvent?.location?.address) {
           context.log(`📅 Ursprung från Microsoft 365 – senaste plats: ${msEvent.location.address}`);
         }
@@ -199,23 +199,16 @@ module.exports = async function (context, req) {
           context.log(`📅 Ursprung från Apple Calendar – senaste plats: ${appleEvent.location}`);
         }
 
-        // Determine which event is newer and set address, originSource, and originEndTime
-        if (msEvent?.location?.address) {
-          address = msEvent.location.address;
-          // For logging origin
-        }
-        if (appleEvent?.location && (!address || new Date(appleEvent.end) > new Date(msEvent?.end))) {
-          address = appleEvent.location;
-        }
-
-        // Set originSource and originEndTime for logging
+        // Avgör vilken som är nyast (address, originSource, originEndTime)
         originSource = null;
         originEndTime = null;
-        if (msEvent?.location?.address) {
+        if (msEvent?.location?.address && (!appleEvent?.location || new Date(msEvent.end) >= new Date(appleEvent?.end))) {
+          address = msEvent.location.address;
           originSource = 'Microsoft 365';
           originEndTime = msEvent.end;
         }
-        if (appleEvent?.location && (!originSource || new Date(appleEvent.end) > new Date(msEvent?.end))) {
+        if (appleEvent?.location && (!msEvent?.location?.address || new Date(appleEvent.end) > new Date(msEvent?.end))) {
+          address = appleEvent.location;
           originSource = 'Apple Calendar';
           originEndTime = appleEvent.end;
         }
@@ -490,13 +483,13 @@ module.exports = async function (context, req) {
             try {
               origin = await resolveOriginAddress({ dateTime: slotTime, context });
 
-              // Add enhanced origin logging and conflict check
+              // Förbättrad loggning och konfliktkontroll
               if (!origin) {
-                context.log(`❌ Slot ${slotTime.toISOString()} avvisad – ingen giltig kalenderadress (privat eller jobb) kunde hämtas`);
+                context.log(`❌ Slot ${slotTime.toISOString()} avvisad – saknar startadress för restid (ingen plats i kalendern)`);
                 context.log(`⚠️ Ursprung kunde inte bestämmas – använder fallback_travel_time_minutes`);
                 travelTimeMin = settings.fallback_travel_time_minutes || 0;
               } else if (originEndTime && new Date(originEndTime) > travelStart) {
-                context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – konflikt med händelse i ${originSource} som slutar ${originEndTime}`);
+                context.log(`📛 Slot ${slotTime.toISOString()} avvisad – kalenderkrock med möte i ${originSource} (slutar ${originEndTime})`);
                 return;
               }
 
@@ -693,9 +686,21 @@ module.exports = async function (context, req) {
     const t4 = Date.now();
     debugLog(`🧮 Slot-loop tog totalt: ${t4 - t3} ms`);
     debugLog('⏱️ Efter slot-loop: ' + (Date.now() - t0) + ' ms');
-    context.log(`📉 Avvisade slots p.g.a. okänt ursprung (ingen kalenderadress): ${Object.values(slotMap).flat().filter(s => !s.origin).length}`);
-    const calendarConflicts = Object.values(slotMap).flat().filter(s => s.origin && originEndTime && new Date(originEndTime) > new Date(s.slot_iso));
-    context.log(`📉 Avvisade slots p.g.a. kalenderkrock (privat/jobb): ${calendarConflicts.length}`);
+    // Summerad loggning för avvisade slots p.g.a. kalenderkrock och okänt ursprung
+    const allSlots = Object.values(slotMap).flat();
+    // Avvisade p.g.a. kalenderkrock (privat/jobb)
+    let calendarConflicts = 0;
+    for (const s of allSlots) {
+      // För varje slot, kolla om originEndTime är satt och slutar efter travelStart
+      // travelStart = slotTime - travelTimeMin*60000 (kan ej återskapas exakt här, men vi kan använda originEndTime > slot_iso som approximation)
+      if (s.origin && originEndTime && new Date(originEndTime) > new Date(s.slot_iso)) {
+        calendarConflicts++;
+      }
+    }
+    context.log(`📉 Avvisade slots p.g.a. kalenderkrock (för sent slut på föregående möte): ${calendarConflicts}`);
+    // Avvisade p.g.a. okänt ursprung (ingen kalenderadress)
+    const unknownOrigin = allSlots.filter(s => !s.origin).length;
+    context.log(`📉 Avvisade slots p.g.a. saknad startadress (kalender tom): ${unknownOrigin}`);
 
     if (isDebug) {
       const totalSlots = Object.values(slotMap).flat().length;
