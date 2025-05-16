@@ -95,42 +95,22 @@ module.exports = async function (context, req) {
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       meeting_type,
-      address: metadata.address || null,
-      postal_code: metadata.postal_code || null,
-      city: metadata.city || null,
-      country: metadata.country || settings.country || 'SE',
-      participant_count: 1,
-      meeting_link: meeting_link,
-      status: 'confirmed',
-      require_approval: metadata.require_approval === true,
-      language: settings.language || 'sv',
-      synced_to_calendar: false,
-      notes: metadata.notes || null,
       metadata: JSON.stringify(metadata),
       created_at,
       updated_at,
       contact_id: metadata.contact_id || null,
-      event_id: null,
-      room_email: null
+      booking_email: email || null
     };
-
-    if (meeting_type === 'atOffice') {
-      fields.metadata = JSON.stringify({ ...metadata, room_status: 'unhandled' });
-    }
 
     const query = `
       INSERT INTO bookings (
         id, start_time, end_time, meeting_type,
-        address, postal_code, city, country, participant_count,
-        meeting_link, status, require_approval, language,
-        synced_to_calendar, notes, metadata, created_at, updated_at,
-        contact_id, event_id, room_email
+        metadata, created_at, updated_at,
+        contact_id, booking_email
       ) VALUES (
         $1, $2, $3, $4,
-        $5, $6, $7, $8, $9,
-        $10, $11, $12, $13,
-        $14, $15, $16, $17, $18,
-        $19, $20, $21
+        $5, $6, $7,
+        $8, $9
       )
     `;
 
