@@ -221,7 +221,7 @@ module.exports = async function (context, req) {
         }
         return address || null;
       } catch (err) {
-        context.log(`⚠️ originResolver error: ${err.message}`);
+        if (isDebug) context.log(`⚠️ originResolver error: ${err.message}`);
         return null;
       }
     };
@@ -372,6 +372,9 @@ module.exports = async function (context, req) {
 
     // Hämta Apple Maps-token en gång tidigt
     const accessToken = await getAppleMapsAccessToken(context);
+    if (!accessToken && isDebug) {
+      context.log('⚠️ Apple Maps-token saknas – vissa slots kan använda fallback');
+    }
     const t3 = Date.now();
     debugLog('⏱️ Efter Apple Maps token: ' + (Date.now() - t0) + ' ms');
 
@@ -485,8 +488,9 @@ module.exports = async function (context, req) {
 
               // Förbättrad loggning och konfliktkontroll
               if (!origin) {
-                context.log(`❌ Slot ${slotTime.toISOString()} avvisad – saknar startadress för restid (ingen plats i kalendern)`);
-                context.log(`⚠️ Ursprung kunde inte bestämmas – använder fallback_travel_time_minutes`);
+                if (isDebug) {
+                  context.log(`❌ Slot ${slotTime.toISOString()} saknar startadress (ingen plats i kalendern) – använder fallback`);
+                }
                 travelTimeMin = settings.fallback_travel_time_minutes || 0;
               } else if (originEndTime && new Date(originEndTime) > travelStart) {
                 context.log(`📛 Slot ${slotTime.toISOString()} avvisad – kalenderkrock med möte i ${originSource} (slutar ${originEndTime})`);
