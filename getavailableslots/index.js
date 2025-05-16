@@ -178,8 +178,18 @@ module.exports = async function (context, req) {
       try {
         let address = null;
         // Fetch latest events
-        const msEvent = await getLatestMs365Event(dateTime, msGraphAccessToken);
-        const appleEvent = await getLatestAppleEvent(dateTime);
+        let msEvent = null;
+        try {
+          msEvent = await getLatestMs365Event(dateTime, msGraphAccessToken);
+        } catch (err) {
+          context.log(`⚠️ MS Graph misslyckades (rate limit eller fel): ${err.message}`);
+        }
+        let appleEvent = null;
+        try {
+          appleEvent = await getLatestAppleEvent(dateTime);
+        } catch (err) {
+          context.log(`⚠️ Apple Calendar misslyckades: ${err.message}`);
+        }
 
         // Logging for fetched events
         if (msEvent?.location?.address) {
@@ -565,6 +575,10 @@ module.exports = async function (context, req) {
 
                   // Cache spara
                   travelCache.set(cacheKey, travelTimeMin);
+                  if (!origin || !destination) {
+                    context.log(`⚠️ Hoppar caching – saknar from_address (${origin}) eller to_address (${destination})`);
+                    return;
+                  }
                   await db.query(`
                     INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
                     VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -632,6 +646,10 @@ module.exports = async function (context, req) {
                         // Lägg till till minnescache även för retur
                         const returnCacheKey = `${from}|${to}|${hour}`;
                         travelCache.set(returnCacheKey, returnMinutes);
+                        if (!from || !to) {
+                          context.log(`⚠️ Hoppar caching av retur – saknar from_address (${from}) eller to_address (${to})`);
+                          return;
+                        }
                         await db.query(`
                           INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
                           VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -676,6 +694,8 @@ module.exports = async function (context, req) {
     debugLog(`🧮 Slot-loop tog totalt: ${t4 - t3} ms`);
     debugLog('⏱️ Efter slot-loop: ' + (Date.now() - t0) + ' ms');
     context.log(`📉 Avvisade slots p.g.a. okänt ursprung (ingen kalenderadress): ${Object.values(slotMap).flat().filter(s => !s.origin).length}`);
+    const calendarConflicts = Object.values(slotMap).flat().filter(s => s.origin && originEndTime && new Date(originEndTime) > new Date(s.slot_iso));
+    context.log(`📉 Avvisade slots p.g.a. kalenderkrock (privat/jobb): ${calendarConflicts.length}`);
 
     if (isDebug) {
       const totalSlots = Object.values(slotMap).flat().length;
