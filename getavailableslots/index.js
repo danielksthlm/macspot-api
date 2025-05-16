@@ -171,13 +171,17 @@ module.exports = async function (context, req) {
         return null;
       }
     }
+    // Declare originSource and originEndTime outside for slot loop access
+    let originSource = null;
+    let originEndTime = null;
     const resolveOriginAddress = async ({ dateTime, context }) => {
       try {
         let address = null;
-
+        // Fetch latest events
         const msEvent = await getLatestMs365Event(dateTime, msGraphAccessToken);
         const appleEvent = await getLatestAppleEvent(dateTime);
 
+        // Logging for fetched events
         if (msEvent?.location?.address) {
           context.log(`📅 Ursprung från Microsoft 365 – senaste plats: ${msEvent.location.address}`);
         }
@@ -185,15 +189,33 @@ module.exports = async function (context, req) {
           context.log(`📅 Ursprung från Apple Calendar – senaste plats: ${appleEvent.location}`);
         }
 
+        // Determine which event is newer and set address, originSource, and originEndTime
         if (msEvent?.location?.address) {
           address = msEvent.location.address;
-          context.log('📅 Ursprung från Microsoft 365');
+          // For logging origin
         }
         if (appleEvent?.location && (!address || new Date(appleEvent.end) > new Date(msEvent?.end))) {
           address = appleEvent.location;
-          context.log('📅 Ursprung från Apple Calendar');
         }
 
+        // Set originSource and originEndTime for logging
+        originSource = null;
+        originEndTime = null;
+        if (msEvent?.location?.address) {
+          originSource = 'Microsoft 365';
+          originEndTime = msEvent.end;
+        }
+        if (appleEvent?.location && (!originSource || new Date(appleEvent.end) > new Date(msEvent?.end))) {
+          originSource = 'Apple Calendar';
+          originEndTime = appleEvent.end;
+        }
+
+        if (address === msEvent?.location?.address) {
+          context.log('📅 Ursprung från Microsoft 365');
+        }
+        if (address === appleEvent?.location) {
+          context.log('📅 Ursprung från Apple Calendar');
+        }
         return address || null;
       } catch (err) {
         context.log(`⚠️ originResolver error: ${err.message}`);
@@ -458,10 +480,14 @@ module.exports = async function (context, req) {
             try {
               origin = await resolveOriginAddress({ dateTime: slotTime, context });
 
+              // Add enhanced origin logging and conflict check
               if (!origin) {
                 context.log(`❌ Slot ${slotTime.toISOString()} avvisad – ingen giltig kalenderadress (privat eller jobb) kunde hämtas`);
                 context.log(`⚠️ Ursprung kunde inte bestämmas – använder fallback_travel_time_minutes`);
                 travelTimeMin = settings.fallback_travel_time_minutes || 0;
+              } else if (originEndTime && new Date(originEndTime) > travelStart) {
+                context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – konflikt med händelse i ${originSource} som slutar ${originEndTime}`);
+                return;
               }
 
               // Kontroll om restiden startar utanför tillåtet fönster
