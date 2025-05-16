@@ -1,6 +1,6 @@
 const { DateTime } = require('luxon');
 const { Pool } = require('pg');
-const resolveOriginAddress = require('./originResolver');
+
 const pool = new Pool({
   user: process.env.PGUSER,
   host: process.env.PGHOST,
@@ -90,6 +90,132 @@ module.exports = async function (context, req) {
   try {
     // Pool återanvänds från global instans
     const fetch = require('node-fetch');
+    // Inlinefunktion för getLatestMs365Event (MS Graph)
+    async function getLatestMs365Event(dateTime) {
+      const jwt = require('jsonwebtoken');
+      const fetch = require('node-fetch');
+
+      const tokenEndpoint = `https://login.microsoftonline.com/${process.env.GRAPH_TENANT_ID}/oauth2/v2.0/token`;
+
+      const params = new URLSearchParams();
+      params.append('client_id', process.env.GRAPH_CLIENT_ID);
+      params.append('client_secret', process.env.GRAPH_CLIENT_SECRET);
+      params.append('scope', 'https://graph.microsoft.com/.default');
+      params.append('grant_type', 'client_credentials');
+
+      const tokenRes = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params
+      });
+
+      if (!tokenRes.ok) {
+        throw new Error(`Kunde inte hämta Graph-token: ${tokenRes.statusText}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      const accessToken = tokenData.access_token;
+
+      const fromDateTime = new Date(dateTime.getTime() - 3 * 60 * 60 * 1000).toISOString(); // 3h bakåt
+      const untilDateTime = dateTime.toISOString();
+
+      const graphRes = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendarView?startDateTime=${fromDateTime}&endDateTime=${untilDateTime}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Prefer': 'outlook.timezone="UTC"'
+        }
+      });
+
+      if (!graphRes.ok) {
+        throw new Error(`Kunde inte hämta kalenderhändelser från Graph: ${graphRes.statusText}`);
+      }
+
+      const graphData = await graphRes.json();
+      const sorted = (graphData.value || [])
+        .filter(e => e.end?.dateTime && e.location?.displayName)
+        .sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
+
+      if (sorted.length === 0) return null;
+
+      return {
+        end: sorted[0].end.dateTime,
+        location: { address: sorted[0].location.displayName }
+      };
+    }
+    async function getLatestAppleEvent(dateTime) {
+      const dav = require('dav');
+      const url = process.env.APPLE_CALDAV_URL;
+      const username = process.env.APPLE_CALDAV_USERNAME;
+      const password = process.env.APPLE_CALDAV_PASSWORD;
+
+      try {
+        const xhr = new dav.transport.Basic(
+          new dav.Credentials({
+            username,
+            password
+          })
+        );
+
+        const account = await dav.createAccount({
+          server: url,
+          xhr,
+          loadObjects: true,
+          loadCollections: true
+        });
+
+        const calendars = account.calendars || [];
+        let latest = null;
+
+        for (const cal of calendars) {
+          for (const obj of cal.objects || []) {
+            if (obj.calendarData) {
+              const match = obj.calendarData.match(/DTEND(?:;TZID=[^:]+)?:([0-9T]+)/);
+              const locationMatch = obj.calendarData.match(/LOCATION:(.+)/);
+              if (match && locationMatch) {
+                const dt = match[1].replace(/T/, '').replace(/Z/, '');
+                const endTime = DateTime.fromFormat(dt, 'yyyyMMddHHmmss', { zone: 'utc' }).toJSDate();
+                if (endTime <= dateTime) {
+                  if (!latest || endTime > latest.end) {
+                    latest = {
+                      end: endTime.toISOString(),
+                      location: locationMatch[1].trim()
+                    };
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        return latest;
+      } catch (err) {
+        context.log('⚠️ Fel i getLatestAppleEvent:', err.message);
+        return null;
+      }
+    }
+    const resolveOriginAddress = async ({ dateTime, context }) => {
+      try {
+        let address = null;
+
+        const msEvent = await getLatestMs365Event(dateTime);
+        const appleEvent = await getLatestAppleEvent(dateTime);
+
+        if (msEvent?.location?.address) {
+          address = msEvent.location.address;
+          context.log('📅 Ursprung från Microsoft 365');
+        }
+        if (appleEvent?.location && (!address || new Date(appleEvent.end) > new Date(msEvent?.end))) {
+          address = appleEvent.location;
+          context.log('📅 Ursprung från Apple Calendar');
+        }
+
+        return address || null;
+      } catch (err) {
+        context.log(`⚠️ originResolver error: ${err.message}`);
+        return null;
+      }
+    };
     debugLog('🏁 Börjar getavailableslots');
     const t0 = Date.now();
     const travelCache = new Map(); // key: from|to|hour
@@ -316,14 +442,7 @@ module.exports = async function (context, req) {
             // --- Försök alltid beräkna restid enligt kontors-/resefönsterlogik ---
             let origin = null;
             try {
-              const isOfficeTime =
-                slotTime >= openTime && slotEndTime <= closeTime;
-
-              if (isOfficeTime) {
-                origin = await resolveOriginAddress({ contact, dateTime: slotTime, context });
-              } else {
-                origin = settings.default_home_address;
-              }
+              origin = await resolveOriginAddress({ dateTime: slotTime, context });
 
               if (!origin) {
                 context.log(`⚠️ Ursprung kunde inte bestämmas – använder fallback_travel_time_minutes`);
@@ -578,7 +697,6 @@ module.exports = async function (context, req) {
   }
 };
 
-// Återanvändbar funktion för att hämta Apple Maps access token
 async function getAppleMapsAccessToken(context) {
   try {
     const jwt = require('jsonwebtoken');
