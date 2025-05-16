@@ -179,6 +179,13 @@ module.exports = async function (context, req) {
         const appleEvent = await getLatestAppleEvent(dateTime);
 
         if (msEvent?.location?.address) {
+          context.log(`📅 Ursprung från Microsoft 365 – senaste plats: ${msEvent.location.address}`);
+        }
+        if (appleEvent?.location) {
+          context.log(`📅 Ursprung från Apple Calendar – senaste plats: ${appleEvent.location}`);
+        }
+
+        if (msEvent?.location?.address) {
           address = msEvent.location.address;
           context.log('📅 Ursprung från Microsoft 365');
         }
@@ -415,6 +422,11 @@ module.exports = async function (context, req) {
               }
             }
 
+            // Kontrollera konflikt med befintlig kalenderhändelse (privat/jobb)
+            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context });
+            const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
+            context.log(originLog);
+
             if (isTooClose) {
               debugLog(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
               return;
@@ -447,6 +459,7 @@ module.exports = async function (context, req) {
               origin = await resolveOriginAddress({ dateTime: slotTime, context });
 
               if (!origin) {
+                context.log(`❌ Slot ${slotTime.toISOString()} avvisad – ingen giltig kalenderadress (privat eller jobb) kunde hämtas`);
                 context.log(`⚠️ Ursprung kunde inte bestämmas – använder fallback_travel_time_minutes`);
                 travelTimeMin = settings.fallback_travel_time_minutes || 0;
               }
@@ -459,6 +472,7 @@ module.exports = async function (context, req) {
               }
             } catch (err) {
               context.log(`⚠️ Fel vid resolveOriginAddress: ${err.message} – använder fallback_travel_time_minutes`);
+              context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
               travelTimeMin = settings.fallback_travel_time_minutes || 0;
             }
             let destination = settings.default_office_address;
@@ -500,6 +514,7 @@ module.exports = async function (context, req) {
             if (!cacheHit) {
               if (!accessToken) {
                 context.log(`⚠️ Apple Maps-token saknas – använder fallback restid ${travelTimeMin} min`);
+                context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                 travelTimeMin = settings.fallback_travel_time_minutes || 0;
               } else {
                 try {
@@ -516,6 +531,7 @@ module.exports = async function (context, req) {
                   const travelSeconds = data.routes?.[0]?.durationSeconds;
                   if (!travelSeconds) {
                     context.log(`⚠️ Apple Maps kunde inte hitta restid – använder fallback`);
+                    context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                     travelTimeMin = settings.fallback_travel_time_minutes || 0;
                   } else {
                     travelTimeMin = Math.round(travelSeconds / 60);
@@ -531,6 +547,7 @@ module.exports = async function (context, req) {
                   `, [origin, destination, hourKey, travelTimeMin]);
                 } catch (err) {
                   context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
+                  context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                   travelTimeMin = settings.fallback_travel_time_minutes || 0;
                 }
               }
@@ -618,8 +635,12 @@ module.exports = async function (context, req) {
               slot_local: DateTime.fromJSDate(slotTime, { zone: 'utc' }).setZone(timezone).toISO(),
               score: minDist,
               require_approval: requireApprovalForThisSlot,
-              travel_time_min: travelTimeMin
+              travel_time_min: travelTimeMin,
+              origin: origin || null
             });
+            if (origin) {
+              context.log(`✅ Slot ${slotTime.toISOString()} tillagd med origin: ${origin}`);
+            }
             slotCount++;
           }));
         })
@@ -628,6 +649,7 @@ module.exports = async function (context, req) {
     const t4 = Date.now();
     debugLog(`🧮 Slot-loop tog totalt: ${t4 - t3} ms`);
     debugLog('⏱️ Efter slot-loop: ' + (Date.now() - t0) + ' ms');
+    context.log(`📉 Avvisade slots p.g.a. okänt ursprung (ingen kalenderadress): ${Object.values(slotMap).flat().filter(s => !s.origin).length}`);
 
     if (isDebug) {
       const totalSlots = Object.values(slotMap).flat().length;
