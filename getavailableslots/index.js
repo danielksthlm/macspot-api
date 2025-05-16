@@ -553,67 +553,66 @@ module.exports = async function (context, req) {
             if (!slotMap[key]) slotMap[key] = [];
             debugLog(`✅ Slot tillagd: ${key}`);
 
-            // Kontrollera om retur från tidigare möte till denna slot fungerar
-            if (meeting_type !== 'atclient') return;
-            const previous = bookingsByDay[dateStr]
-              .filter(b => b.end < slotStart)
-              .sort((a, b) => b.end - a.end)[0];
+            // Hantera särskild logik för atClient, t.ex. returresvägskrav
+            if (meeting_type === 'atclient') {
+              const previous = bookingsByDay[dateStr]
+                .filter(b => b.end < slotStart)
+                .sort((a, b) => b.end - a.end)[0];
 
-            if (previous) {
-              const prevEnd = new Date(previous.end);
-              const from = previous.address || settings.default_office_address;
-              const to = meeting_type === 'atClient'
-                ? contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city
-                : settings.default_home_address;
+              if (previous) {
+                const prevEnd = new Date(previous.end);
+                const from = previous.address || settings.default_office_address;
+                const to = contact.metadata.address + ' ' + contact.metadata.postal_code + ' ' + contact.metadata.city;
 
-              if (accessToken) {
-                try {
-                  // Rensa bort och undvik att spara returrestid om from och to är identiska
-                  if (from === to) {
-                    context.log(`💾 Returrestid är 0 min (${from} → ${to}) – ingen cache behövs`);
-                  } else {
-                    const url = new URL('https://maps-api.apple.com/v1/directions');
-                    url.searchParams.append('origin', from);
-                    url.searchParams.append('destination', to);
-                    url.searchParams.append('transportType', 'automobile');
-                    url.searchParams.append('departureTime', prevEnd.toISOString());
+                if (accessToken) {
+                  try {
+                    // Rensa bort och undvik att spara returrestid om from och to är identiska
+                    if (from === to) {
+                      context.log(`💾 Returrestid är 0 min (${from} → ${to}) – ingen cache behövs`);
+                    } else {
+                      const url = new URL('https://maps-api.apple.com/v1/directions');
+                      url.searchParams.append('origin', from);
+                      url.searchParams.append('destination', to);
+                      url.searchParams.append('transportType', 'automobile');
+                      url.searchParams.append('departureTime', prevEnd.toISOString());
 
-                    const res = await fetch(url.toString(), {
-                      headers: { Authorization: `Bearer ${accessToken}` }
-                    });
-                    const data = await res.json();
-                    const returnMinutes = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
-                    const arrivalTime = new Date(prevEnd.getTime() + returnMinutes * 60000);
+                      const res = await fetch(url.toString(), {
+                        headers: { Authorization: `Bearer ${accessToken}` }
+                      });
+                      const data = await res.json();
+                      const returnMinutes = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
+                      const arrivalTime = new Date(prevEnd.getTime() + returnMinutes * 60000);
 
-                    // --- Cacha returrestid ---
-                    try {
-                      const hour = prevEnd.getUTCHours();
-                      // Lägg till till minnescache även för retur
-                      const returnCacheKey = `${from}|${to}|${hour}`;
-                      travelCache.set(returnCacheKey, returnMinutes);
-                      await db.query(`
-                        INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, NOW(), NOW())
-                        ON CONFLICT (from_address, to_address, hour)
-                        DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
-                      `, [from, to, hour, returnMinutes]);
-                      context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
-                    } catch (err) {
-                      context.log(`⚠️ Kunde inte spara returrestid till cache: ${err.message}`);
+                      // --- Cacha returrestid ---
+                      try {
+                        const hour = prevEnd.getUTCHours();
+                        // Lägg till till minnescache även för retur
+                        const returnCacheKey = `${from}|${to}|${hour}`;
+                        travelCache.set(returnCacheKey, returnMinutes);
+                        await db.query(`
+                          INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
+                          VALUES ($1, $2, $3, $4, NOW(), NOW())
+                          ON CONFLICT (from_address, to_address, hour)
+                          DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+                        `, [from, to, hour, returnMinutes]);
+                        context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
+                      } catch (err) {
+                        context.log(`⚠️ Kunde inte spara returrestid till cache: ${err.message}`);
+                      }
+                      // --- Slut cache returrestid ---
+
+                      if (arrivalTime > slotTime) {
+                        debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
+                        return;
+                      }
                     }
-                    // --- Slut cache returrestid ---
-
-                    if (arrivalTime > slotTime) {
-                      debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
-                      return;
-                    }
+                  } catch (err) {
+                    context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
                   }
-                } catch (err) {
-                  context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
                 }
               }
             }
-
+            // Resten av slot-genereringskoden gäller alla mötestyper
             slotMap[key].push({
               slot_iso: slotTime.toISOString(),
               slot_local: DateTime.fromJSDate(slotTime, { zone: 'utc' }).setZone(timezone).toISO(),
