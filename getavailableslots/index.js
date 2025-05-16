@@ -95,11 +95,11 @@ module.exports = async function (context, req) {
       const jwt = require('jsonwebtoken');
       const fetch = require('node-fetch');
 
-      const tokenEndpoint = `https://login.microsoftonline.com/${process.env.GRAPH_TENANT_ID}/oauth2/v2.0/token`;
+      const tokenEndpoint = `https://login.microsoftonline.com/${process.env.MS365_TENANT_ID}/oauth2/v2.0/token`;
 
       const params = new URLSearchParams();
-      params.append('client_id', process.env.GRAPH_CLIENT_ID);
-      params.append('client_secret', process.env.GRAPH_CLIENT_SECRET);
+      params.append('client_id', process.env.MS365_CLIENT_ID);
+      params.append('client_secret', process.env.MS365_CLIENT_SECRET);
       params.append('scope', 'https://graph.microsoft.com/.default');
       params.append('grant_type', 'client_credentials');
 
@@ -119,7 +119,7 @@ module.exports = async function (context, req) {
       const fromDateTime = new Date(dateTime.getTime() - 3 * 60 * 60 * 1000).toISOString(); // 3h bakåt
       const untilDateTime = dateTime.toISOString();
 
-      const graphRes = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.GRAPH_USER_ID}/calendarView?startDateTime=${fromDateTime}&endDateTime=${untilDateTime}`, {
+      const graphRes = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.MS365_USER_EMAIL}/calendarView?startDateTime=${fromDateTime}&endDateTime=${untilDateTime}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${accessToken}`,
