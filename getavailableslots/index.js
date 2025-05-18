@@ -238,7 +238,7 @@ module.exports = async function (context, req) {
     // Globala variabler för loggning av ursprung
     let originSource = null;
     let originEndTime = null;
-    const resolveOriginAddress = async ({ dateTime, context }) => {
+    const resolveOriginAddress = async ({ dateTime, context, settings }) => {
       try {
         // Se till att travelStart är alltid definierad för denna funktion
         const travelStart = new Date(dateTime.getTime() - (settings.fallback_travel_time_minutes || 0) * 60000);
@@ -600,7 +600,7 @@ module.exports = async function (context, req) {
             }
 
             // Kontrollera konflikt med befintlig kalenderhändelse (privat/jobb)
-            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context });
+            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context, settings });
             const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
             context.log(originLog);
 
@@ -633,7 +633,7 @@ module.exports = async function (context, req) {
             // --- Försök alltid beräkna restid enligt kontors-/resefönsterlogik ---
             let origin = null;
             try {
-              origin = await resolveOriginAddress({ dateTime: slotTime, context });
+              origin = await resolveOriginAddress({ dateTime: slotTime, context, settings });
 
               // Förbättrad loggning och konfliktkontroll
               if (!origin) {
