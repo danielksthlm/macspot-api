@@ -233,6 +233,9 @@ module.exports = async function (context, req) {
         } catch (err) {
           context.log(`⚠️ Apple Calendar misslyckades: ${err.message}`);
         }
+        // Logga hela appleEvent och msEvent-objekten
+        context.log('🧪 Apple event:', JSON.stringify(appleEvent, null, 2));
+        context.log('🧪 MS event:', JSON.stringify(msEvent, null, 2));
 
         // Logging för hämtade events
         if (msEvent?.location?.address) {
@@ -263,6 +266,9 @@ module.exports = async function (context, req) {
           originEndTime = new Date(dateTime.getTime() - 15 * 60000).toISOString();
           context.log(`🧪 Fallback origin används: ${address}`);
         }
+
+        // Kontroll-logg för vald originEndTime
+        context.log(`📅 Vald originEndTime: ${originEndTime} från ${originSource}`);
 
         // Spara till calendar_origin_cache om vi har giltig information
         if (address && originEndTime && originSource) {
@@ -583,7 +589,7 @@ module.exports = async function (context, req) {
                 }
                 travelTimeMin = settings.fallback_travel_time_minutes || 0;
               } else if (originEndTime && new Date(originEndTime) > travelStart) {
-                context.log(`📛 Slot ${slotTime.toISOString()} avvisad – kalenderkrock med möte i ${originSource} (slutar ${originEndTime})`);
+                context.log(`📛 Slot ${slotTime.toISOString()} avvisad – kalenderkrock (slut ${originEndTime}, travelStart ${travelStart.toISOString()})`);
                 return;
               }
 
