@@ -134,7 +134,7 @@ module.exports = async function (context, req) {
     // Simulera att kalendern synkades för denna demo
     fields.synced_to_calendar = true;
     await db.query(
-      'INSERT INTO event_log (event_type, booking_id, created_at) VALUES ($1, $2, NOW())',
+      'INSERT INTO event_log (event_type, booking_id) VALUES ($1, $2)',
       ['booking_created', id]
     );
 
