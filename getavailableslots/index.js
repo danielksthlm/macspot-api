@@ -255,8 +255,17 @@ module.exports = async function (context, req) {
           originEndTime = appleEvent.end;
         }
 
+        // Fallback om båda msEvent och appleEvent misslyckas
+        if (!address) {
+          address = settings.default_home_address;
+          originSource = 'fallback';
+          originEndTime = new Date(dateTime.getTime() - 15 * 60000).toISOString();
+          context.log(`🧪 Fallback origin används: ${address}`);
+        }
+
         // Spara till calendar_origin_cache om vi har giltig information
         if (address && originEndTime && originSource) {
+          context.log(`💾 Försöker spara origin: ${address}, källa: ${originSource}, slut: ${originEndTime}`);
           try {
             await pool.query(`
               INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
@@ -272,6 +281,9 @@ module.exports = async function (context, req) {
           } catch (err) {
             context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
           }
+        }
+        else {
+          context.log(`🛑 Ursprung inte sparad – address: ${address}, end: ${originEndTime}, source: ${originSource}`);
         }
 
         // Spara till minnescache för snabbare access inom processen
