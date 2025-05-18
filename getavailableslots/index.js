@@ -161,61 +161,62 @@ module.exports = async function (context, req) {
           server: url,
           rootUrl: fullUrl,
           xhr,
-          loadObjects: false,
+          loadObjects: true,
           loadCollections: true
         });
 
         const calendars = account.calendars || [];
         let latest = null;
 
-        // Sync each calendar before processing objects
-        for (const cal of calendars) {
-          try {
-            await dav.syncCalendar(cal, { xhr });
-          } catch (err) {
-            context.log(`⚠️ Kunde inte synka kalender ${cal.displayName || cal.url}: ${err.message}`);
-            continue;
-          }
+        // Only process the calendar that matches fullUrl
+        const cal = calendars.find(c => c.url === fullUrl);
+        if (!cal) {
+          context.log(`⚠️ Kunde inte hitta kalender som matchar fullUrl`);
+          return null;
+        }
+        try {
+          await dav.syncCalendar(cal, { xhr });
+        } catch (err) {
+          context.log(`⚠️ Kunde inte synka kalender ${cal.displayName || cal.url}: ${err.message}`);
+          return null;
         }
 
-        // Now process all calendar objects
-        for (const cal of calendars) {
-          for (const obj of cal.objects || []) {
-            const dataStr = obj.calendarData;
-            if (!dataStr || typeof dataStr !== 'string') continue;
+        // Process objects in the matched calendar only
+        for (const obj of cal.objects || []) {
+          const dataStr = obj.calendarData;
+          if (!dataStr || typeof dataStr !== 'string') continue;
 
-            const dtendMatch = dataStr.match(/DTEND(?:;TZID=[^:]+)?:([0-9T]+)/);
-            const locationMatch = dataStr.match(/LOCATION:(.+)/);
-            if (!dtendMatch || !locationMatch) continue;
+          const dtendMatch = dataStr.match(/DTEND(?:;TZID=[^:]+)?:([0-9T]+)/);
+          const locationMatch = dataStr.match(/LOCATION:(.+)/);
+          if (!dtendMatch || !locationMatch) continue;
 
-            let raw = dtendMatch[1];
-            raw = raw.replace(/[-T:Z]/g, ''); // Normalize to yyyymmddhhmmss
-            let endTime;
+          let raw = dtendMatch[1];
+          raw = raw.replace(/[-T:Z]/g, ''); // Normalize to yyyymmddhhmmss
+          let endTime;
 
-            if (raw.length === 8) {
-              // Date only
-              endTime = DateTime.fromFormat(raw, 'yyyyMMdd', { zone: 'utc' }).toJSDate();
-            } else if (raw.length === 15) {
-              // Full timestamp
-              endTime = DateTime.fromFormat(raw, 'yyyyMMddTHHmmss', { zone: 'utc' }).toJSDate();
-            } else if (raw.length === 14) {
-              endTime = DateTime.fromFormat(raw, 'yyyyMMddHHmmss', { zone: 'utc' }).toJSDate();
-            } else {
-              continue;
+          if (raw.length === 8) {
+            // Date only
+            endTime = DateTime.fromFormat(raw, 'yyyyMMdd', { zone: 'utc' }).toJSDate();
+          } else if (raw.length === 15) {
+            // Full timestamp
+            endTime = DateTime.fromFormat(raw, 'yyyyMMddTHHmmss', { zone: 'utc' }).toJSDate();
+          } else if (raw.length === 14) {
+            endTime = DateTime.fromFormat(raw, 'yyyyMMddHHmmss', { zone: 'utc' }).toJSDate();
+          } else {
+            continue;
+          }
+
+          if (endTime <= dateTime) {
+            let location = locationMatch[1].split('\\n')[0].trim();
+            if (location === 'Europe/Stockholm') {
+              context.log(`ℹ️ Ignorerar ogiltig plats '${location}' – fallback kommer användas`);
+              location = null;
             }
-
-            if (endTime <= dateTime) {
-              let location = locationMatch[1].split('\\n')[0].trim();
-              if (location === 'Europe/Stockholm') {
-                context.log(`ℹ️ Ignorerar ogiltig plats '${location}' – fallback kommer användas`);
-                location = null;
-              }
-              if (location && (!latest || endTime > new Date(latest.end))) {
-                latest = {
-                  end: endTime.toISOString(),
-                  location
-                };
-              }
+            if (location && (!latest || endTime > new Date(latest.end))) {
+              latest = {
+                end: endTime.toISOString(),
+                location
+              };
             }
           }
         }
