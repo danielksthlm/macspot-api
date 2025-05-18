@@ -233,6 +233,8 @@ module.exports = async function (context, req) {
     let originEndTime = null;
     const resolveOriginAddress = async ({ dateTime, context }) => {
       try {
+        // Se till att travelStart är alltid definierad för denna funktion
+        const travelStart = new Date(dateTime.getTime() - (settings.fallback_travel_time_minutes || 0) * 60000);
         let address = null;
         // Minnescache för statisk origin per dag
         const staticOriginCache = global.staticOriginCache || (global.staticOriginCache = new Map());
@@ -311,6 +313,8 @@ module.exports = async function (context, req) {
 
         // Kontroll-logg för vald originEndTime
         context.log(`📅 Vald originEndTime: ${originEndTime} från ${originSource}`);
+
+        // travelStart är alltid definierad här
 
         // Spara till calendar_origin_cache om vi har giltig information
         if (address && originEndTime && originSource) {
