@@ -127,6 +127,11 @@ module.exports = async function (context, req) {
       const username = process.env.CALDAV_USER;
       const password = process.env.CALDAV_PASSWORD;
 
+      if (!url || typeof url !== 'string') {
+        context.log('❌ CALDAV_CALENDAR_URL saknas eller är felaktig');
+        return null;
+      }
+
       try {
         const xhr = new dav.transport.Basic(
           new dav.Credentials({
