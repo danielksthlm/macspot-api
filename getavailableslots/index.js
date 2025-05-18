@@ -1,3 +1,4 @@
+// SQL: GRANT USAGE, SELECT ON SEQUENCE calendar_origin_cache_id_seq TO <user>;
 const { DateTime } = require('luxon');
 const { Pool } = require('pg');
 
@@ -267,18 +268,22 @@ module.exports = async function (context, req) {
         if (address && originEndTime && originSource) {
           context.log(`💾 Försöker spara origin: ${address}, källa: ${originSource}, slut: ${originEndTime}`);
           try {
-            await pool.query(`
+            const result = await pool.query(`
               INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
               VALUES ($1, $2, $3, $4)
               ON CONFLICT DO NOTHING
-              RETURNING timestamp
+              RETURNING *
             `, [
               dateTime.toISOString().split('T')[0],
               originSource,
               address,
               originEndTime
             ]);
-            context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
+            if (result.rows.length > 0) {
+              context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
+            } else {
+              context.log(`ℹ️ Ursprung redan sparad tidigare: ${address} (${originSource})`);
+            }
           } catch (err) {
             context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
           }
