@@ -1,60 +1,47 @@
-module.exports = async function (context, req) {
-  context.log('📬 Inkommande kalendernotifiering mottagen');
+require('dotenv').config();
+const fetch = require('node-fetch');
 
-  if (req.method !== 'POST') {
-    context.res = {
-      status: 405,
-      body: 'Endast POST är tillåtet'
-    };
+async function renewSubscription() {
+  const tenantId = process.env.MS365_TENANT_ID;
+  const clientId = process.env.MS365_CLIENT_ID;
+  const clientSecret = process.env.MS365_CLIENT_SECRET;
+  const subscriptionId = process.env.SUBSCRIPTION_ID; // lägg till i din .env
+
+  const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: 'https://graph.microsoft.com/.default',
+      grant_type: 'client_credentials'
+    })
+  });
+
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) {
+    console.error('❌ Kunde inte hämta access token:', tokenData);
     return;
   }
 
-  // Validera Microsofts initiala verifiering
-  if (req.query && req.query.validationToken) {
-    context.log('✅ Verifiering av prenumeration');
-    context.res = {
-      status: 200,
-      headers: { 'Content-Type': 'text/plain' },
-      body: req.query.validationToken
-    };
-    return;
+  const newExpiration = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // +1 timme
+
+  const res = await fetch(`https://graph.microsoft.com/v1.0/subscriptions/${subscriptionId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${tokenData.access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ expirationDateTime: newExpiration })
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error('❌ Fel vid förnyelse:', err);
+  } else {
+    const result = await res.json();
+    console.log('✅ Förnyad subscription:', result);
   }
+}
 
-  const notifications = req.body?.value;
-  if (!Array.isArray(notifications)) {
-    context.res = {
-      status: 400,
-      body: 'Ogiltig payload'
-    };
-    return;
-  }
-
-  for (const note of notifications) {
-    const throttleMap = globalThis.throttleMap || (globalThis.throttleMap = new Map());
-    const now = Date.now();
-
-    context.log(`🔔 Notis: Resource = ${note.resource}, ChangeType = ${note.changeType}, Subscription = ${note.subscriptionId}`);
-    try {
-      const fetch = require('node-fetch');
-      const lastCall = throttleMap.get(note.resource) || 0;
-      if (now - lastCall > 30 * 1000) {
-        const res = await fetch(process.env.BACKGROUND_SLOT_REFRESH_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: 'calendar_change', resource: note.resource })
-        });
-        throttleMap.set(note.resource, now);
-        context.log(`♻️ Cacheuppdatering triggad: status ${res.status}`);
-      } else {
-        context.log(`⏳ Skippade cacheuppdatering för ${note.resource} – throttlad`);
-      }
-    } catch (err) {
-      context.log(`❌ Misslyckades trigga cacheuppdatering: ${err.message}`);
-    }
-  }
-
-  context.res = {
-    status: 202,
-    body: 'Notis mottagen'
-  };
-};
+renewSubscription();

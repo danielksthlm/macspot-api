@@ -146,20 +146,35 @@ module.exports = async function (context, req) {
 
         for (const cal of calendars) {
           for (const obj of cal.objects || []) {
-            if (obj.calendarData) {
-              const match = obj.calendarData.match(/DTEND(?:;TZID=[^:]+)?:([0-9T]+)/);
-              const locationMatch = obj.calendarData.match(/LOCATION:(.+)/);
-              if (match && locationMatch) {
-                const dt = match[1].replace(/T/, '').replace(/Z/, '');
-                const endTime = DateTime.fromFormat(dt, 'yyyyMMddHHmmss', { zone: 'utc' }).toJSDate();
-                if (endTime <= dateTime) {
-                  if (!latest || endTime > latest.end) {
-                    latest = {
-                      end: endTime.toISOString(),
-                      location: locationMatch[1].trim()
-                    };
-                  }
-                }
+            const dataStr = obj.calendarData;
+            if (!dataStr || typeof dataStr !== 'string') continue;
+
+            const dtendMatch = dataStr.match(/DTEND(?:;TZID=[^:]+)?:([0-9T]+)/);
+            const locationMatch = dataStr.match(/LOCATION:(.+)/);
+            if (!dtendMatch || !locationMatch) continue;
+
+            let raw = dtendMatch[1];
+            raw = raw.replace(/[-T:Z]/g, ''); // Normalize to yyyymmddhhmmss
+            let endTime;
+
+            if (raw.length === 8) {
+              // Date only
+              endTime = DateTime.fromFormat(raw, 'yyyyMMdd', { zone: 'utc' }).toJSDate();
+            } else if (raw.length === 15) {
+              // Full timestamp
+              endTime = DateTime.fromFormat(raw, 'yyyyMMddTHHmmss', { zone: 'utc' }).toJSDate();
+            } else if (raw.length === 14) {
+              endTime = DateTime.fromFormat(raw, 'yyyyMMddHHmmss', { zone: 'utc' }).toJSDate();
+            } else {
+              continue;
+            }
+
+            if (endTime <= dateTime) {
+              if (!latest || endTime > new Date(latest.end)) {
+                latest = {
+                  end: endTime.toISOString(),
+                  location: locationMatch[1].split('\\n')[0].trim()
+                };
               }
             }
           }
@@ -177,6 +192,33 @@ module.exports = async function (context, req) {
     const resolveOriginAddress = async ({ dateTime, context }) => {
       try {
         let address = null;
+        // Minnescache för statisk origin per dag
+        const staticOriginCache = global.staticOriginCache || (global.staticOriginCache = new Map());
+        const staticKey = dateTime.toISOString().split('T')[0];
+        if (staticOriginCache.has(staticKey)) {
+          const cached = staticOriginCache.get(staticKey);
+          originSource = cached.source;
+          originEndTime = cached.end_time;
+          context.log(`🧠 Ursprung hittad i minnescache: ${cached.address} (${cached.source})`);
+          return cached.address;
+        }
+        // Försök hämta från calendar_origin_cache innan några externa anrop
+        try {
+          const cacheDate = dateTime.toISOString().split('T')[0];
+          const cacheRes = await pool.query(
+            'SELECT source, address, end_time FROM calendar_origin_cache WHERE event_date = $1 LIMIT 1',
+            [cacheDate]
+          );
+          if (cacheRes.rows.length > 0) {
+            const row = cacheRes.rows[0];
+            originSource = row.source;
+            originEndTime = row.end_time;
+            context.log(`📦 Ursprung hittad i cache: ${row.address} (${row.source})`);
+            return row.address;
+          }
+        } catch (err) {
+          context.log(`⚠️ Fel vid läsning av calendar_origin_cache: ${err.message}`);
+        }
         // Hämta senaste events
         let msEvent = null;
         let appleEvent = null;
@@ -211,6 +253,35 @@ module.exports = async function (context, req) {
           address = appleEvent.location;
           originSource = 'Apple Calendar';
           originEndTime = appleEvent.end;
+        }
+
+        // Spara till calendar_origin_cache om vi har giltig information
+        if (address && originEndTime && originSource) {
+          try {
+            await pool.query(`
+              INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
+              VALUES ($1, $2, $3, $4)
+              ON CONFLICT DO NOTHING
+            `, [
+              dateTime.toISOString().split('T')[0],
+              originSource,
+              address,
+              originEndTime
+            ]);
+            context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
+          } catch (err) {
+            context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
+          }
+        }
+
+        // Spara till minnescache för snabbare access inom processen
+        if (address && originEndTime && originSource) {
+          staticOriginCache.set(staticKey, {
+            source: originSource,
+            address,
+            end_time: originEndTime
+          });
+          context.log(`🧠 Ursprung sparad till minnescache: ${address} (${originSource})`);
         }
 
         if (address === msEvent?.location?.address) {
