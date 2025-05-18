@@ -398,8 +398,7 @@ module.exports = async function (context, req) {
     const today = new Date();
     const endDate = new Date(today);
     endDate.setDate(today.getDate() + maxDays);
-    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); // sista dagen i månaden
-    const totalDays = Math.ceil((endMonth - today) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDays = maxDays;
     const days = Array.from({ length: totalDays }, (_, i) => {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
@@ -462,8 +461,8 @@ module.exports = async function (context, req) {
     const t3 = Date.now();
     debugLog('⏱️ Efter Apple Maps token: ' + (Date.now() - t0) + ' ms');
 
-    // Parallellisera dag-loop i chunkar om 28
-    const chunkSize = 28;
+    // Parallellisera dag-loop i chunkar om 7
+    const chunkSize = 7;
     debugLog('🔁 Startar slot-loop i chunkar');
     let slotCount = 0;
     for (let i = 0; i < days.length; i += chunkSize) {
@@ -849,6 +848,7 @@ module.exports = async function (context, req) {
         slots: chosen
       }
     };
+    context.done();
   } catch (error) {
     debugLog(`💥 Fel uppstod: ${error.message}`);
     context.log('🔥 FEL:', error.message, '\nSTACK:', error.stack);
