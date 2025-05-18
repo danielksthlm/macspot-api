@@ -143,7 +143,8 @@ module.exports = async function (context, req) {
         );
 
         const account = await dav.createAccount({
-          server: url,
+          server: 'https://caldav.icloud.com',
+          rootUrl: url,
           xhr,
           loadObjects: true,
           loadCollections: true
