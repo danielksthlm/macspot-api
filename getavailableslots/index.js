@@ -474,8 +474,10 @@ module.exports = async function (context, req) {
       const chunk = days.slice(i, i + chunkSize);
       const results = await Promise.allSettled(
         chunk.map(async (day) => {
+          // Loggning i början av funktionen för dag och tid
           const dateStr = day.toISOString().split('T')[0];
           const weekdayName = day.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+          context.log(`📊 Analysdag: ${dateStr} (${weekdayName}) för meeting_type=${meeting_type}`);
           debugLog(`🧪 Kontroll av veckodag '${weekdayName}' mot ${JSON.stringify(settings.allowed_atclient_meeting_days)} för mötestyp: ${meeting_type}`);
 
           if (settings.block_weekends && (day.getDay() === 0 || day.getDay() === 6)) {
