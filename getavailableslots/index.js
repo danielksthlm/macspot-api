@@ -271,6 +271,7 @@ module.exports = async function (context, req) {
               INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
               VALUES ($1, $2, $3, $4)
               ON CONFLICT DO NOTHING
+              RETURNING timestamp
             `, [
               dateTime.toISOString().split('T')[0],
               originSource,
