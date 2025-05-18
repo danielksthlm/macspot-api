@@ -147,13 +147,24 @@ module.exports = async function (context, req) {
           server: url,
           rootUrl: fullUrl,
           xhr,
-          loadObjects: true,
+          loadObjects: false,
           loadCollections: true
         });
 
         const calendars = account.calendars || [];
         let latest = null;
 
+        // Sync each calendar before processing objects
+        for (const cal of calendars) {
+          try {
+            await dav.syncCalendar(cal, { xhr });
+          } catch (err) {
+            context.log(`⚠️ Kunde inte synka kalender ${cal.displayName || cal.url}: ${err.message}`);
+            continue;
+          }
+        }
+
+        // Now process all calendar objects
         for (const cal of calendars) {
           for (const obj of cal.objects || []) {
             const dataStr = obj.calendarData;
