@@ -238,10 +238,8 @@ module.exports = async function (context, req) {
     // Globala variabler för loggning av ursprung
     let originSource = null;
     let originEndTime = null;
-    const resolveOriginAddress = async ({ dateTime, context, settings }) => {
+    const resolveOriginAddress = async ({ dateTime, context, settings, travelStart }) => {
       try {
-        // Se till att travelStart är alltid definierad för denna funktion
-        const travelStart = new Date(dateTime.getTime() - (settings.fallback_travel_time_minutes || 0) * 60000);
         let address = null;
         // Minnescache för statisk origin per dag
         const staticOriginCache = global.staticOriginCache || (global.staticOriginCache = new Map());
@@ -600,7 +598,8 @@ module.exports = async function (context, req) {
             }
 
             // Kontrollera konflikt med befintlig kalenderhändelse (privat/jobb)
-            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context, settings });
+            const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
+            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context, settings, travelStart });
             const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
             context.log(originLog);
 
