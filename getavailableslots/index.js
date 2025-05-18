@@ -124,6 +124,7 @@ module.exports = async function (context, req) {
     async function getLatestAppleEvent(dateTime) {
       const dav = require('dav');
       const url = process.env.CALDAV_CALENDAR_URL;
+      context.log('🔍 CALDAV_CALENDAR_URL (verifiering):', url);
       context.log(`🔍 CALDAV_CALENDAR_URL: ${url}`);
       const username = process.env.CALDAV_USER;
       const password = process.env.CALDAV_PASSWORD;
