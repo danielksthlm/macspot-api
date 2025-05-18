@@ -661,10 +661,10 @@ module.exports = async function (context, req) {
                     return;
                   }
                   await db.query(`
-                    INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes)
+                    VALUES ($1, $2, $3, $4)
                     ON CONFLICT (from_address, to_address, hour)
-                    DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+                    DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes
                   `, [origin, destination, hourKey, travelTimeMin]);
                 } catch (err) {
                   context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
@@ -732,10 +732,10 @@ module.exports = async function (context, req) {
                           return;
                         }
                         await db.query(`
-                          INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, created_at, updated_at)
-                          VALUES ($1, $2, $3, $4, NOW(), NOW())
+                          INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes)
+                          VALUES ($1, $2, $3, $4)
                           ON CONFLICT (from_address, to_address, hour)
-                          DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, updated_at = NOW()
+                          DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes
                         `, [from, to, hour, returnMinutes]);
                         context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
                       } catch (err) {
