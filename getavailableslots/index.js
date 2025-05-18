@@ -618,7 +618,7 @@ module.exports = async function (context, req) {
               return;
             }
 
-            const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
+            // const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
             const travelEnd = new Date(slotTime.getTime() + meeting_length * 60000 + returnTravelTimeMin * 60000);
 
             let requireApprovalForThisSlot = false;
