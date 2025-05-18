@@ -92,34 +92,48 @@ module.exports = async function (context, req) {
   try {
     // Pool återanvänds från global instans
     const fetch = require('node-fetch');
-    // Funktion för att hämta senaste MS365-event med token som parameter
+    // Funktion för att hämta senaste MS365-event med token som parameter, med retry-loop vid 429
     async function getLatestMs365Event(dateTime, accessToken) {
       const fromDateTime = new Date(dateTime.getTime() - 3 * 60 * 60 * 1000).toISOString(); // 3h bakåt
       const untilDateTime = dateTime.toISOString();
+      const url = `https://graph.microsoft.com/v1.0/users/${process.env.MS365_USER_EMAIL}/calendarView?startDateTime=${fromDateTime}&endDateTime=${untilDateTime}`;
+      let attempt = 0;
+      while (attempt < 3) {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Prefer': 'outlook.timezone="UTC"'
+          }
+        });
 
-      const graphRes = await fetch(`https://graph.microsoft.com/v1.0/users/${process.env.MS365_USER_EMAIL}/calendarView?startDateTime=${fromDateTime}&endDateTime=${untilDateTime}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Prefer': 'outlook.timezone="UTC"'
+        if (res.status === 429) {
+          const retryAfter = parseInt(res.headers.get('Retry-After') || '1', 10);
+          if (isDebug && context && context.log) {
+            context.log(`🔁 MS Graph 429 – retry #${attempt+1}, väntar ${retryAfter}s (${dateTime.toISOString()})`);
+          }
+          await new Promise(r => setTimeout(r, retryAfter * 1000));
+          attempt++;
+          continue;
         }
-      });
 
-      if (!graphRes.ok) {
-        throw new Error(`Kunde inte hämta kalenderhändelser från Graph: ${graphRes.statusText}`);
+        if (!res.ok) {
+          throw new Error(`Kunde inte hämta kalenderhändelser från Graph: ${res.statusText}`);
+        }
+
+        const graphData = await res.json();
+        const sorted = (graphData.value || [])
+          .filter(e => e.end?.dateTime && e.location?.displayName)
+          .sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
+
+        if (sorted.length === 0) return null;
+
+        return {
+          end: sorted[0].end.dateTime,
+          location: { address: sorted[0].location.displayName }
+        };
       }
-
-      const graphData = await graphRes.json();
-      const sorted = (graphData.value || [])
-        .filter(e => e.end?.dateTime && e.location?.displayName)
-        .sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
-
-      if (sorted.length === 0) return null;
-
-      return {
-        end: sorted[0].end.dateTime,
-        location: { address: sorted[0].location.displayName }
-      };
+      throw new Error('MS Graph 429 – upprepade rate limits');
     }
     async function getLatestAppleEvent(dateTime) {
       const dav = require('dav');
@@ -191,10 +205,15 @@ module.exports = async function (context, req) {
             }
 
             if (endTime <= dateTime) {
-              if (!latest || endTime > new Date(latest.end)) {
+              let location = locationMatch[1].split('\\n')[0].trim();
+              if (location === 'Europe/Stockholm') {
+                context.log(`ℹ️ Ignorerar ogiltig plats '${location}' – fallback kommer användas`);
+                location = null;
+              }
+              if (location && (!latest || endTime > new Date(latest.end))) {
                 latest = {
                   end: endTime.toISOString(),
-                  location: locationMatch[1].split('\\n')[0].trim()
+                  location
                 };
               }
             }
@@ -244,6 +263,7 @@ module.exports = async function (context, req) {
         let msEvent = null;
         let appleEvent = null;
         try {
+          if (isDebug) context.log(`🔁 Försöker hämta MS Graph-data (för ${dateTime.toISOString()})`);
           msEvent = await getLatestMs365Event(dateTime, msGraphAccessToken);
         } catch (err) {
           context.log(`⚠️ MS Graph misslyckades (rate limit eller fel): ${err.message}`);
