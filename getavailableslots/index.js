@@ -168,8 +168,9 @@ module.exports = async function (context, req) {
         const calendars = account.calendars || [];
         let latest = null;
 
-        // Only process the calendar that matches fullUrl
-        const cal = calendars.find(c => c.url === fullUrl);
+        // Only process the calendar that matches fullUrl (normalized)
+        const normalize = (str) => str?.toLowerCase().replace(/^https:/, 'http:').replace(/:443/, '').replace(/\/+$/, '');
+        const cal = calendars.find(c => normalize(c.url) === normalize(fullUrl));
         if (!cal) {
           context.log(`⚠️ Kunde inte hitta kalender som matchar fullUrl`);
           return null;
