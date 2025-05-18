@@ -169,8 +169,15 @@ module.exports = async function (context, req) {
         let latest = null;
 
         // Only process the calendar that matches fullUrl (normalized)
-        const normalize = (str) => str?.toLowerCase().replace(/^https:/, 'http:').replace(/:443/, '').replace(/\/+$/, '');
-        const cal = calendars.find(c => normalize(c.url) === normalize(fullUrl));
+        const normalize = (str) =>
+          String(str)
+            .toLowerCase()
+            .replace(/^https?:/, '')
+            .replace(/^\/\/+/, '')
+            .replace(/:443/, '')
+            .replace(/\/+$/, '');
+        const normFullUrl = normalize(fullUrl);
+        const cal = calendars.find(c => normalize(c.url) === normFullUrl);
         if (!cal) {
           context.log(`⚠️ Kunde inte hitta kalender som matchar fullUrl`);
           return null;
