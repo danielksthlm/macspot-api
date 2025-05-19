@@ -616,6 +616,8 @@ module.exports = async function (context, req) {
       // context.log(`🏆 Bästa slot för ${key}: ${best.slot_iso} (score ${best.score})`);
       chosen.push(best);
     }
+    // Sort chosen by slot_iso (chronologically)
+    chosen.sort((a, b) => new Date(a.slot_iso) - new Date(b.slot_iso));
     debugLog(`📦 Slots genererade: ${chosen.length}`);
 
     const elapsedMs = Date.now() - t0;
