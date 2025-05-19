@@ -564,9 +564,8 @@ module.exports = async function (context, req) {
     // Avvisade p.g.a. kalenderkrock (privat/jobb)
     let calendarConflicts = 0;
     for (const s of allSlots) {
-      // För varje slot, kolla om originEndTime är satt och slutar efter travelStart
-      // travelStart = slotTime - travelTimeMin*60000 (kan ej återskapas exakt här, men vi kan använda originEndTime > slot_iso som approximation)
-      if (s.origin && originEndTime && new Date(originEndTime) > new Date(s.slot_iso)) {
+      // För varje slot, kolla om s.originEndTime är satt och slutar efter slot_iso
+      if (s.origin && s.originEndTime && new Date(s.originEndTime) > new Date(s.slot_iso)) {
         calendarConflicts++;
       }
     }
