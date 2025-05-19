@@ -1,15 +1,7 @@
 // SQL: GRANT USAGE, SELECT ON SEQUENCE calendar_origin_cache_id_seq TO <user>;
 const { DateTime } = require('luxon');
-const { Pool } = require('pg');
-
-const pool = new Pool({
-  user: process.env.PGUSER,
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE,
-  password: process.env.PGPASSWORD,
-  port: parseInt(process.env.PGPORT || '5432', 10),
-  ssl: { rejectUnauthorized: false }
-});
+const pool = require('../shared/db/pgPool');
+const loadSettings = require('../shared/config/settingsLoader');
 
 function verifyBookingSettings(settings, context) {
   const expected = {
@@ -93,298 +85,8 @@ module.exports = async function (context, req) {
 
   try {
     // Pool återanvänds från global instans
-    const fetch = require('node-fetch');
-    // Funktion för att hämta senaste MS365-event med token som parameter, med retry-loop vid 429
-    async function getLatestMs365Event(dateTime, accessToken) {
-      const fromDateTime = new Date(dateTime.getTime() - 3 * 60 * 60 * 1000).toISOString(); // 3h bakåt
-      const untilDateTime = dateTime.toISOString();
-      const url = `https://graph.microsoft.com/v1.0/users/${process.env.MS365_USER_EMAIL}/calendarView?startDateTime=${fromDateTime}&endDateTime=${untilDateTime}`;
-      let attempt = 0;
-      while (attempt < 3) {
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Prefer': 'outlook.timezone="UTC"'
-          }
-        });
-
-        if (res.status === 429) {
-          const retryAfter = parseInt(res.headers.get('Retry-After') || '1', 10);
-          if (isDebug && context && context.log) {
-            context.log(`🔁 MS Graph 429 – retry #${attempt+1}, väntar ${retryAfter}s (${dateTime.toISOString()})`);
-          }
-          await new Promise(r => setTimeout(r, retryAfter * 1000));
-          attempt++;
-          continue;
-        }
-
-        if (!res.ok) {
-          throw new Error(`Kunde inte hämta kalenderhändelser från Graph: ${res.statusText}`);
-        }
-
-        const graphData = await res.json();
-        const sorted = (graphData.value || [])
-          .filter(e => e.end?.dateTime && e.location?.displayName)
-          .sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
-
-        if (sorted.length === 0) return null;
-
-        return {
-          end: sorted[0].end.dateTime,
-          location: { address: sorted[0].location.displayName }
-        };
-      }
-      throw new Error('MS Graph 429 – upprepade rate limits');
-    }
-    async function getLatestAppleEvent(dateTime) {
-      const dav = require('dav');
-      const fullUrl = process.env.CALDAV_CALENDAR_URL?.trim();
-      const url = 'https://caldav.icloud.com';
-      context.log('🔍 CALDAV_CALENDAR_URL (verifiering):', fullUrl);
-      context.log(`🔍 CALDAV_CALENDAR_URL: ${fullUrl}`);
-      const username = process.env.CALDAV_USER;
-      const password = process.env.CALDAV_PASSWORD;
-
-      if (!fullUrl || typeof fullUrl !== 'string') {
-        context.log('❌ CALDAV_CALENDAR_URL saknas eller är felaktig');
-        return null;
-      }
-
-      try {
-        const xhr = new dav.transport.Basic(
-          new dav.Credentials({
-            username,
-            password
-          })
-        );
-
-        const account = await dav.createAccount({
-          server: url,
-          rootUrl: fullUrl,
-          xhr,
-          loadObjects: true,
-          loadCollections: true
-        });
-
-        const calendars = account.calendars || [];
-        let latest = null;
-
-        // Only process the calendar that matches fullUrl (normalized)
-        const normalize = (str) =>
-          String(str)
-            .toLowerCase()
-            .replace(/^https?:/, '')
-            .replace(/^\/\/+/, '')
-            .replace(/:443/, '')
-            .replace(/\/+$/, '');
-        const normFullUrl = normalize(fullUrl);
-        const cal = calendars.find(c => normalize(c.url) === normFullUrl);
-        if (!cal) {
-          context.log(`⚠️ Kunde inte hitta kalender som matchar fullUrl`);
-          return null;
-        }
-        try {
-          await dav.syncCalendar(cal, { xhr });
-        } catch (err) {
-          context.log(`⚠️ Kunde inte synka kalender ${cal.displayName || cal.url}: ${err.message}`);
-          return null;
-        }
-
-        // Process objects in the matched calendar only
-        for (const obj of cal.objects || []) {
-          const dataStr = obj.calendarData;
-          if (!dataStr || typeof dataStr !== 'string') continue;
-
-          const dtendMatch = dataStr.match(/DTEND(?:;TZID=[^:]+)?:([0-9T]+)/);
-          const locationMatch = dataStr.match(/LOCATION:(.+)/);
-          if (!dtendMatch || !locationMatch) continue;
-
-          let raw = dtendMatch[1];
-          raw = raw.replace(/[-T:Z]/g, ''); // Normalize to yyyymmddhhmmss
-          let endTime;
-
-          if (raw.length === 8) {
-            // Date only
-            endTime = DateTime.fromFormat(raw, 'yyyyMMdd', { zone: 'utc' }).toJSDate();
-          } else if (raw.length === 15) {
-            // Full timestamp
-            endTime = DateTime.fromFormat(raw, 'yyyyMMddTHHmmss', { zone: 'utc' }).toJSDate();
-          } else if (raw.length === 14) {
-            endTime = DateTime.fromFormat(raw, 'yyyyMMddHHmmss', { zone: 'utc' }).toJSDate();
-          } else {
-            continue;
-          }
-
-          if (endTime <= dateTime) {
-            let location = locationMatch[1].split('\\n')[0].trim();
-            if (location === 'Europe/Stockholm') {
-              context.log(`ℹ️ Ignorerar ogiltig plats '${location}' – fallback kommer användas`);
-              location = null;
-            }
-            if (location && (!latest || endTime > new Date(latest.end))) {
-              latest = {
-                end: endTime.toISOString(),
-                location
-              };
-            }
-          }
-        }
-
-        return latest;
-      } catch (err) {
-        context.log('⚠️ Fel i getLatestAppleEvent:', err.message);
-        if (err.code === 'EAI_AGAIN') {
-          context.log('🌐 DNS-fel (EAI_AGAIN) – kunde inte nå servern:', err.message);
-        }
-        return null;
-      }
-    }
-    // Globala variabler för loggning av ursprung
-    let originSource = null;
-    let originEndTime = null;
-    const resolveOriginAddress = async ({ dateTime, context, settings, travelStart }) => {
-      try {
-        let address = null;
-        // Minnescache för statisk origin per dag
-        const staticOriginCache = global.staticOriginCache || (global.staticOriginCache = new Map());
-        const staticKey = dateTime.toISOString().split('T')[0];
-        if (staticOriginCache.has(staticKey)) {
-          const cached = staticOriginCache.get(staticKey);
-          originSource = cached.source;
-          originEndTime = cached.end_time;
-          context.log(`🧠 Ursprung hittad i minnescache: ${cached.address} (${cached.source})`);
-          return cached.address;
-        }
-        // Försök hämta från calendar_origin_cache innan några externa anrop
-        try {
-          const cacheDate = dateTime.toISOString().split('T')[0];
-          const cacheRes = await pool.query(
-            'SELECT source, address, end_time FROM calendar_origin_cache WHERE event_date = $1 LIMIT 1',
-            [cacheDate]
-          );
-          if (cacheRes.rows.length > 0) {
-            const row = cacheRes.rows[0];
-            originSource = row.source;
-            originEndTime = row.end_time;
-            context.log(`📦 Ursprung hittad i cache: ${row.address} (${row.source})`);
-            return row.address;
-          }
-        } catch (err) {
-          context.log(`⚠️ Fel vid läsning av calendar_origin_cache: ${err.message}`);
-        }
-        // Hämta senaste events
-        let msEvent = null;
-        let appleEvent = null;
-        try {
-          if (isDebug) context.log(`🔁 Försöker hämta MS Graph-data (för ${dateTime.toISOString()})`);
-          msEvent = await getLatestMs365Event(dateTime, msGraphAccessToken);
-        } catch (err) {
-          context.log(`⚠️ MS Graph misslyckades (rate limit eller fel): ${err.message}`);
-        }
-        try {
-          appleEvent = await getLatestAppleEvent(dateTime);
-        } catch (err) {
-          context.log(`⚠️ Apple Calendar misslyckades: ${err.message}`);
-        }
-        // Logga hela appleEvent och msEvent-objekten
-        context.log('🧪 Apple event:', JSON.stringify(appleEvent, null, 2));
-        context.log('🧪 MS event:', JSON.stringify(msEvent, null, 2));
-
-        // Logging för hämtade events
-        if (msEvent?.location?.address) {
-          context.log(`📅 Ursprung från Microsoft 365 – senaste plats: ${msEvent.location.address}`);
-        }
-        if (appleEvent?.location) {
-          context.log(`📅 Ursprung från Apple Calendar – senaste plats: ${appleEvent.location}`);
-        }
-
-        // Avgör vilken som är nyast (address, originSource, originEndTime)
-        originSource = null;
-        originEndTime = null;
-        if (msEvent?.location?.address && (!appleEvent?.location || new Date(msEvent.end) >= new Date(appleEvent?.end))) {
-          address = msEvent.location.address;
-          originSource = 'Microsoft 365';
-          originEndTime = msEvent.end;
-        }
-        if (appleEvent?.location && (!msEvent?.location?.address || new Date(appleEvent.end) > new Date(msEvent?.end))) {
-          address = appleEvent.location;
-          originSource = 'Apple Calendar';
-          originEndTime = appleEvent.end;
-        }
-
-        // Fallback om båda msEvent och appleEvent misslyckas
-        if (!address) {
-          address = settings.default_home_address;
-          originSource = 'fallback';
-          originEndTime = new Date(dateTime.getTime() - 15 * 60000).toISOString();
-          context.log(`🧪 Fallback origin används: ${address}`);
-        }
-
-        // Kontroll-logg för vald originEndTime
-        context.log(`📅 Vald originEndTime: ${originEndTime} från ${originSource}`);
-
-        // travelStart är alltid definierad här
-
-        // Spara till calendar_origin_cache om vi har giltig information, men ej om originSource är 'fallback'
-        if (address && originEndTime && originSource && originSource !== 'fallback') {
-          context.log(`💾 Försöker spara origin: ${address}, källa: ${originSource}, slut: ${originEndTime}`);
-          // Permission check log before attempting to insert
-          context.log('🔐 Försök att spara till calendar_origin_cache – kontrollera rättigheter till sequence calendar_origin_cache_id_seq');
-          try {
-            const result = await pool.query(`
-              INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
-              VALUES ($1, $2, $3, $4)
-              ON CONFLICT DO NOTHING
-              RETURNING *
-            `, [
-              dateTime.toISOString().split('T')[0],
-              originSource,
-              address,
-              originEndTime
-            ]);
-            if (result.rows.length > 0) {
-              context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
-            } else {
-              context.log(`ℹ️ Ursprung redan sparad tidigare: ${address} (${originSource})`);
-            }
-          } catch (err) {
-            if (err.code === 'EAI_AGAIN') {
-              context.log(`🌐 DNS-fel vid försök att spara till calendar_origin_cache (EAI_AGAIN): ${err.message}`);
-            } else {
-              context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
-              if (err.code === '42501') {
-                context.log('🚫 Åtkomst nekad: saknar rättigheter till sekvens calendar_origin_cache_id_seq – kör GRANT manuellt i databasen.');
-              }
-            }
-          }
-        }
-        else {
-          context.log(`🛑 Ursprung inte sparad – address: ${address}, end: ${originEndTime}, source: ${originSource}`);
-        }
-
-        // Spara till minnescache för snabbare access inom processen
-        if (address && originEndTime && originSource) {
-          staticOriginCache.set(staticKey, {
-            source: originSource,
-            address,
-            end_time: originEndTime
-          });
-          context.log(`🧠 Ursprung sparad till minnescache: ${address} (${originSource})`);
-        }
-
-        if (address === msEvent?.location?.address) {
-          context.log('📅 Ursprung från Microsoft 365');
-        }
-        if (address === appleEvent?.location) {
-          context.log('📅 Ursprung från Apple Calendar');
-        }
-        return address || null;
-      } catch (err) {
-        if (isDebug) context.log(`⚠️ originResolver error: ${err.message}`);
-        return null;
-      }
-    };
+    // Import cache-driven origin resolution logic
+    const { resolveOriginAddress } = require('../shared/calendar/resolveOrigin');
     debugLog('🏁 Börjar getavailableslots');
     const t0 = Date.now();
     const travelCache = new Map(); // key: from|to|hour
@@ -438,27 +140,7 @@ module.exports = async function (context, req) {
     const t1 = Date.now();
     debugLog('⏱️ Efter kontakt: ' + (Date.now() - t0) + ' ms');
 
-    const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
-    const settings = {};
-    for (const row of settingsRes.rows) {
-      if (
-        row.value_type === 'json' ||
-        row.value_type === 'array' ||
-        (typeof row.value_type === 'string' && /\[\]$/.test(row.value_type))
-      ) {
-        try {
-          settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
-        } catch (_) {}
-      } else if (row.value_type === 'int') {
-        settings[row.key] = parseInt(row.value);
-      } else if (row.value_type === 'bool') {
-        settings[row.key] = row.value === 'true' || row.value === true;
-      } else if (row.value_type === 'string') {
-        settings[row.key] = String(row.value).replace(/^"(.*)"$/, '$1');
-      } else {
-        settings[row.key] = row.value;
-      }
-    }
+    const settings = await loadSettings(db, context);
     debugLog(`⚙️ Inställningar laddade: ${Object.keys(settings).join(', ')}`);
     verifyBookingSettings(settings, context);
     debugLog('⚙️ Inställningar klara');
@@ -623,8 +305,14 @@ module.exports = async function (context, req) {
 
             // Kontrollera konflikt med befintlig kalenderhändelse (privat/jobb)
             const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
-            // Endast ett anrop till resolveOriginAddress per slot, returnerar ett enda giltigt värde
-            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context, settings, travelStart });
+            // Anropa nya cache-drivna resolveOriginAddress
+            const { origin: latestEvent } = await resolveOriginAddress({
+              eventId: slotTime.toISOString(),  // Using time as a surrogate event ID
+              calendarId: contact_id,           // Using contact_id as calendar surrogate
+              pool,
+              context,
+              fallbackOrigin: settings.default_home_address
+            });
             const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
             context.log(originLog);
 
