@@ -538,11 +538,13 @@ module.exports = async function (context, req) {
     // Parallellisera dag-loop i chunkar om 7
     const chunkSize = 7;
     debugLog('🔁 Startar slot-loop i chunkar');
+    context.log('🔁 Startar slot-loop i chunkar');
     const chunkStartMs = Date.now();
     let slotCount = 0;
     for (let i = 0; i < days.length; i += chunkSize) {
       const chunkT0 = Date.now();
       const chunk = days.slice(i, i + chunkSize);
+      context.log(`🔁 Bearbetar chunk ${i / chunkSize + 1} (${chunk.length} dagar)`);
       const results = await Promise.allSettled(
         chunk.map(async (day) => {
           // Loggning i början av funktionen för dag och tid
@@ -571,6 +573,7 @@ module.exports = async function (context, req) {
           }
 
           await Promise.all([10, 14].map(async (hour) => {
+            context.log(`⏱️ Startar slot-generation för ${dateStr} kl ${hour}`);
             debugLog(`🕑 Bearbetar datum ${dateStr}, timmar: 10 och 14`);
             const slotTime = DateTime.fromISO(`${dateStr}T${hour.toString().padStart(2, '0')}:00`, { zone: timezone }).toUTC().toJSDate();
 
@@ -613,6 +616,7 @@ module.exports = async function (context, req) {
 
             // Kontrollera konflikt med befintlig kalenderhändelse (privat/jobb)
             const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
+            // Endast ett anrop till resolveOriginAddress per slot, returnerar ett enda giltigt värde
             const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context, settings, travelStart });
             const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
             context.log(originLog);
@@ -644,10 +648,8 @@ module.exports = async function (context, req) {
             }
 
             // --- Försök alltid beräkna restid enligt kontors-/resefönsterlogik ---
-            let origin = null;
+            let origin = latestEvent;
             try {
-              origin = await resolveOriginAddress({ dateTime: slotTime, context, settings, travelStart });
-
               // Förbättrad loggning och konfliktkontroll
               if (!origin) {
                 if (isDebug) {
@@ -681,6 +683,7 @@ module.exports = async function (context, req) {
             const cacheKey = `${origin}|${destination}|${hourKey}`;
 
             let cacheHit = false;
+            context.log(`⏱️ Startar restidsanrop/kontroll för slot ${slotTime.toISOString()}, origin: ${origin}, destination: ${destination}, hour: ${hourKey}`);
             try {
               if (travelCache.has(cacheKey)) {
                 travelTimeMin = travelCache.get(cacheKey);
@@ -711,6 +714,7 @@ module.exports = async function (context, req) {
                 context.log(`⚠️ Apple Maps-token saknas – använder fallback restid ${travelTimeMin} min`);
                 context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                 travelTimeMin = settings.fallback_travel_time_minutes || 0;
+                context.log(`⏱️ Fallback-aktivering för slot ${slotTime.toISOString()} pga saknad Apple Maps-token`);
               } else {
                 try {
                   const url = new URL('https://maps-api.apple.com/v1/directions');
@@ -732,6 +736,7 @@ module.exports = async function (context, req) {
                     context.log(`⚠️ Apple Maps kunde inte hitta restid – använder fallback`);
                     context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                     travelTimeMin = settings.fallback_travel_time_minutes || 0;
+                    context.log(`⏱️ Fallback-aktivering för slot ${slotTime.toISOString()} pga Apple Maps misslyckades`);
                   } else {
                     travelTimeMin = Math.round(travelSeconds / 60);
                   }
@@ -752,6 +757,7 @@ module.exports = async function (context, req) {
                   context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
                   context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                   travelTimeMin = settings.fallback_travel_time_minutes || 0;
+                  context.log(`⏱️ Fallback-aktivering för slot ${slotTime.toISOString()} pga Apple Maps-anrop fel`);
                 }
               }
             }
