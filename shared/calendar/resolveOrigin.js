@@ -118,6 +118,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     originEndTime
   };
   debugLog(`🧠 resolveOriginAddress resultat: ${latestOrigin} (källa: ${originSource})`);
+  context.log(`📤 resolveOriginAddress return: ${latestOrigin} (källa: ${originSource}, endTime: ${originEndTime?.toISOString?.() || 'null'})`);
   return { origin: latestOrigin, originSource, originEndTime };
 }
 
