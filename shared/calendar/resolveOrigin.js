@@ -1,13 +1,13 @@
 const memoryCache = {};
 
-async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin }) {
+async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin, settings }) {
   const cacheKey = `${calendarId}:${eventId}`;
   const eventDateOnly = eventId.split('T')[0];
   if (memoryCache[cacheKey]) {
     // Provide originEndTime as well
     let originEndTime = null;
     if (memoryCache[cacheKey].originSource === 'fallback') {
-      originEndTime = new Date(`${eventDateOnly}T06:00:00`);
+      originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
     } else {
       originEndTime = memoryCache[cacheKey].originEndTime || null;
     }
@@ -32,7 +32,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
     let originEndTime = null;
     if (dbRes.rows[0].source === 'fallback') {
-      originEndTime = new Date(`${eventDateOnly}T06:00:00`);
+      originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
     } else {
       originEndTime = dbRes.rows[0].end_time || null;
     }
@@ -85,7 +85,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   // Write to DB cache unless fallback
   let originEndTime = null;
   if (originSource === 'fallback') {
-    originEndTime = new Date(`${eventDateOnly}T06:00:00`);
+    originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
   }
   if (originSource !== 'fallback') {
     try {

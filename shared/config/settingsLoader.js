@@ -1,5 +1,3 @@
-
-
 module.exports = async function loadSettings(pool, context) {
   try {
     const settingsRes = await pool.query('SELECT key, value, value_type FROM booking_settings');

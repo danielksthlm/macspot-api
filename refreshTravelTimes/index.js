@@ -1,5 +1,3 @@
-
-
 const { DateTime } = require('luxon');
 const fetch = require('node-fetch');
 const pool = require('../shared/db/pgPool');

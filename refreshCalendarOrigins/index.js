@@ -26,7 +26,8 @@ module.exports = async function (context, myTimer) {
       calendarId: 'system-refresh',
       pool,
       context,
-      fallbackOrigin: settings.default_home_address
+      fallbackOrigin: settings.default_home_address,
+      settings
     });
   }
 
