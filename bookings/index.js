@@ -190,14 +190,20 @@ async function sendConfirmationEmail({ to, startTime, endTime, meeting_type, mee
     saveToSentItems: true
   };
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000); // max 8s
+
   const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender_email)}/sendMail`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: controller.signal
   });
+
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const err = await response.text();
