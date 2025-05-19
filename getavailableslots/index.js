@@ -274,13 +274,13 @@ module.exports = async function (context, req) {
 
             // Avvisa möten utanför öppettider
             if (slotTime < openTime || slotEndTime > closeTime) {
-              debugLog(`⏰ Slot ${slotTime.toISOString()} ligger utanför öppettider (${settings.open_time}–${settings.close_time}) – skippar`);
+              debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – utanför öppettider`);
               return;
             }
 
             debugLog(`🕵️ Kontroll: slot ${slotTime.toISOString()} till ${slotEndTime.toISOString()} vs lunch ${lunchStart.toISOString()}–${lunchEnd.toISOString()}`);
             if (meeting_type !== 'atclient' && slotTime < lunchEnd && slotEndTime > lunchStart) {
-              debugLog(`🍽️ Slot ${slotTime.toISOString()} överlappar lunch – skippar`);
+              debugLog(`🍽️ Slot ${slotTime.toISOString()} avvisad – överlappar lunch`);
               return;
             }
 
@@ -317,7 +317,7 @@ module.exports = async function (context, req) {
             context.log(originLog);
 
             if (isTooClose) {
-              debugLog(`⛔ Slot ${slotTime.toISOString()} krockar eller ligger för nära annan bokning – skippar`);
+              debugLog(`⛔ Slot ${slotTime.toISOString()} avvisad – för nära annan bokning`);
               return;
             }
 
@@ -327,7 +327,7 @@ module.exports = async function (context, req) {
             const maxMinutes = settings.max_weekly_booking_minutes || 99999;
 
             if (bookedMinutes + meeting_length > maxMinutes) {
-              debugLog(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids (${bookedMinutes} + ${meeting_length} > ${maxMinutes})`);
+              debugLog(`📛 Slot ${slotTime.toISOString()} avvisad – veckokvot överskrids`);
               return;
             }
 
@@ -338,7 +338,7 @@ module.exports = async function (context, req) {
             const travelStartHour = travelStart.getUTCHours();
             const travelEndHour = travelEnd.getUTCHours();
             if (travelStartHour < windowStartHour || travelEndHour >= windowEndHour) {
-              debugLog(`⚠️ Slot ${slotTime.toISOString()} kräver godkännande – utanför restidsfönster`);
+              debugLog(`⚠️ Slot ${slotTime.toISOString()} kräver godkännande – restid utanför tillåten tid`);
               requireApprovalForThisSlot = true;
             }
 
@@ -472,7 +472,7 @@ module.exports = async function (context, req) {
 
             const key = `${dateStr}_${hour < 12 ? 'fm' : 'em'}`;
             if (!slotMap[key]) slotMap[key] = [];
-            debugLog(`✅ Slot tillagd: ${key}`);
+            context.log(`✅ Slot ${slotTime.toISOString()} tillagd (key: ${key})`);
 
             // Hantera särskild logik för atClient, t.ex. returresvägskrav
             if (meeting_type === 'atclient') {
