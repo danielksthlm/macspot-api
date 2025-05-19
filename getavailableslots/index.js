@@ -58,7 +58,14 @@ module.exports = async function (context, req) {
   context.log(`📥 Request mottagen: ${JSON.stringify(req.body || {}, null, 2)}`);
   let msGraphAccessToken = null;
   const isDebug = process.env.DEBUG === 'true';
+  const skipReasons = {};
+  let slotCount = 0;
+  const slotMap = {};
   let debugLog = (msg) => {
+    if (msg.startsWith('⛔') || msg.startsWith('🍽️') || msg.startsWith('📛')) {
+      const reason = msg.split(' – ')[0];
+      skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+    }
     if (isDebug && context && context.log) {
       context.log(msg);
     }
@@ -90,8 +97,6 @@ module.exports = async function (context, req) {
     debugLog('🏁 Börjar getavailableslots');
     const t0 = Date.now();
     const travelCache = new Map(); // key: from|to|hour
-
-    const slotMap = {}; // dag_fm eller dag_em → array av { iso, score, require_approval }
 
     const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
     for (const key of requiredEnv) {
@@ -229,7 +234,6 @@ module.exports = async function (context, req) {
     debugLog('🔁 Startar slot-loop i chunkar');
     context.log('🔁 Startar slot-loop i chunkar');
     const chunkStartMs = Date.now();
-    let slotCount = 0;
     for (let i = 0; i < days.length; i += chunkSize) {
       const chunkT0 = Date.now();
       const chunk = days.slice(i, i + chunkSize);
@@ -593,26 +597,6 @@ module.exports = async function (context, req) {
       context.log(`🛑 Slots som kräver godkännande: ${requireApprovalCount}`);
     }
 
-    // --- Summerad loggning av varför slots har avvisats (om isDebug) ---
-    if (isDebug) {
-      const skipReasons = {};
-      // slotCount already declared above
-      const originalDebugLog = debugLog;
-      debugLog = (msg) => {
-        if (msg.startsWith('⛔') || msg.startsWith('🍽️') || msg.startsWith('📛')) {
-          const reason = msg.split(' – ')[0];
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-        }
-        originalDebugLog(msg);
-      };
-
-      process.on('beforeExit', () => {
-        for (const [reason, count] of Object.entries(skipReasons)) {
-          context.log(`📉 ${reason}: ${count} st`);
-        }
-        context.log(`📈 Totalt tillagda slots: ${slotCount}`);
-      });
-    }
 
     for (const [key, candidates] of Object.entries(slotMap)) {
       if (candidates.length === 0) continue;
@@ -629,7 +613,7 @@ module.exports = async function (context, req) {
 
     debugLog(`✅ getavailableslots klar med ${chosen.length} slots`);
     // --- Summerad loggning av varför slots har avvisats (om isDebug) ---
-    if (isDebug && typeof skipReasons !== 'undefined') {
+    if (isDebug) {
       for (const [reason, count] of Object.entries(skipReasons)) {
         context.log(`📉 ${reason}: ${count} st`);
       }
@@ -646,6 +630,12 @@ module.exports = async function (context, req) {
         body: { slots: [] }
       };
       return;
+    }
+    if (isDebug) {
+      for (const [reason, count] of Object.entries(skipReasons)) {
+        context.log(`📉 ${reason}: ${count} st`);
+      }
+      context.log(`📈 Totalt tillagda slots: ${slotCount}`);
     }
     context.res = {
       status: 200,
