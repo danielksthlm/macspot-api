@@ -59,19 +59,17 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   // Try fetching from MS Graph
   let latestOrigin;
   let originSource = 'unknown';
-  if (graphClient && typeof graphClient.getEvent === 'function') {
+  if (graphClient) {
     try {
       const msEvent = await graphClient.getEvent(calendarId, eventId);
-      if (msEvent && msEvent.location && msEvent.location.displayName) {
-        latestOrigin = msEvent.location.displayName;
+      if (msEvent && msEvent.location) {
+        latestOrigin = msEvent.location;
         originSource = 'msgraph';
         debugLog(`✅ Hittade origin från MS Graph: ${latestOrigin}`);
       }
     } catch (err) {
       context.log(`⚠️ MS Graph error in resolveOriginAddress: ${err.message}`);
     }
-  } else {
-    context.log(`⚠️ graphClient saknar getEvent-metod eller är null`);
   }
 
   // Try fetching from Apple calendar if not found
