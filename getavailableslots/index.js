@@ -546,7 +546,9 @@ module.exports = async function (context, req) {
               travel_time_min: travelTimeMin,
               origin: origin || null,
               originEndTime: originEndTime || null,
-              meeting_length: meeting_length
+              meeting_length: meeting_length,
+              weekday: weekdayName,
+              slot_part: hour < 12 ? 'fm' : 'em'
             });
             if (origin) {
               context.log(`✅ Slot ${slotTime.toISOString()} tillagd med origin: ${origin}`);
