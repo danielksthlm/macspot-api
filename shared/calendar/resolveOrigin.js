@@ -31,6 +31,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       'SELECT address, source, end_time FROM calendar_origin_cache WHERE event_date = $1',
       [eventDateOnly]
     );
+    debugLog(`📂 DB-kontroll: Hittade ${dbRes?.rows?.length || 0} rader för ${eventDateOnly}`);
   } catch (err) {
     context.log(`⚠️ DB error in resolveOriginAddress: ${err.message}`);
   }
@@ -53,6 +54,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       originEndTime
     };
   }
+  debugLog(`🕳️ Inget cacheträff i DB för ${eventDateOnly}`);
 
   // Try fetching from MS Graph
   let latestOrigin;
@@ -86,6 +88,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
 
   // Fallback if not found
   if (!latestOrigin) {
+    debugLog(`🚨 Ingen träff i varken cache, DB, Graph eller Apple – använder fallback`);
     latestOrigin = fallbackOrigin || '';
     originSource = 'fallback';
     debugLog(`⚠️ Fallback används som origin: ${latestOrigin}`);
