@@ -17,8 +17,10 @@
 !bookings/**
 !refreshCalendarOrigins/
 !refreshCalendarOrigins/**
-!resolveOrigin/
-!resolveOrigin/**
+!refreshTravelTimes/
+!refreshTravelTimes/**
 
 !node_modules/
 !node_modules/**
+!shared/
+!shared/**
