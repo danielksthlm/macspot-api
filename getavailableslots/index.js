@@ -231,10 +231,9 @@ module.exports = async function (context, req) {
 
         return latest;
       } catch (err) {
-        if (err.message && err.message.includes('EAI_AGAIN')) {
-          context.log('🌐 Nätverksfel i getLatestAppleEvent (EAI_AGAIN) – kontrollera DNS eller iCloud-nätverkstillgänglighet.');
-        } else {
-          context.log('⚠️ Fel i getLatestAppleEvent:', err.message);
+        context.log('⚠️ Fel i getLatestAppleEvent:', err.message);
+        if (err.code === 'EAI_AGAIN') {
+          context.log('🌐 DNS-fel (EAI_AGAIN) – kunde inte nå servern:', err.message);
         }
         return null;
       }
@@ -328,29 +327,30 @@ module.exports = async function (context, req) {
         // Spara till calendar_origin_cache om vi har giltig information
         if (address && originEndTime && originSource) {
           context.log(`💾 Försöker spara origin: ${address}, källa: ${originSource}, slut: ${originEndTime}`);
-          try {
-            const result = await pool.query(`
-              INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
-              VALUES ($1, $2, $3, $4)
-              ON CONFLICT DO NOTHING
-              RETURNING *
-            `, [
-              dateTime.toISOString().split('T')[0],
-              originSource,
-              address,
-              originEndTime
-            ]);
-            if (result.rows.length > 0) {
-              context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
-            } else {
-              context.log(`ℹ️ Ursprung redan sparad tidigare: ${address} (${originSource})`);
-            }
-          } catch (err) {
-            context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
-            if (err.message && err.message.includes('EAI_AGAIN')) {
-              context.log(`🌐 Nätverksfel (EAI_AGAIN) vid skrivning till calendar_origin_cache – tillfälligt DNS-fel?`);
-            }
+        try {
+          const result = await pool.query(`
+            INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+            RETURNING *
+          `, [
+            dateTime.toISOString().split('T')[0],
+            originSource,
+            address,
+            originEndTime
+          ]);
+          if (result.rows.length > 0) {
+            context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
+          } else {
+            context.log(`ℹ️ Ursprung redan sparad tidigare: ${address} (${originSource})`);
           }
+        } catch (err) {
+          if (err.code === 'EAI_AGAIN') {
+            context.log(`🌐 DNS-fel vid försök att spara till calendar_origin_cache (EAI_AGAIN): ${err.message}`);
+          } else {
+            context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
+          }
+        }
         }
         else {
           context.log(`🛑 Ursprung inte sparad – address: ${address}, end: ${originEndTime}, source: ${originSource}`);
@@ -739,9 +739,6 @@ module.exports = async function (context, req) {
                   `, [origin, destination, hourKey, travelTimeMin]);
                 } catch (err) {
                   context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
-                  if (err.message && err.message.includes('EAI_AGAIN')) {
-                    context.log('🌐 Nätverksfel (EAI_AGAIN) vid anrop till Apple Maps – DNS-problem?');
-                  }
                   context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                   travelTimeMin = settings.fallback_travel_time_minutes || 0;
                 }
@@ -967,6 +964,9 @@ async function getAppleMapsAccessToken(context) {
     return data.accessToken;
   } catch (err) {
     context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
+    if (err.code === 'EAI_AGAIN') {
+      context.log('🌐 DNS-fel (EAI_AGAIN) – kunde inte nå servern:', err.message);
+    }
     return null;
   }
 }
