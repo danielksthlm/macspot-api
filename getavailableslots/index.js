@@ -632,7 +632,7 @@ module.exports = async function (context, req) {
             // --- Försök alltid beräkna restid enligt kontors-/resefönsterlogik ---
             let origin = null;
             try {
-              origin = await resolveOriginAddress({ dateTime: slotTime, context, settings });
+              origin = await resolveOriginAddress({ dateTime: slotTime, context, settings, travelStart });
 
               // Förbättrad loggning och konfliktkontroll
               if (!origin) {
@@ -646,7 +646,7 @@ module.exports = async function (context, req) {
               }
 
               // Kontroll om restiden startar utanför tillåtet fönster
-              const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
+              // travelStart redan deklarerad ovan
               const startHour = travelStart.getUTCHours();
               if (startHour < windowStartHour || startHour > windowEndHour) {
                 requireApprovalForThisSlot = true;
