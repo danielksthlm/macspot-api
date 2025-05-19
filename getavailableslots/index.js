@@ -485,12 +485,14 @@ module.exports = async function (context, req) {
       'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
       [startDateStr, endDateStr]
     );
+    context.log("🔢 Mapping allBookings rows:", allBookingsRes.rows.length);
     const allBookings = allBookingsRes.rows.map(b => ({
       start: new Date(b.start_time).getTime(),
       end: new Date(b.end_time).getTime(),
       date: new Date(b.start_time).toISOString().split('T')[0],
       meeting_type: b.meeting_type
     }));
+    context.log("📊 allBookings parsed:", allBookings.map(b => b.start));
     const bookingCount = allBookings.length;
     context.log(`📊 Antal bokningar i intervall: ${bookingCount}`);
     context.log(`👤 Kund: ${contact?.first_name || ''} ${contact?.last_name || ''}, Typ: ${meeting_type}`);
