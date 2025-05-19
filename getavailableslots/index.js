@@ -238,7 +238,7 @@ module.exports = async function (context, req) {
     // Globala variabler för loggning av ursprung
     let originSource = null;
     let originEndTime = null;
-    const resolveOriginAddress = async ({ dateTime, context, settings }) => {
+    const resolveOriginAddress = async ({ dateTime, context, settings, travelStart }) => {
       try {
         let address = null;
         // Minnescache för statisk origin per dag
@@ -599,7 +599,7 @@ module.exports = async function (context, req) {
 
             // Kontrollera konflikt med befintlig kalenderhändelse (privat/jobb)
             const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
-            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context, settings });
+            const latestEvent = await resolveOriginAddress({ dateTime: slotTime, context, settings, travelStart });
             const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
             context.log(originLog);
 
