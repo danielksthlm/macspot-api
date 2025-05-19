@@ -1,32 +1,51 @@
-
-
-
-// This function resolves the origin address for a calendar event, using cache and fallback logic.
-// It checks the calendar_origin_cache, fetches latest MS Graph and Apple events, and writes to DB unless using fallback.
 const memoryCache = {};
 
 async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin }) {
   const cacheKey = `${calendarId}:${eventId}`;
+  const eventDateOnly = eventId.split('T')[0];
   if (memoryCache[cacheKey]) {
-    return { origin: memoryCache[cacheKey].origin, originSource: memoryCache[cacheKey].originSource };
+    // Provide originEndTime as well
+    let originEndTime = null;
+    if (memoryCache[cacheKey].originSource === 'fallback') {
+      originEndTime = new Date(`${eventDateOnly}T06:00:00`);
+    } else {
+      originEndTime = memoryCache[cacheKey].originEndTime || null;
+    }
+    return {
+      origin: memoryCache[cacheKey].origin,
+      originSource: memoryCache[cacheKey].originSource,
+      originEndTime
+    };
   }
+
 
   // Try database cache first
   let dbRes;
   try {
     dbRes = await pool.query(
-      'SELECT origin, origin_source FROM calendar_origin_cache WHERE calendar_id = $1 AND event_id = $2',
-      [calendarId, eventId]
+      'SELECT address, source, end_time FROM calendar_origin_cache WHERE event_date = $1',
+      [eventDateOnly]
     );
   } catch (err) {
     context.log(`⚠️ DB error in resolveOriginAddress: ${err.message}`);
   }
   if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+    let originEndTime = null;
+    if (dbRes.rows[0].source === 'fallback') {
+      originEndTime = new Date(`${eventDateOnly}T06:00:00`);
+    } else {
+      originEndTime = dbRes.rows[0].end_time || null;
+    }
     memoryCache[cacheKey] = {
-      origin: dbRes.rows[0].origin,
-      originSource: dbRes.rows[0].origin_source
+      origin: dbRes.rows[0].address,
+      originSource: dbRes.rows[0].source,
+      originEndTime: originEndTime
     };
-    return { origin: dbRes.rows[0].origin, originSource: dbRes.rows[0].origin_source };
+    return {
+      origin: dbRes.rows[0].address,
+      originSource: dbRes.rows[0].source,
+      originEndTime
+    };
   }
 
   // Try fetching from MS Graph
@@ -64,21 +83,29 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   }
 
   // Write to DB cache unless fallback
+  let originEndTime = null;
+  if (originSource === 'fallback') {
+    originEndTime = new Date(`${eventDateOnly}T06:00:00`);
+  }
   if (originSource !== 'fallback') {
     try {
       await pool.query(
-        `INSERT INTO calendar_origin_cache (calendar_id, event_id, origin, origin_source)
+        `INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT (calendar_id, event_id) DO UPDATE SET origin = EXCLUDED.origin, origin_source = EXCLUDED.origin_source`,
-        [calendarId, eventId, latestOrigin, originSource]
+         ON CONFLICT DO NOTHING`,
+        [eventDateOnly, originSource, latestOrigin, originEndTime]
       );
     } catch (err) {
       context.log(`⚠️ DB write error in resolveOriginAddress: ${err.message}`);
     }
   }
 
-  memoryCache[cacheKey] = { origin: latestOrigin, originSource };
-  return { origin: latestOrigin, originSource };
+  memoryCache[cacheKey] = {
+    origin: latestOrigin,
+    originSource,
+    originEndTime
+  };
+  return { origin: latestOrigin, originSource, originEndTime };
 }
 
 module.exports = { resolveOriginAddress };

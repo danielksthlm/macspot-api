@@ -306,7 +306,7 @@ module.exports = async function (context, req) {
             // Kontrollera konflikt med befintlig kalenderhändelse (privat/jobb)
             const travelStart = new Date(slotTime.getTime() - travelTimeMin * 60000);
             // Anropa nya cache-drivna resolveOriginAddress
-            const { origin: latestEvent } = await resolveOriginAddress({
+            const { origin: latestEvent, originEndTime = null } = await resolveOriginAddress({
               eventId: slotTime.toISOString(),  // Using time as a surrogate event ID
               calendarId: contact_id,           // Using contact_id as calendar surrogate
               pool,
