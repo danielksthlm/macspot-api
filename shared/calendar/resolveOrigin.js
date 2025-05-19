@@ -59,7 +59,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   // Try fetching from MS Graph
   let latestOrigin;
   let originSource = 'unknown';
-  if (graphClient) {
+  if (graphClient && typeof graphClient.getEvent === 'function') {
     try {
       const msEvent = await graphClient.getEvent(calendarId, eventId);
       if (msEvent && msEvent.location && msEvent.location.displayName) {
@@ -70,10 +70,12 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     } catch (err) {
       context.log(`⚠️ MS Graph error in resolveOriginAddress: ${err.message}`);
     }
+  } else {
+    context.log(`⚠️ graphClient saknar getEvent-metod eller är null`);
   }
 
   // Try fetching from Apple calendar if not found
-  if (!latestOrigin && appleClient) {
+  if (!latestOrigin && appleClient && typeof appleClient.getEvent === 'function') {
     try {
       const appleEvent = await appleClient.getEvent(calendarId, eventId);
       if (appleEvent && appleEvent.location) {
@@ -84,6 +86,8 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     } catch (err) {
       context.log(`⚠️ Apple error in resolveOriginAddress: ${err.message}`);
     }
+  } else if (!latestOrigin && appleClient) {
+    context.log(`⚠️ appleClient saknar getEvent-metod eller är null`);
   }
 
   // Fallback if not found
