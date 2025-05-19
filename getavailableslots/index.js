@@ -326,8 +326,8 @@ module.exports = async function (context, req) {
 
         // travelStart är alltid definierad här
 
-        // Spara till calendar_origin_cache om vi har giltig information
-        if (address && originEndTime && originSource) {
+        // Spara till calendar_origin_cache om vi har giltig information, men ej om originSource är 'fallback'
+        if (address && originEndTime && originSource && originSource !== 'fallback') {
           context.log(`💾 Försöker spara origin: ${address}, källa: ${originSource}, slut: ${originEndTime}`);
           // Permission check log before attempting to insert
           context.log('🔐 Försök att spara till calendar_origin_cache – kontrollera rättigheter till sequence calendar_origin_cache_id_seq');
