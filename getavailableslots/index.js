@@ -544,7 +544,9 @@ module.exports = async function (context, req) {
               score: minDist,
               require_approval: requireApprovalForThisSlot,
               travel_time_min: travelTimeMin,
-              origin: origin || null
+              origin: origin || null,
+              originEndTime: originEndTime || null,
+              meeting_length: meeting_length
             });
             if (origin) {
               context.log(`✅ Slot ${slotTime.toISOString()} tillagd med origin: ${origin}`);
