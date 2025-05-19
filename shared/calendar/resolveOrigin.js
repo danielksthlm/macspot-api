@@ -2,6 +2,10 @@ const memoryCache = {};
 
 async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin, settings }) {
   const cacheKey = `${calendarId}:${eventId}`;
+  const debugLog = (msg) => {
+    if (process.env.DEBUG === 'true' && context?.log) context.log(msg);
+  };
+  debugLog(`🔍 resolveOriginAddress → calendarId: ${calendarId}, eventId: ${eventId}`);
   const eventDateOnly = eventId.split('T')[0];
   if (memoryCache[cacheKey]) {
     // Provide originEndTime as well
@@ -11,6 +15,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     } else {
       originEndTime = memoryCache[cacheKey].originEndTime || null;
     }
+    debugLog(`✅ Hittade origin från cache: ${memoryCache[cacheKey].origin}`);
     return {
       origin: memoryCache[cacheKey].origin,
       originSource: memoryCache[cacheKey].originSource,
@@ -41,6 +46,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       originSource: dbRes.rows[0].source,
       originEndTime: originEndTime
     };
+    debugLog(`✅ Hittade origin från DB: ${dbRes.rows[0].address}`);
     return {
       origin: dbRes.rows[0].address,
       originSource: dbRes.rows[0].source,
@@ -57,6 +63,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       if (msEvent && msEvent.location && msEvent.location.displayName) {
         latestOrigin = msEvent.location.displayName;
         originSource = 'msgraph';
+        debugLog(`✅ Hittade origin från MS Graph: ${latestOrigin}`);
       }
     } catch (err) {
       context.log(`⚠️ MS Graph error in resolveOriginAddress: ${err.message}`);
@@ -70,6 +77,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       if (appleEvent && appleEvent.location) {
         latestOrigin = appleEvent.location;
         originSource = 'apple';
+        debugLog(`✅ Hittade origin från Apple: ${latestOrigin}`);
       }
     } catch (err) {
       context.log(`⚠️ Apple error in resolveOriginAddress: ${err.message}`);
@@ -80,6 +88,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   if (!latestOrigin) {
     latestOrigin = fallbackOrigin || '';
     originSource = 'fallback';
+    debugLog(`⚠️ Fallback används som origin: ${latestOrigin}`);
   }
 
   // Write to DB cache unless fallback
@@ -105,6 +114,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     originSource,
     originEndTime
   };
+  debugLog(`🧠 resolveOriginAddress resultat: ${latestOrigin} (källa: ${originSource})`);
   return { origin: latestOrigin, originSource, originEndTime };
 }
 

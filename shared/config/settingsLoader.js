@@ -1,8 +1,17 @@
 module.exports = async function loadSettings(pool, context) {
   try {
-    const settingsRes = await pool.query('SELECT key, value, value_type FROM booking_settings');
     const settings = {};
+    const isDebug = process.env.DEBUG === 'true';
+    const debugLog = (msg) => {
+      if (isDebug && context && context.log) {
+        context.log(msg);
+      }
+    };
+    debugLog('⚙️ Börjar läsa booking_settings...');
+    const settingsRes = await pool.query('SELECT key, value, value_type FROM booking_settings');
+    debugLog(`📦 ${settingsRes.rows.length} inställningar hämtade`);
     for (const row of settingsRes.rows) {
+      debugLog(`🔑 ${row.key} = ${row.value} (${row.value_type})`);
       if (
         row.value_type === 'json' ||
         row.value_type === 'array' ||
@@ -21,6 +30,7 @@ module.exports = async function loadSettings(pool, context) {
         settings[row.key] = row.value;
       }
     }
+    debugLog('✅ Alla inställningar tolkade och klara');
     return settings;
   } catch (err) {
     context.log(`⚠️ Fel vid laddning av booking_settings: ${err.message}`);
