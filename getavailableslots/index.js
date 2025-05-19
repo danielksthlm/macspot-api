@@ -430,9 +430,6 @@ module.exports = async function (context, req) {
   const contactRes = await db.query('SELECT * FROM contact WHERE id = $1', [contact_id]);
   const contact = contactRes.rows[0];
   debugLog(`👤 Kontakt hittad: ${contact?.id || 'ej funnen'}`);
-  const bookingCount = allBookings.length;
-  context.log(`📊 Antal bokningar i intervall: ${bookingCount}`);
-  context.log(`👤 Kund: ${contact?.first_name || ''} ${contact?.last_name || ''}, Typ: ${meeting_type}`);
     const t1 = Date.now();
     debugLog('⏱️ Efter kontakt: ' + (Date.now() - t0) + ' ms');
 
@@ -494,6 +491,9 @@ module.exports = async function (context, req) {
       date: new Date(b.start_time).toISOString().split('T')[0],
       meeting_type: b.meeting_type
     }));
+    const bookingCount = allBookings.length;
+    context.log(`📊 Antal bokningar i intervall: ${bookingCount}`);
+    context.log(`👤 Kund: ${contact?.first_name || ''} ${contact?.last_name || ''}, Typ: ${meeting_type}`);
     for (const booking of allBookings) {
       if (!bookingsByDay[booking.date]) bookingsByDay[booking.date] = [];
       bookingsByDay[booking.date].push({ start: booking.start, end: booking.end });
