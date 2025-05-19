@@ -329,6 +329,8 @@ module.exports = async function (context, req) {
         // Spara till calendar_origin_cache om vi har giltig information
         if (address && originEndTime && originSource) {
           context.log(`💾 Försöker spara origin: ${address}, källa: ${originSource}, slut: ${originEndTime}`);
+          // Permission check log before attempting to insert
+          context.log('🔐 Försök att spara till calendar_origin_cache – kontrollera rättigheter till sequence calendar_origin_cache_id_seq');
           try {
             const result = await pool.query(`
               INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
@@ -351,6 +353,9 @@ module.exports = async function (context, req) {
               context.log(`🌐 DNS-fel vid försök att spara till calendar_origin_cache (EAI_AGAIN): ${err.message}`);
             } else {
               context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
+              if (err.code === '42501') {
+                context.log('🚫 Åtkomst nekad: saknar rättigheter till sekvens calendar_origin_cache_id_seq – kör GRANT manuellt i databasen.');
+              }
             }
           }
         }
