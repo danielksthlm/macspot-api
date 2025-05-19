@@ -9,10 +9,10 @@ function verifyBookingSettings(settings, context) {
     default_home_address: 'string',
     fallback_travel_time_minutes: 'number',
     buffer_between_meetings: 'number',
-    default_meeting_length_atoffice: 'object',
-    default_meeting_length_atclient: 'object',
-    default_meeting_length_digital: 'object',
-    meeting_types: 'object',
+    default_meeting_length_atoffice: 'array',
+    default_meeting_length_atclient: 'array',
+    default_meeting_length_digital: 'array',
+    meeting_types: 'array',
     block_weekends: 'boolean',
     open_time: 'string',
     close_time: 'string',
@@ -548,7 +548,11 @@ module.exports = async function (context, req) {
               originEndTime: originEndTime || null,
               meeting_length: meeting_length,
               weekday: weekdayName,
-              slot_part: hour < 12 ? 'fm' : 'em'
+              slot_part: hour < 12 ? 'fm' : 'em',
+              max_days_in_advance: settings.max_days_in_advance,
+              buffer_between_meetings: settings.buffer_between_meetings,
+              max_weekly_booking_minutes: settings.max_weekly_booking_minutes,
+              block_weekends: settings.block_weekends
             });
             if (origin) {
               context.log(`✅ Slot ${slotTime.toISOString()} tillagd med origin: ${origin}`);
