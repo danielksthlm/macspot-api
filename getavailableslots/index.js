@@ -329,30 +329,30 @@ module.exports = async function (context, req) {
         // Spara till calendar_origin_cache om vi har giltig information
         if (address && originEndTime && originSource) {
           context.log(`💾 Försöker spara origin: ${address}, källa: ${originSource}, slut: ${originEndTime}`);
-        try {
-          const result = await pool.query(`
-            INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT DO NOTHING
-            RETURNING *
-          `, [
-            dateTime.toISOString().split('T')[0],
-            originSource,
-            address,
-            originEndTime
-          ]);
-          if (result.rows.length > 0) {
-            context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
-          } else {
-            context.log(`ℹ️ Ursprung redan sparad tidigare: ${address} (${originSource})`);
+          try {
+            const result = await pool.query(`
+              INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
+              VALUES ($1, $2, $3, $4)
+              ON CONFLICT DO NOTHING
+              RETURNING *
+            `, [
+              dateTime.toISOString().split('T')[0],
+              originSource,
+              address,
+              originEndTime
+            ]);
+            if (result.rows.length > 0) {
+              context.log(`💾 Ursprung sparad: ${address} (${originSource})`);
+            } else {
+              context.log(`ℹ️ Ursprung redan sparad tidigare: ${address} (${originSource})`);
+            }
+          } catch (err) {
+            if (err.code === 'EAI_AGAIN') {
+              context.log(`🌐 DNS-fel vid försök att spara till calendar_origin_cache (EAI_AGAIN): ${err.message}`);
+            } else {
+              context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
+            }
           }
-        } catch (err) {
-          if (err.code === 'EAI_AGAIN') {
-            context.log(`🌐 DNS-fel vid försök att spara till calendar_origin_cache (EAI_AGAIN): ${err.message}`);
-          } else {
-            context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
-          }
-        }
         }
         else {
           context.log(`🛑 Ursprung inte sparad – address: ${address}, end: ${originEndTime}, source: ${originSource}`);
