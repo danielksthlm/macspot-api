@@ -231,7 +231,11 @@ module.exports = async function (context, req) {
 
         return latest;
       } catch (err) {
-        context.log('⚠️ Fel i getLatestAppleEvent:', err.message);
+        if (err.message && err.message.includes('EAI_AGAIN')) {
+          context.log('🌐 Nätverksfel i getLatestAppleEvent (EAI_AGAIN) – kontrollera DNS eller iCloud-nätverkstillgänglighet.');
+        } else {
+          context.log('⚠️ Fel i getLatestAppleEvent:', err.message);
+        }
         return null;
       }
     }
@@ -343,6 +347,9 @@ module.exports = async function (context, req) {
             }
           } catch (err) {
             context.log(`⚠️ Kunde inte spara calendar_origin_cache: ${err.message}`);
+            if (err.message && err.message.includes('EAI_AGAIN')) {
+              context.log(`🌐 Nätverksfel (EAI_AGAIN) vid skrivning till calendar_origin_cache – tillfälligt DNS-fel?`);
+            }
           }
         }
         else {
@@ -732,6 +739,9 @@ module.exports = async function (context, req) {
                   `, [origin, destination, hourKey, travelTimeMin]);
                 } catch (err) {
                   context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
+                  if (err.message && err.message.includes('EAI_AGAIN')) {
+                    context.log('🌐 Nätverksfel (EAI_AGAIN) vid anrop till Apple Maps – DNS-problem?');
+                  }
                   context.log(`⚠️ Slot ${slotTime.toISOString()} använder fallback restid – resvägsadress saknas eller kunde inte tolkas`);
                   travelTimeMin = settings.fallback_travel_time_minutes || 0;
                 }
