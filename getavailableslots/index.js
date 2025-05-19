@@ -940,6 +940,15 @@ module.exports = async function (context, req) {
     if (chosen.length < 2) {
       context.log(`⚠️ Endast ${chosen.length} slot(s) genererade – kontrollera regler eller data`);
     }
+    if (!chosen.length) {
+      context.log(`⚠️ Inga tillgängliga slots kunde genereras – returnerar tom lista`);
+      context.res = {
+        status: 200,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: { slots: [] }
+      };
+      return;
+    }
     context.res = {
       status: 200,
       headers: {
