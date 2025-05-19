@@ -62,6 +62,8 @@ function verifyBookingSettings(settings, context) {
 }
 
 module.exports = async function (context, req) {
+  const startTimeMs = Date.now();
+  context.log(`📥 Request mottagen: ${JSON.stringify(req.body || {}, null, 2)}`);
   let msGraphAccessToken = null;
   const isDebug = process.env.DEBUG === 'true';
   let debugLog = (msg) => {
@@ -425,9 +427,12 @@ module.exports = async function (context, req) {
       context.log(`⚠️ Fel vid Graph-tokenhämtning: ${err.message}`);
     }
 
-    const contactRes = await db.query('SELECT * FROM contact WHERE id = $1', [contact_id]);
-    const contact = contactRes.rows[0];
-    debugLog(`👤 Kontakt hittad: ${contact?.id || 'ej funnen'}`);
+  const contactRes = await db.query('SELECT * FROM contact WHERE id = $1', [contact_id]);
+  const contact = contactRes.rows[0];
+  debugLog(`👤 Kontakt hittad: ${contact?.id || 'ej funnen'}`);
+  const bookingCount = allBookings.length;
+  context.log(`📊 Antal bokningar i intervall: ${bookingCount}`);
+  context.log(`👤 Kund: ${contact?.first_name || ''} ${contact?.last_name || ''}, Typ: ${meeting_type}`);
     const t1 = Date.now();
     debugLog('⏱️ Efter kontakt: ' + (Date.now() - t0) + ' ms');
 
@@ -533,8 +538,10 @@ module.exports = async function (context, req) {
     // Parallellisera dag-loop i chunkar om 7
     const chunkSize = 7;
     debugLog('🔁 Startar slot-loop i chunkar');
+    const chunkStartMs = Date.now();
     let slotCount = 0;
     for (let i = 0; i < days.length; i += chunkSize) {
+      const chunkT0 = Date.now();
       const chunk = days.slice(i, i + chunkSize);
       const results = await Promise.allSettled(
         chunk.map(async (day) => {
@@ -845,6 +852,8 @@ module.exports = async function (context, req) {
           }));
         })
       );
+      const chunkDuration = Date.now() - chunkT0;
+      context.log(`⏱️ Slot-chunk ${i / chunkSize + 1} tog ${chunkDuration} ms`);
     }
     const t4 = Date.now();
     debugLog(`🧮 Slot-loop tog totalt: ${t4 - t3} ms`);
@@ -915,6 +924,9 @@ module.exports = async function (context, req) {
       }
       context.log(`📈 Totalt tillagda slots: ${slotCount}`);
     }
+    if (chosen.length < 2) {
+      context.log(`⚠️ Endast ${chosen.length} slot(s) genererade – kontrollera regler eller data`);
+    }
     context.res = {
       status: 200,
       headers: {
@@ -924,6 +936,8 @@ module.exports = async function (context, req) {
         slots: chosen
       }
     };
+    const totalDurationMs = Date.now() - startTimeMs;
+    context.log(`⏱️ getavailableslots färdig – total tid: ${totalDurationMs} ms`);
     return;
   } catch (error) {
     debugLog(`💥 Fel uppstod: ${error.message}`);
