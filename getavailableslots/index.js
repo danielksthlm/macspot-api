@@ -315,7 +315,10 @@ module.exports = async function (context, req) {
               calendarId: contact_id,           // Using contact_id as calendar surrogate
               pool,
               context,
-              fallbackOrigin: settings.default_home_address
+              fallbackOrigin: settings.default_home_address,
+              graphClient: msGraphAccessToken,
+              appleClient: accessToken,
+              settings
             });
             const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
             context.log(originLog);
