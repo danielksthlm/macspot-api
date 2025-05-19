@@ -2,6 +2,8 @@
 const { DateTime } = require('luxon');
 const pool = require('../shared/db/pgPool');
 const loadSettings = require('../shared/config/settingsLoader');
+const graphClient = require('../shared/calendar/msGraph');
+const appleClient = require('../shared/calendar/appleCalendar');
 
 function verifyBookingSettings(settings, context) {
   const expected = {
@@ -316,8 +318,8 @@ module.exports = async function (context, req) {
               pool,
               context,
               fallbackOrigin: settings.default_home_address,
-              graphClient: msGraphAccessToken,
-              appleClient: accessToken,
+              graphClient,
+              appleClient,
               settings
             });
             const originLog = latestEvent ? `📌 Möjlig startadress: ${latestEvent}` : '❌ Kunde inte hämta startadress';
