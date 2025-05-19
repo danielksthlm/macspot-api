@@ -712,9 +712,13 @@ module.exports = async function (context, req) {
                   url.searchParams.append('transportType', 'automobile');
                   url.searchParams.append('departureTime', slotTime.toISOString());
 
+                  const controller = new AbortController();
+                  const timeout = setTimeout(() => controller.abort(), 8000); // max 8s
                   const res = await fetch(url.toString(), {
-                    headers: { Authorization: `Bearer ${accessToken}` }
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                    signal: controller.signal
                   });
+                  clearTimeout(timeout);
                   const data = await res.json();
                   const travelSeconds = data.routes?.[0]?.durationSeconds;
                   if (!travelSeconds) {
