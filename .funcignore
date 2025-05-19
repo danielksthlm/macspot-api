@@ -15,8 +15,6 @@
 !refreshremainingslots/**
 !bookings/
 !bookings/**
-!oncalendarupdate/
-!oncalendarupdate/**
 
 !node_modules/
 !node_modules/**
