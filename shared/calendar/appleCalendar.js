@@ -1,3 +1,4 @@
+console.log("🧪 appleCalendar.js laddades");
 const fetch = require("node-fetch");
 const xml2js = require("xml2js");
 

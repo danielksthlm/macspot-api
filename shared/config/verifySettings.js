@@ -1,5 +1,4 @@
-
-
+console.log("🧪 verifySettings.js laddades");
 function verifyBookingSettings(settings, context) {
   const expected = {
     default_office_address: 'string',

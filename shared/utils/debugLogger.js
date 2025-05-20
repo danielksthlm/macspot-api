@@ -1,4 +1,4 @@
-
+console.log("🧪 debugLogger.js laddades");
 
 function createDebugLogger(context) {
   const isDebug = process.env.DEBUG === 'true';

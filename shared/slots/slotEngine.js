@@ -1,4 +1,4 @@
-
+console.log("🧪 slotEngine.js laddades");
 
 const pool = require('../db/pgPool');
 

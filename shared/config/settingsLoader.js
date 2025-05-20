@@ -1,3 +1,4 @@
+console.log("🧪 settingsLoader.js laddades");
 module.exports = async function loadSettings(pool, context) {
   try {
     const settings = {};

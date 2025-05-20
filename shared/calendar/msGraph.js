@@ -1,3 +1,4 @@
+console.log("🧪 msGraph.js laddades");
 const { Client } = require("@microsoft/microsoft-graph-client");
 require("isomorphic-fetch");
 const fetch = require("node-fetch");

@@ -1,5 +1,4 @@
-
-
+console.log("🧪 returnTravelVerifier.js laddades");
 const { URL } = require('url');
 
 async function verifyReturnTravelFeasibility({

@@ -1,5 +1,4 @@
-
-
+console.log("🧪 getMsToken.js laddades");
 const fetch = require('node-fetch');
 
 module.exports = async function getMsToken(context) {
