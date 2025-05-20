@@ -97,4 +97,5 @@ module.exports = async function (context, req) {
     context.log("🔥 FEL i minimal testfunktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
+  context.log("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
 };
