@@ -43,6 +43,43 @@ module.exports = async function (context, req) {
       context.log("✅ Steg 2a: Inställningar laddade – nycklar:", Object.keys(settings).join(', '));
       verifyBookingSettings(settings, context);
       context.log("✅ Steg 2b: Inställningar verifierade");
+
+      context.log("✅ Steg 3: Genererar days[] och laddar bokningar");
+
+      const bookingsByDay = {};
+      const maxDays = settings.max_days_in_advance || 14;
+      const today = new Date();
+      const days = Array.from({ length: maxDays }, (_, i) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        return date;
+      });
+
+      const startDateStr = days[0].toISOString().split('T')[0];
+      const endDateStr = days[days.length - 1].toISOString().split('T')[0];
+
+      const db = await pool.connect();
+      const allBookingsRes = await db.query(
+        'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
+        [startDateStr, endDateStr]
+      );
+      context.log("🔢 Antal bokningar hämtade:", allBookingsRes.rows.length);
+
+      const allBookings = allBookingsRes.rows.map(b => ({
+        start: new Date(b.start_time).getTime(),
+        end: new Date(b.end_time).getTime(),
+        date: new Date(b.start_time).toISOString().split('T')[0],
+        meeting_type: b.meeting_type
+      }));
+
+      for (const booking of allBookings) {
+        if (!bookingsByDay[booking.date]) bookingsByDay[booking.date] = [];
+        bookingsByDay[booking.date].push({ start: booking.start, end: booking.end });
+      }
+
+      context.log("✅ Steg 3: Dagar genererade och bokningar summerade");
+      db.release();
+
     } catch (err) {
       context.log("🔥 Fel vid laddning/verifiering av settings:", err.message);
       context.res = { status: 500, body: { error: "Settings error", detail: err.message } };
