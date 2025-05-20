@@ -1,3 +1,4 @@
+console.log("✅ Alla require-satser exekverades utan fel");
 console.log("🧪 getavailableslots/index.js – laddning startar");
 
 const { DateTime } = require("luxon");
@@ -25,6 +26,7 @@ const { getAppleMapsAccessToken } = require("../shared/maps/appleMaps");
 console.log("✅ appleMaps import ok");
 
 module.exports = async function (context, req) {
+  context.log("🧪 Azure Function entrypoint nådd");
   context.log("🧪 Function initierad");
   context.res = {
     status: 200,
