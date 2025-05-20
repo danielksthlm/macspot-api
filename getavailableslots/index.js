@@ -118,6 +118,7 @@ module.exports = async function (context, req) {
     }
 
     // Riktigt anrop till generateSlotChunks
+    const slotGroupPicked = {};
     const chosenSlotsResult = await generateSlotChunks({
       days,
       context,
