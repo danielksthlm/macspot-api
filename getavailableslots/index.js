@@ -183,13 +183,8 @@ module.exports = async function (context, req) {
       const windowStartHour = DateTime.fromISO(`${days[0].toISOString().split('T')[0]}T${settings.travel_time_window_start || '06:00'}`, { zone: timezone }).toUTC().hour;
       const windowEndHour = DateTime.fromISO(`${days[0].toISOString().split('T')[0]}T${settings.travel_time_window_end || '23:00'}`, { zone: timezone }).toUTC().hour;
 
-      // Hämta Apple Maps-token en gång tidigt
-      const accessToken = await getAppleMapsAccessToken(context);
-      if (!accessToken && isDebug) {
-        context.log('⚠️ Apple Maps-token saknas – vissa slots kan använda fallback');
-      }
-      const t3 = Date.now();
-      debugLog('⏱️ Efter Apple Maps token: ' + (Date.now() - t0) + ' ms');
+      // Skippa Apple Maps-token för felsökning
+      context.log("🧪 Skippade Apple Maps-token för felsökning");
 
       // Parallellisera dag-loop i chunkar om 7
       // --- Ny slot-generation via generateSlotChunks ---
