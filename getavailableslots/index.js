@@ -97,6 +97,20 @@ module.exports = async function (context, req) {
       return;
     }
 
+    const weeklyMinutesByType = {};
+    const weekKey = (date) => {
+      const start = new Date(date);
+      start.setUTCHours(0, 0, 0, 0);
+      start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+      return start.toISOString().split('T')[0];
+    };
+    for (const b of allBookings) {
+      const type = b.meeting_type || 'unknown';
+      const week = weekKey(b.start);
+      weeklyMinutesByType[type] = weeklyMinutesByType[type] || {};
+      weeklyMinutesByType[type][week] = (weeklyMinutesByType[type][week] || 0) + (b.end - b.start) / 60000;
+    }
+
     // Riktigt anrop till generateSlotChunks
     const chosenSlotsResult = await generateSlotChunks({
       days,
@@ -106,7 +120,7 @@ module.exports = async function (context, req) {
       meeting_type,
       meeting_length: 20,
       bookingsByDay,
-      weeklyMinutesByType: {}, // detta kan fyllas i nästa steg
+      weeklyMinutesByType,
       settings,
       graphClient: null,
       appleClient: null,
