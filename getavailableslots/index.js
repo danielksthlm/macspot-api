@@ -6,6 +6,8 @@ module.exports = async function (context, req) {
   context.log("🧪 Azure Function entrypoint nådd");
 
   try {
+    const client = await db.connect();
+
     if (!req || !req.body) {
       context.log("❌ Ingen request body mottagen");
       context.res = { status: 400, body: { error: "Missing request body" } };
@@ -24,7 +26,6 @@ module.exports = async function (context, req) {
     let bookingsByDay = {};
 
     try {
-      const client = await db.connect();
       const contactRes = await client.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
       contact = contactRes.rows[0];
       if (contact) {
@@ -32,10 +33,10 @@ module.exports = async function (context, req) {
       } else {
         context.log("⚠️ Ingen kontakt hittad för contact_id:", contact_id);
       }
-      client.release();
     } catch (err) {
       context.log("🔥 DB-fel:", err.message);
       context.res = { status: 500, body: { error: "DB error", detail: err.message } };
+      client.release();
       return;
     }
 
@@ -64,7 +65,6 @@ module.exports = async function (context, req) {
       const startDateStr = days[0].toISOString().split('T')[0];
       const endDateStr = days[days.length - 1].toISOString().split('T')[0];
 
-      const client = await db.connect();
       const allBookingsRes = await client.query(
         'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
         [startDateStr, endDateStr]
@@ -84,11 +84,11 @@ module.exports = async function (context, req) {
       }
 
       context.log("✅ Steg 3: Dagar genererade och bokningar summerade");
-      client.release();
 
     } catch (err) {
       context.log("🔥 Fel vid laddning/verifiering av settings:", err.message);
       context.res = { status: 500, body: { error: "Settings error", detail: err.message } };
+      client.release();
       return;
     }
 
@@ -99,6 +99,7 @@ module.exports = async function (context, req) {
     } catch (importErr) {
       context.log("❌ Misslyckades importera generateSlotChunks:", importErr.message);
       context.res = { status: 500, body: { error: "Import error", detail: importErr.message } };
+      client.release();
       return;
     }
 
@@ -144,6 +145,7 @@ module.exports = async function (context, req) {
         received: { email, meeting_type }
       }
     };
+    client.release();
   } catch (err) {
     context.log("🔥 FEL i minimal testfunktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
