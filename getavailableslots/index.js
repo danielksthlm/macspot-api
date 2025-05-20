@@ -14,9 +14,11 @@ const appleClient = require('../shared/calendar/appleCalendar')();
 console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("✅ Prepping to export handler");
+context.log('🧪 Handler definieras i getavailableslots/index.js');
 try {
   console.log("✅ Reached module.exports definition");
   module.exports = async function (context, req) {
+    context.log('🧪 Handler körs – första rad i handler');
     try {
       context.log('🔧 Initialiserar graphClient...');
       graphClient = createGraphClient();
@@ -263,4 +265,5 @@ try {
   console.error('🔥 EXTERNT FEL I FUNKTION:', outerErr.message);
 }
 
+context.log('🧪 getavailableslots/index.js laddad färdigt')
 console.log("✅ End of getavailableslots/index.js reached");
