@@ -62,4 +62,9 @@ function createMsGraphClient() {
   return { getEvent };
 }
 
+if (process.env.NODE_ENV === 'test') {
+  const testClient = createMsGraphClient();
+  console.log("🧪 TEST graphClient:", typeof testClient.getEvent === 'function' ? '✅ getEvent finns' : '❌ getEvent saknas');
+}
+
 module.exports = createMsGraphClient;

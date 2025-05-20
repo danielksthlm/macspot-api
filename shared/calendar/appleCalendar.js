@@ -73,4 +73,9 @@ function createAppleClient(context) {
   return { getEvent };
 }
 
+if (process.env.NODE_ENV === 'test') {
+  const testClient = createAppleClient({ log: console.log });
+  console.log("🧪 TEST appleClient:", typeof testClient.getEvent === 'function' ? '✅ getEvent finns' : '❌ getEvent saknas');
+}
+
 module.exports = createAppleClient;
