@@ -23,16 +23,8 @@ module.exports = async function (context, req) {
 
     const { email, contact_id, meeting_type: rawMeetingType, meeting_length } = req.body || {};
     context.log("📨 Inparametrar:", { email, contact_id, meeting_type: rawMeetingType, meeting_length });
-    try {
-      if (typeof graphClient?.setToken !== 'function') throw new Error('❌ graphClient saknar setToken-metod');
-      if (typeof appleClient?.setContext !== 'function') throw new Error('❌ appleClient saknar setContext-metod');
-      context.log("✅ graphClient & appleClient laddade med förväntade metoder");
-    } catch (err) {
-      context.log.error("⚠️ Fel i client-kontroll:", err.message);
-      context.res = { status: 500, body: { error: "Fel vid laddning av kalenderklienter", detail: err.message } };
-      db.release();
-      return;
-    }
+
+    context.log("✅ Hoppar kontroll av graphClient/AppleClient i detta steg");
 
     context.res = {
       status: 200,
