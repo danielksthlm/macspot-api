@@ -132,7 +132,8 @@ module.exports = async function (context, req) {
       travelCache: new Map(),
       accessToken: null,
       timezone: settings.timezone || 'Europe/Stockholm',
-      debugHelper: { debugLog: context.log, skipReasons: {} }
+      debugHelper: { debugLog: context.log, skipReasons: {} },
+      db: client
     });
     context.log("✅ generateSlotChunks kördes utan fel");
 
