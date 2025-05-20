@@ -1,6 +1,9 @@
 const pool = require("../shared/db/pgPool");
 const loadSettings = require("../shared/config/settingsLoader");
+const verifyBookingSettings = require("../shared/config/verifySettings");
+const { createDebugLogger } = require("../shared/utils/debugLogger");
 console.log("✅ pool + settingsLoader import ok");
+console.log("✅ debugLogger import ok");
 
 module.exports = async function (context, req) {
   context.log("🧪 Azure Function entrypoint nådd");
