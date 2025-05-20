@@ -127,3 +127,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
 }
 
 module.exports = { resolveOriginAddress };
+
+if (process.env.NODE_ENV === 'test') {
+  module.exports._test = { memoryCache };
+}

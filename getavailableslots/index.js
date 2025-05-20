@@ -39,6 +39,17 @@ module.exports = async function (context, req) {
     // Pool återanvänds från global instans
     // Import cache-driven origin resolution logic
     const { resolveOriginAddress } = require('../shared/calendar/resolveOrigin');
+    if (typeof graphClient?.setToken !== 'function') {
+      throw new Error('graphClient saknar setToken-metod');
+    }
+    if (typeof appleClient?.setContext !== 'function') {
+      throw new Error('appleClient saknar setContext-metod');
+    }
+    context.log('📦 graphClient keys:', Object.keys(graphClient || {}));
+    context.log('📦 appleClient keys:', Object.keys(appleClient || {}));
+    // Hämta MS Graph-token en gång
+    const getMsToken = require('../shared/calendar/getMsToken');
+    msGraphAccessToken = await getMsToken(context);
     graphClient.setToken(msGraphAccessToken);
     appleClient.setContext(context);
     debugLog('🏁 Börjar getavailableslots');
@@ -64,9 +75,6 @@ module.exports = async function (context, req) {
 
     const db = await pool.connect();
 
-    // Hämta MS Graph-token en gång
-    const getMsToken = require('../shared/calendar/getMsToken');
-    msGraphAccessToken = await getMsToken(context);
 
   const contactRes = await db.query('SELECT * FROM contact WHERE id = $1', [contact_id]);
   const contact = contactRes.rows[0];
@@ -83,8 +91,6 @@ module.exports = async function (context, req) {
     debugLog('⏱️ Efter settings: ' + (Date.now() - t0) + ' ms');
 
     const bookingsByDay = {};
-    const slotGroupPicked = {};
-    const chosen = [];
 
     const maxDays = settings.max_days_in_advance || 14;
     const today = new Date();

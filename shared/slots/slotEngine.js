@@ -1,5 +1,7 @@
 
 
+const pool = require('../db/pgPool');
+
 const { DateTime } = require("luxon");
 const { resolveOriginAddress } = require("../calendar/resolveOrigin");
 const { resolveTravelTime } = require("../maps/travelTimeResolver");
@@ -87,6 +89,22 @@ async function generateSlotChunks({
   const slotMap = {};
   const chosen = [];
 
+  if (days.length === 0) {
+    const fallbackDate = new Date().toISOString().split('T')[0];
+    const { rows } = await pool.query(
+      'SELECT slots FROM slot_cache WHERE slot_day = $1 LIMIT 1',
+      [fallbackDate]
+    );
+    if (rows.length > 0) {
+      context.log(`🟡 Använder slot_cache som fallback (${fallbackDate})`);
+      return {
+        chosenSlots: rows[0].slots || [],
+        slotMapResult: {},
+        slotLogSummary: { 'fallback_used': 1 }
+      };
+    }
+  }
+
   for (const day of days) {
     const dayStr = day.toISOString().split("T")[0];
     const slotCandidates = await generateSlotCandidates({
@@ -106,7 +124,15 @@ async function generateSlotChunks({
 
   for (const [key, candidates] of Object.entries(slotMap)) {
     if (candidates.length === 0) continue;
-    const best = candidates.sort((a, b) => b.score - a.score)[0] || candidates[0];
+
+    const alreadyPicked = slotGroupPicked[key];
+    if (alreadyPicked) {
+      debugLog?.(`🟡 Slotgrupp '${key}' redan vald tidigare – hoppar`);
+      continue;
+    }
+
+    const best = candidates.sort((a, b) => (b.score || 0) - (a.score || 0))[0] || candidates[0];
+    slotGroupPicked[key] = true;
     chosen.push(best);
   }
 
@@ -117,4 +143,7 @@ async function generateSlotChunks({
   };
 }
 
-module.exports = { generateSlotCandidates, generateSlotChunks };
+module.exports = {
+  generateSlotCandidates,
+  generateSlotChunks
+};
