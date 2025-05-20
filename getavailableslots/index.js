@@ -18,10 +18,10 @@ console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("🧪 Försöker importera generateSlotChunks");
 const { generateSlotChunks } = require('../shared/slots/slotEngine');
-if (!generateSlotChunks) {
-  console.log("❌ generateSlotChunks är undefined");
+if (typeof generateSlotChunks !== 'function') {
+  console.log("❌ generateSlotChunks är inte en funktion!");
 } else {
-  console.log("✅ generateSlotChunks är definierad");
+  console.log("✅ generateSlotChunks är en funktion och redo att användas");
 }
 console.log("🧪 generateSlotChunks importerat från slotEngine.js");
 console.log("✅ generateSlotChunks import ok");
@@ -221,6 +221,8 @@ module.exports = async function (context, req) {
         debugHelper: { debugLog, skipReasons }
       });
       context.log("🧪 Efter generateSlotChunks – kontroll om vi ens når hit");
+      context.log("📊 chosenSlots:", Array.isArray(chosenSlots) ? chosenSlots.length : 'undefined');
+      context.log("📊 slotMapResult keys:", slotMapResult ? Object.keys(slotMapResult).length : 'undefined');
       const slotMap = slotMapResult;
       const chosen = chosenSlots;
       const slotCount = chosen.length;
