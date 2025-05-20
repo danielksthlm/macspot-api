@@ -1,4 +1,4 @@
-const pool = require("../shared/db/pgPool");
+const db = require("../shared/db/pgPool");
 console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
 
@@ -24,15 +24,15 @@ module.exports = async function (context, req) {
     let bookingsByDay = {};
 
     try {
-      const db = await pool.connect();
-      const contactRes = await db.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
+      const client = await db.connect();
+      const contactRes = await client.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
       contact = contactRes.rows[0];
       if (contact) {
         context.log("✅ Kontakt hittad:", contact.id);
       } else {
         context.log("⚠️ Ingen kontakt hittad för contact_id:", contact_id);
       }
-      db.release();
+      client.release();
     } catch (err) {
       context.log("🔥 DB-fel:", err.message);
       context.res = { status: 500, body: { error: "DB error", detail: err.message } };
@@ -46,7 +46,7 @@ module.exports = async function (context, req) {
 
     let settings;
     try {
-      settings = await loadSettings(pool, context);
+      settings = await loadSettings(db, context);
       context.log("✅ Steg 2a: Inställningar laddade – nycklar:", Object.keys(settings).join(', '));
       verifyBookingSettings(settings, context);
       context.log("✅ Steg 2b: Inställningar verifierade");
@@ -64,8 +64,8 @@ module.exports = async function (context, req) {
       const startDateStr = days[0].toISOString().split('T')[0];
       const endDateStr = days[days.length - 1].toISOString().split('T')[0];
 
-      const db = await pool.connect();
-      const allBookingsRes = await db.query(
+      const client = await db.connect();
+      const allBookingsRes = await client.query(
         'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
         [startDateStr, endDateStr]
       );
@@ -84,7 +84,7 @@ module.exports = async function (context, req) {
       }
 
       context.log("✅ Steg 3: Dagar genererade och bokningar summerade");
-      db.release();
+      client.release();
 
     } catch (err) {
       context.log("🔥 Fel vid laddning/verifiering av settings:", err.message);
