@@ -67,6 +67,7 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
 
     for filnamn in filnamn_lista:
         visat_filnamn = os.path.basename(filnamn)
+        rel_path = os.path.relpath(filnamn, root_path)
         if os.path.exists(filnamn):
             # Läs filens rader
             with open(filnamn, "r", encoding="utf-8") as infil:
@@ -165,7 +166,7 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
 
             # Skriv metadata-block
             utfil.write("====================\n")
-            utfil.write(f"📄 Fil: {visat_filnamn}\n")
+            utfil.write(f"📄 Fil: {rel_path}\n")
             utfil.write(f"📅 Senast ändrad: {senast_andrad}\n")
             utfil.write(f"📏 Antal rader: {antal_rader}\n")
             utfil.write(f"🧩 Antal funktioner: {funktion_count}\n")
@@ -306,8 +307,3 @@ def generera_databasstruktur(output_path):
 
 generera_databasstruktur(output_fil)
 
-# Exportera summeringsdata som CSV
-with open(output_fil.replace(".txt", ".csv"), "w", encoding="utf-8") as csvfil:
-    csvfil.write("fil,rader,funktioner,komplexitet,kommentarer,imports\n")
-    for row in fil_summering:
-        csvfil.write(",".join(str(x) for x in row) + "\n")
