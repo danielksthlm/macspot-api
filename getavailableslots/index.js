@@ -2,6 +2,8 @@ const pool = require("../shared/db/pgPool");
 const loadSettings = require("../shared/config/settingsLoader");
 const verifyBookingSettings = require("../shared/config/verifySettings");
 const { createDebugLogger } = require("../shared/utils/debugLogger");
+const graphClient = require("../shared/calendar/msGraph")();
+const appleClient = require("../shared/calendar/appleCalendar")();
 console.log("✅ pool + settingsLoader import ok");
 console.log("✅ debugLogger import ok");
 
@@ -21,6 +23,16 @@ module.exports = async function (context, req) {
 
     const { email, contact_id, meeting_type: rawMeetingType, meeting_length } = req.body || {};
     context.log("📨 Inparametrar:", { email, contact_id, meeting_type: rawMeetingType, meeting_length });
+    try {
+      if (typeof graphClient?.setToken !== 'function') throw new Error('❌ graphClient saknar setToken-metod');
+      if (typeof appleClient?.setContext !== 'function') throw new Error('❌ appleClient saknar setContext-metod');
+      context.log("✅ graphClient & appleClient laddade med förväntade metoder");
+    } catch (err) {
+      context.log.error("⚠️ Fel i client-kontroll:", err.message);
+      context.res = { status: 500, body: { error: "Fel vid laddning av kalenderklienter", detail: err.message } };
+      db.release();
+      return;
+    }
 
     context.res = {
       status: 200,
