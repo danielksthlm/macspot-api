@@ -1,7 +1,7 @@
 const pool = require("../shared/db/pgPool");
 console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
-const { generateSlotChunks } = require('../shared/slots/slotEngine');
+// const { generateSlotChunks } = require('../shared/slots/slotEngine');
 context.log("✅ generateSlotChunks import ok");
 
 module.exports = async function (context, req) {
@@ -86,6 +86,16 @@ module.exports = async function (context, req) {
     } catch (err) {
       context.log("🔥 Fel vid laddning/verifiering av settings:", err.message);
       context.res = { status: 500, body: { error: "Settings error", detail: err.message } };
+      return;
+    }
+
+    let generateSlotChunks;
+    try {
+      generateSlotChunks = require('../shared/slots/slotEngine').generateSlotChunks;
+      context.log("✅ generateSlotChunks import ok");
+    } catch (importErr) {
+      context.log("❌ Misslyckades importera generateSlotChunks:", importErr.message);
+      context.res = { status: 500, body: { error: "Import error", detail: importErr.message } };
       return;
     }
 
