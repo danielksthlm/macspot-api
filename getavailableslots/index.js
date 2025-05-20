@@ -1,4 +1,5 @@
 const { DateTime } = require("luxon");
+console.log("🧪 getavailableslots/index.js – första rad körd (fil laddades)");
 console.log("✅ luxon import ok");
 console.log("🧪 getavailableslots/index.js – FÖRSTA RADEN I FILEN KÖRS");
 console.log("✅ Loading debugLogger");
@@ -22,6 +23,11 @@ if (typeof generateSlotChunks !== 'function') {
   console.log("❌ generateSlotChunks är inte en funktion!");
 } else {
   console.log("✅ generateSlotChunks är en funktion och redo att användas");
+}
+if (typeof generateSlotChunks !== 'function') {
+  console.log("❌ generateSlotChunks är inte en funktion (efter import)");
+} else {
+  console.log("✅ generateSlotChunks är en funktion (efter import)");
 }
 console.log("🧪 generateSlotChunks importerat från slotEngine.js");
 console.log("✅ generateSlotChunks import ok");
@@ -203,6 +209,7 @@ module.exports = async function (context, req) {
         meeting_type,
         meeting_length
       });
+      context.log("🧪 generateSlotChunks kommer nu anropas");
       const { chosenSlots, slotMapResult, slotLogSummary } = await generateSlotChunks({
         days,
         context,
@@ -220,7 +227,7 @@ module.exports = async function (context, req) {
         timezone,
         debugHelper: { debugLog, skipReasons }
       });
-      // Loggradsverifiering direkt efter generateSlotChunks
+      context.log("🧪 generateSlotChunks anrop utfört");
       if (!chosenSlots || !slotMapResult) {
         context.log("❌ generateSlotChunks returnerade null eller undefined");
         context.res = {
@@ -228,9 +235,8 @@ module.exports = async function (context, req) {
           body: { error: "generateSlotChunks failed to return expected data" }
         };
         return;
-      } else {
-        context.log(`✅ generateSlotChunks gav ${chosenSlots.length} slots och ${Object.keys(slotMapResult).length} map-keys`);
       }
+      context.log(`✅ generateSlotChunks gav ${chosenSlots.length} slots och ${Object.keys(slotMapResult).length} map-keys`);
       context.log("🧪 Efter generateSlotChunks – kontroll om vi ens når hit");
       context.log("📊 chosenSlots:", Array.isArray(chosenSlots) ? chosenSlots.length : 'undefined');
       context.log("📊 slotMapResult keys:", slotMapResult ? Object.keys(slotMapResult).length : 'undefined');
