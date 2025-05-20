@@ -1,26 +1,31 @@
-# Ignore all by default, then selectively include
-*
+# Exclude dev-only files and folders
+.git
+.vscode
+.env
+*.log
+test/
+tests/
 
-# Always include essential deployment files
+# Explicitly include all required files and folders
 !host.json
 !package.json
 !package-lock.json
-!meeting_types/
-!meeting_types/**
-!validate_contact/
-!validate_contact/**
-!getavailableslots/
-!getavailableslots/**
-!refreshremainingslots/
-!refreshremainingslots/**
+
+!node_modules/
+!node_modules/**
+
+!shared/
+!shared/**
+
 !bookings/
 !bookings/**
+!getavailableslots/
+!getavailableslots/**
+!validate_contact/
+!validate_contact/**
+!meeting_types/
+!meeting_types/**
 !refreshCalendarOrigins/
 !refreshCalendarOrigins/**
 !refreshTravelTimes/
 !refreshTravelTimes/**
-
-!node_modules/
-!node_modules/**
-!shared/
-!shared/**
