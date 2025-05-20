@@ -15,10 +15,7 @@ const pool = require('../shared/db/pgPool');
 console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("🧪 getavailableslots/index.js – samtliga imports klara");
-console.log("✅ Prepping to export handler");
-context.log('🧪 Handler definieras i getavailableslots/index.js');
-console.log("✅ Reached module.exports definition");
-console.log("🧪 getavailableslots/index.js – exports definieras");
+console.log("✅ Alla imports genomförda – exporterar handler");
 module.exports = async function (context, req) {
   context.log("🧪 getavailableslots – module.exports funktionen körs");
   console.log("🧪 Handler har kallats – första raden i handler");
