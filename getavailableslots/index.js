@@ -21,6 +21,7 @@ module.exports = async function (context, req) {
     let allBookings = [];
     let days = [];
     let contact;
+    let bookingsByDay = {};
 
     try {
       const db = await pool.connect();
@@ -52,7 +53,6 @@ module.exports = async function (context, req) {
 
       context.log("✅ Steg 3: Genererar days[] och laddar bokningar");
 
-      const bookingsByDay = {};
       const maxDays = settings.max_days_in_advance || 14;
       const today = new Date();
       days = Array.from({ length: maxDays }, (_, i) => {
