@@ -16,9 +16,10 @@ const pool = require('../shared/db/pgPool');
 // const appleClient = require('../shared/calendar/appleCalendar')();
 console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
+const { generateSlotChunks } = require('../shared/slots/slotEngine');
+console.log("✅ generateSlotChunks import ok");
 console.log("🧪 getavailableslots/index.js – samtliga imports klara");
 console.log("✅ Alla imports genomförda – exporterar handler");
-const { generateSlotChunks } = require('../shared/slots/slotEngine');
 module.exports = async function (context, req) {
   context.log("🧪 getavailableslots – module.exports funktionen körs");
   console.log("🧪 Handler har kallats – första raden i handler");
