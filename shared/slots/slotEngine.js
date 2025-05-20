@@ -8,7 +8,7 @@ const { resolveTravelTime } = require("../maps/travelTimeResolver");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
-async function generateSlotCandidates({ day, settings, contact, db, context }) {
+async function generateSlotCandidates({ day, settings, contact, pool, context }) {
   const timezone = settings.timezone || "Europe/Stockholm";
   const hoursToTry = [10, 14];
   const slots = [];
@@ -22,7 +22,7 @@ async function generateSlotCandidates({ day, settings, contact, db, context }) {
     const originInfo = await resolveOriginAddress({
       eventId,
       calendarId: contact.contact_id,
-      db,
+      pool,
       context,
       graphClient: msGraph,
       appleClient: appleCalendar,
@@ -40,7 +40,7 @@ async function generateSlotCandidates({ day, settings, contact, db, context }) {
       origin: originInfo.origin,
       destination,
       hour,
-      db,
+      db: pool,
       accessToken: context.accessToken || null,
       context
     });
@@ -111,7 +111,7 @@ async function generateSlotChunks({
       day: dayStr,
       settings,
       contact,
-      db: context.db || context.pool,
+      pool: context.client || pool,
       context
     });
 
