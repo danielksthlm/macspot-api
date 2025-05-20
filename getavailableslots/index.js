@@ -19,6 +19,7 @@ module.exports = async function (context, req) {
 
     // Declare allBookings at the top-level scope of the outer try block
     let allBookings = [];
+    let days = [];
 
     try {
       const db = await pool.connect();
@@ -53,7 +54,7 @@ module.exports = async function (context, req) {
       const bookingsByDay = {};
       const maxDays = settings.max_days_in_advance || 14;
       const today = new Date();
-      const days = Array.from({ length: maxDays }, (_, i) => {
+      days = Array.from({ length: maxDays }, (_, i) => {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
         return date;
