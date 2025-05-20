@@ -13,8 +13,14 @@ module.exports = async function (context, req) {
     context.log("✅ DB-anslutning OK");
 
     const settings = await loadSettings(db, context);
-    context.log("✅ Inställningar laddade");
-    context.log("📦 Nycklar i settings:", Object.keys(settings).join(", "));
+    context.log("✅ settingsLoader OK – inställningar hämtade");
+    verifyBookingSettings(settings, context);
+    context.log("✅ verifySettings OK – inställningar verifierade");
+    const timezone = settings.timezone || 'Europe/Stockholm';
+    context.log(`🕒 Använder tidszon: ${timezone}`);
+
+    const { email, contact_id, meeting_type: rawMeetingType, meeting_length } = req.body || {};
+    context.log("📨 Inparametrar:", { email, contact_id, meeting_type: rawMeetingType, meeting_length });
 
     context.res = {
       status: 200,
