@@ -31,6 +31,11 @@ module.exports = async function (context, req) {
   console.log("🧪 Kontrollpunkt: Azure Function körs med method:", req?.method);
   console.log("🧪 Payload body:", JSON.stringify(req?.body || {}, null, 2));
   console.log("🧪 Miljövariabler:", Object.keys(process.env).filter(k => k.startsWith("PG") || k.startsWith("APPLE") || k.startsWith("MS")).join(", "));
+  Object.entries(process.env).forEach(([key, val]) => {
+    if (key.startsWith("PG") || key.startsWith("APPLE") || key.startsWith("MS")) {
+      console.log(`🔐 ENV ${key} = ${val ? val.slice(0, 5) : ""}... (${val ? val.length : 0} tecken)`);
+    }
+  });
   context.res = {
     status: 200,
     body: { message: "✅ Alla require är OK" }
