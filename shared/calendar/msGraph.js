@@ -67,4 +67,6 @@ if (process.env.NODE_ENV === 'test') {
   console.log("🧪 TEST graphClient:", typeof testClient.getEvent === 'function' ? '✅ getEvent finns' : '❌ getEvent saknas');
 }
 
-module.exports = createMsGraphClient;
+const client = createMsGraphClient();
+console.log("🧪 msGraph-klient skapad – getEvent är funktion:", typeof client.getEvent === 'function');
+module.exports = () => client;

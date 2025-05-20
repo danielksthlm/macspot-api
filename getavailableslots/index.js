@@ -1,12 +1,16 @@
 const db = require("../shared/db/pgPool");
 const createMsGraphClient = require('../shared/calendar/msGraph');
 const createAppleClient = require('../shared/calendar/appleCalendar');
+const appleClient = createAppleClient(context);
+const graphClient = createMsGraphClient();
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
 
 module.exports = async function (context, req) {
   context.log("🧪 Azure Function entrypoint nådd");
+  context.log("🧪 graphClient.getEvent:", typeof graphClient.getEvent === "function");
+  context.log("🧪 appleClient.getEvent:", typeof appleClient.getEvent === "function");
 
   try {
     const client = await db.connect();
@@ -132,8 +136,8 @@ module.exports = async function (context, req) {
       bookingsByDay,
       weeklyMinutesByType,
       settings,
-      graphClient: createMsGraphClient(),
-      appleClient: createAppleClient(context),
+      graphClient,
+      appleClient,
       travelCache: new Map(),
       accessToken: await getAppleMapsAccessToken(context),
       timezone: settings.timezone || 'Europe/Stockholm',
