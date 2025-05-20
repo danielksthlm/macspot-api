@@ -1,4 +1,3 @@
-throw new Error("🛑 TEST: Denna rad kastar ett fel direkt vid filens laddning!");
 const { DateTime } = require("luxon");
 console.log("🧪 getavailableslots/index.js – första rad körd (fil laddades)");
 console.log("✅ luxon import ok");
