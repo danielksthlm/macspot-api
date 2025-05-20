@@ -134,7 +134,7 @@ module.exports = async function (context, req) {
       accessToken: null,
       timezone: settings.timezone || 'Europe/Stockholm',
       debugHelper: { debugLog: context.log, skipReasons: {} },
-      client: db  // ändrat från db: db till client: db
+      client: client
     });
     context.log("✅ generateSlotChunks kördes utan fel");
 
