@@ -21,17 +21,16 @@ console.log("🧪 Försöker importera generateSlotChunks");
 let generateSlotChunks;
 try {
   const imported = require('../shared/slots/slotEngine');
-  generateSlotChunks = imported.generateSlotChunks;
-  if (typeof generateSlotChunks !== 'function') {
-    console.log("❌ generateSlotChunks är inte en funktion!");
-  } else {
-    console.log("✅ generateSlotChunks är en funktion och redo att användas");
+  if (!imported || typeof imported.generateSlotChunks !== 'function') {
+    console.log("❌ generateSlotChunks saknas eller är inte en funktion");
+    throw new Error("generateSlotChunks is not defined or invalid");
   }
+  generateSlotChunks = imported.generateSlotChunks;
+  console.log("✅ generateSlotChunks är en giltig funktion");
 } catch (err) {
   console.log("❌ Fel vid import av generateSlotChunks:", err.message);
+  throw err; // Avbryt startup direkt om importen misslyckas
 }
-console.log("🧪 generateSlotChunks importerat från slotEngine.js");
-console.log("✅ generateSlotChunks import ok");
 console.log("🧪 getavailableslots/index.js – samtliga imports klara");
 console.log("✅ Alla imports genomförda – exporterar handler");
 module.exports = async function (context, req) {
