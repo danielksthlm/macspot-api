@@ -17,6 +17,9 @@ module.exports = async function (context, req) {
     context.log("✅ Request body innehåller:", { email, meeting_type });
     context.log("✅ Steg 1: Anropar DB med contact_id:", contact_id);
 
+    // Declare allBookings at the top-level scope of the outer try block
+    let allBookings = [];
+
     try {
       const db = await pool.connect();
       const contactRes = await db.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
@@ -66,7 +69,7 @@ module.exports = async function (context, req) {
       );
       context.log("🔢 Antal bokningar hämtade:", allBookingsRes.rows.length);
 
-      const allBookings = allBookingsRes.rows.map(b => ({
+      allBookings = allBookingsRes.rows.map(b => ({
         start: new Date(b.start_time).getTime(),
         end: new Date(b.end_time).getTime(),
         date: new Date(b.start_time).toISOString().split('T')[0],
