@@ -34,6 +34,7 @@ module.exports = async function (context, req) {
       return;
     }
     const startTimeMs = Date.now();
+    context.log("🧪 Steg 1 – startTimeMs satt");
     context.log(`📥 Request mottagen: ${JSON.stringify(req.body || {}, null, 2)}`);
     let msGraphAccessToken = null;
     const isDebug = process.env.DEBUG === 'true';
@@ -92,20 +93,24 @@ module.exports = async function (context, req) {
       debugLog('✅ PostgreSQL pool created');
       debugLog('⏱️ Efter env och pool: ' + (Date.now() - t0) + ' ms');
 
-      const { email, contact_id, meeting_type: rawMeetingType, meeting_length } = req.body || {};
+    const { email, contact_id, meeting_type: rawMeetingType, meeting_length } = req.body || {};
+    context.log("🧪 Steg 2 – inparametrar extraherade");
       const meeting_type = (rawMeetingType || '').toLowerCase();
       debugLog(`📨 Begäran mottagen med meeting_type: ${meeting_type}, meeting_length: ${meeting_length}, contact_id: ${contact_id}, email: ${email}`);
 
-      const db = await pool.connect();
+    const db = await pool.connect();
+    context.log("🧪 Steg 3 – DB-anslutning etablerad");
 
 
     const contactRes = await db.query('SELECT * FROM contact WHERE id = $1', [contact_id]);
+    context.log("🧪 Steg 4 – contact hämtad från DB");
     const contact = contactRes.rows[0];
     debugLog(`👤 Kontakt hittad: ${contact?.id || 'ej funnen'}`);
       const t1 = Date.now();
       debugLog('⏱️ Efter kontakt: ' + (Date.now() - t0) + ' ms');
 
       const settings = await loadSettings(db, context);
+      context.log("🧪 Steg 5 – inställningar laddade");
       debugLog(`⚙️ Inställningar laddade: ${Object.keys(settings).join(', ')}`);
       verifyBookingSettings(settings, context);
       debugLog('⚙️ Inställningar klara');
