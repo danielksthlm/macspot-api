@@ -1,3 +1,4 @@
+console.log("🧪 getavailableslots/index.js – FÖRSTA RADEN I FILEN KÖRS");
 console.log("✅ Loading debugLogger");
 const { createDebugLogger } = require('../shared/utils/debugLogger');
 console.log("✅ Loading settingsLoader");
@@ -19,6 +20,7 @@ context.log('🧪 Handler definieras i getavailableslots/index.js');
 console.log("✅ Reached module.exports definition");
 console.log("🧪 getavailableslots/index.js – exports definieras");
 module.exports = async function (context, req) {
+  context.log("🧪 getavailableslots – module.exports funktionen körs");
   console.log("🧪 Handler har kallats – första raden i handler");
   console.log("🧪 getavailableslots/index.js – handler påbörjad");
   context.log('🧪 Handler körs – första rad i handler');
@@ -265,7 +267,6 @@ module.exports = async function (context, req) {
   }
 };
 
-context.log('🧪 getavailableslots/index.js laddad färdigt')
 console.log("✅ End of getavailableslots/index.js reached");
 
 console.log("✅ getavailableslots/index.js – HELA FILEN exekverad");
