@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from datetime import datetime
 
 # Lista över filnamn
@@ -148,4 +150,64 @@ if saknade_filer:
     print("⚠️ Följande filer hittades inte:")
     for fil in saknade_filer:
         print(f" - {fil}")
-print(f"✅ Filer sammanfogade i {output_fil}")
+
+# Slutlig sammanslagen fil
+
+import psycopg2
+
+def generera_databasstruktur(output_path):
+    # Denna funktion ansluter till molndatabasen (Azure) för att hämta struktur och innehåll
+    try:
+        conn = psycopg2.connect(
+            dbname=os.environ["REMOTE_DB_NAME"],
+            user=os.environ["REMOTE_DB_USER"],
+            password=os.environ["REMOTE_DB_PASSWORD"],
+            host=os.environ["REMOTE_DB_HOST"],
+            port=os.environ.get("REMOTE_DB_PORT", 5432),
+            sslmode="require"
+        )
+        cur = conn.cursor()
+        with open(output_path, "a", encoding="utf-8") as f:
+            f.write("📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL\n")
+            f.write("====================================\n\n")
+            # Tabeller
+            cur.execute("""
+                SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+            """)
+            tables = [row[0] for row in cur.fetchall()]
+            for table in tables:
+                f.write(f"📁 Tabell: {table}\n")
+                # Kolumner
+                cur.execute(f"""
+                    SELECT column_name, data_type
+                    FROM information_schema.columns
+                    WHERE table_name = %s
+                """, (table,))
+                cols = cur.fetchall()
+                for col in cols:
+                    f.write(f"  • {col[0]} ({col[1]})\n")
+                # Primär-/sekundärnycklar
+                cur.execute("""
+                    SELECT conname, contype, pg_get_constraintdef(c.oid)
+                    FROM pg_constraint c
+                    JOIN pg_class t ON c.conrelid = t.oid
+                    WHERE t.relname = %s
+                """, (table,))
+                keys = cur.fetchall()
+                for key in keys:
+                    f.write(f"  🔑 [{key[1]}] {key[0]}: {key[2]}\n")
+                # Top 5 rader
+                cur.execute(f"SELECT * FROM {table} LIMIT 5")
+                rows = cur.fetchall()
+                if rows:
+                    colnames = [desc[0] for desc in cur.description]
+                    f.write("  🧪 Topp 5 rader:\n")
+                    for row in rows:
+                        f.write("    - " + ", ".join(f"{k}={v}" for k, v in zip(colnames, row)) + "\n")
+                f.write("\n")
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print("⚠️ Fel vid hämtning av databasstruktur:", e)
+
+generera_databasstruktur(output_fil)
