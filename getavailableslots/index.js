@@ -17,7 +17,9 @@ console.log("🧪 getavailableslots/index.js – samtliga imports klara");
 console.log("✅ Prepping to export handler");
 context.log('🧪 Handler definieras i getavailableslots/index.js');
 console.log("✅ Reached module.exports definition");
+console.log("🧪 getavailableslots/index.js – exports definieras");
 module.exports = async function (context, req) {
+  console.log("🧪 Handler har kallats – första raden i handler");
   console.log("🧪 getavailableslots/index.js – handler påbörjad");
   context.log('🧪 Handler körs – första rad i handler');
   try {
@@ -265,3 +267,5 @@ module.exports = async function (context, req) {
 
 context.log('🧪 getavailableslots/index.js laddad färdigt')
 console.log("✅ End of getavailableslots/index.js reached");
+
+console.log("✅ getavailableslots/index.js – HELA FILEN exekverad");
