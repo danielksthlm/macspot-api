@@ -1,25 +1,18 @@
+console.log("✅ Loading debugLogger");
+const { createDebugLogger } = require('../shared/utils/debugLogger');
+console.log("✅ Loading settingsLoader");
+const loadSettings = require('../shared/config/settingsLoader');
+console.log("✅ Loading verifySettings");
+const verifyBookingSettings = require('../shared/config/verifySettings');
+console.log("✅ Loading pgPool");
+const pool = require('../shared/db/pgPool');
+console.log("✅ Loading msGraph");
+const graphClient = require('../shared/calendar/msGraph')();
+console.log("✅ Loading appleCalendar");
+const appleClient = require('../shared/calendar/appleCalendar')();
+console.log("✅ Loading appleMaps");
+const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 try {
-  const { createDebugLogger } = require('../shared/utils/debugLogger');
-  console.log('✅ DebugLogger loaded');
-
-  const loadSettings = require('../shared/config/settingsLoader');
-  console.log('✅ loadSettings loaded');
-
-  const verifyBookingSettings = require('../shared/config/verifySettings');
-  console.log('✅ verifyBookingSettings loaded');
-
-  const pool = require('../shared/db/pgPool');
-  console.log('✅ pgPool loaded');
-
-  const graphClient = require('../shared/calendar/msGraph')();
-  console.log('✅ graphClient instansierad');
-
-  const appleClient = require('../shared/calendar/appleCalendar')();
-  console.log('✅ appleClient instansierad');
-
-  const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
-  console.log('✅ getAppleMapsAccessToken loaded');
-
   module.exports = async function (context, req) {
     try {
       if (!req || !req.body) {
