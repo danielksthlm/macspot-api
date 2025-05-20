@@ -10,6 +10,11 @@ async function resolveTravelTime({ origin, destination, hour, db, accessToken, c
     return { travelTimeMin, cacheHit: false, isFallback };
   }
 
+  if (!db || typeof db.query !== 'function') {
+    context.log(`❌ db saknas eller saknar query-metod i resolveTravelTime`);
+    return { travelTimeMin, cacheHit: false, isFallback: true };
+  }
+
   try {
     const cacheRes = await db.query(
       `SELECT travel_minutes, is_fallback FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3 LIMIT 1`,
