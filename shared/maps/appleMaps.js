@@ -1,15 +1,15 @@
-
-
 const jwt = require('jsonwebtoken');
-const fs = require('fs');
 const fetch = require('node-fetch');
 
 async function getAppleMapsAccessToken(context) {
   try {
     const teamId = process.env.APPLE_MAPS_TEAM_ID;
     const keyId = process.env.APPLE_MAPS_KEY_ID;
-    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') ||
-                       fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+    if (!privateKey) {
+      throw new Error('Apple Maps private key saknas – kontrollera APPLE_MAPS_PRIVATE_KEY');
+    }
 
     const token = jwt.sign({}, privateKey, {
       algorithm: 'ES256',
