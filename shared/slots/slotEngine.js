@@ -1,0 +1,120 @@
+
+
+const { DateTime } = require("luxon");
+const { resolveOriginAddress } = require("../calendar/resolveOrigin");
+const { resolveTravelTime } = require("../maps/travelTimeResolver");
+const msGraph = require("../calendar/msGraph");
+const appleCalendar = require("../calendar/appleCalendar");
+
+async function generateSlotCandidates({ day, settings, contact, pool, context }) {
+  const timezone = settings.timezone || "Europe/Stockholm";
+  const hoursToTry = [10, 14];
+  const slots = [];
+
+  for (const hour of hoursToTry) {
+    const eventId = `${day}T${hour.toString().padStart(2, "0")}:00:00.000Z`;
+    const dateObj = new Date(eventId);
+    const weekday = dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
+    const slot_part = hour < 12 ? "fm" : "em";
+
+    const originInfo = await resolveOriginAddress({
+      eventId,
+      calendarId: contact.contact_id,
+      pool,
+      context,
+      graphClient: msGraph,
+      appleClient: appleCalendar,
+      fallbackOrigin: settings.default_home_address,
+      settings
+    });
+
+    if (!originInfo?.origin) {
+      context.log(`⚠️ Kunde inte fastställa origin för ${eventId}`);
+      continue;
+    }
+
+    const destination = settings.default_office_address;
+    const { travelTimeMin } = await resolveTravelTime({
+      origin: originInfo.origin,
+      destination,
+      hour,
+      db: pool,
+      accessToken: context.accessToken || null,
+      context
+    });
+
+    if (!travelTimeMin || typeof travelTimeMin !== "number") {
+      context.log.warn(`⚠️ Ogiltig restid, hoppar slot: ${eventId}`);
+      continue;
+    }
+
+    slots.push({
+      slot_iso: eventId,
+      slot_local: DateTime.fromJSDate(dateObj).setZone(timezone).toISO(),
+      travel_time_min: travelTimeMin,
+      origin: originInfo.origin,
+      originEndTime: originInfo.originEndTime,
+      source: originInfo.originSource,
+      require_approval: settings.require_approval,
+      meeting_length: settings.default_meeting_length_digital?.[0] || 20,
+      weekday,
+      slot_part
+    });
+  }
+
+  return slots;
+}
+
+
+async function generateSlotChunks({
+  days,
+  context,
+  contact,
+  contact_id,
+  meeting_type,
+  meeting_length,
+  bookingsByDay,
+  weeklyMinutesByType,
+  settings,
+  graphClient,
+  appleClient,
+  travelCache,
+  accessToken,
+  timezone,
+  debugHelper
+}) {
+  const { debugLog, skipReasons } = debugHelper || {};
+  const slotMap = {};
+  const chosen = [];
+
+  for (const day of days) {
+    const dayStr = day.toISOString().split("T")[0];
+    const slotCandidates = await generateSlotCandidates({
+      day: dayStr,
+      settings,
+      contact,
+      pool: context.db || context.pool,
+      context
+    });
+
+    for (const slot of slotCandidates) {
+      const key = `${dayStr}_${slot.slot_part}`;
+      if (!slotMap[key]) slotMap[key] = [];
+      slotMap[key].push(slot);
+    }
+  }
+
+  for (const [key, candidates] of Object.entries(slotMap)) {
+    if (candidates.length === 0) continue;
+    const best = candidates.sort((a, b) => b.score - a.score)[0] || candidates[0];
+    chosen.push(best);
+  }
+
+  return {
+    chosenSlots: chosen.sort((a, b) => new Date(a.slot_iso) - new Date(b.slot_iso)),
+    slotMapResult: slotMap,
+    slotLogSummary: skipReasons
+  };
+}
+
+module.exports = { generateSlotCandidates, generateSlotChunks };
