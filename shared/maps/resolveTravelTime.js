@@ -30,6 +30,11 @@ async function resolveTravelTime({ origin, destination, hour, db, accessToken, c
     context.log(`⚠️ Kunde inte läsa från travel_time_cache: ${err.message}`);
   }
 
+  if (!accessToken) {
+    context.log(`⚠️ accessToken saknas – använder fallback`);
+    return { travelTimeMin, cacheHit: false, isFallback: true };
+  }
+
   if (!cacheHit && accessToken) {
     try {
       const url = new URL('https://maps-api.apple.com/v1/directions');
