@@ -17,14 +17,15 @@ module.exports = async function (context, req) {
     context.log("✅ Request body innehåller:", { email, meeting_type });
     context.log("✅ Steg 1: Anropar DB med contact_id:", contact_id);
 
-    // Declare allBookings at the top-level scope of the outer try block
+    // Declare allBookings, days, and contact at the top-level scope of the outer try block
     let allBookings = [];
     let days = [];
+    let contact;
 
     try {
       const db = await pool.connect();
       const contactRes = await db.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
-      const contact = contactRes.rows[0];
+      contact = contactRes.rows[0];
       if (contact) {
         context.log("✅ Kontakt hittad:", contact.id);
       } else {
