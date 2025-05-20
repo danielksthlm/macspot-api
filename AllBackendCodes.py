@@ -4,6 +4,8 @@ load_dotenv()
 from datetime import datetime
 
 # Lista över filnamn
+import glob
+
 filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/meeting_types/index.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/validate_contact/index.js",
@@ -145,6 +147,20 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             utfil.write(f"// ⚠️ Filen '{visat_filnamn}' hittades inte\n")
             utfil.write(f"END: {visat_filnamn}\n\n")
             saknade_filer.append(visat_filnamn)
+
+    # Lista alla function.json och host.json i hela macspot-api
+    utfil.write("📁 JSON-KONFIGURATIONER (function.json / host.json)\n")
+    utfil.write("====================================\n\n")
+    json_filer = glob.glob(os.path.join(root_path, "**", "function.json"), recursive=True)
+    json_filer += glob.glob(os.path.join(root_path, "**", "host.json"), recursive=True)
+
+    if json_filer:
+        for json_fil in sorted(json_filer):
+            rel_path = os.path.relpath(json_fil, root_path)
+            utfil.write(f"- {rel_path}\n")
+    else:
+        utfil.write("Inga function.json eller host.json hittades.\n")
+    utfil.write("\n")
 
 if saknade_filer:
     print("⚠️ Följande filer hittades inte:")
