@@ -1,5 +1,8 @@
 const pool = require("../shared/db/pgPool");
 console.log("✅ getavailableslots/index.js laddad");
+require('../shared/config/verifySettings');
+const { generateSlotChunks } = require('../shared/slots/slotEngine');
+context.log("✅ generateSlotChunks import ok");
 
 module.exports = async function (context, req) {
   context.log("🧪 Azure Function entrypoint nådd");
@@ -85,6 +88,26 @@ module.exports = async function (context, req) {
       context.res = { status: 500, body: { error: "Settings error", detail: err.message } };
       return;
     }
+
+    // Test-anrop till generateSlotChunks
+    const chosenSlotsResult = await generateSlotChunks({
+      days: [], // vi skickar tom array som test
+      context,
+      contact: { metadata: {} },
+      contact_id,
+      meeting_type,
+      meeting_length: 20,
+      bookingsByDay: {},
+      weeklyMinutesByType: {},
+      settings,
+      graphClient: null,
+      appleClient: null,
+      travelCache: new Map(),
+      accessToken: null,
+      timezone: settings.timezone || 'Europe/Stockholm',
+      debugHelper: { debugLog: context.log, skipReasons: {} }
+    });
+    context.log("✅ generateSlotChunks kördes utan fel");
 
     context.res = {
       status: 200,
