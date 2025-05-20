@@ -19,11 +19,13 @@ console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("🧪 Försöker importera generateSlotChunks");
 let generateSlotChunks;
+console.log("🧪 Kontroll: Försöker importera slotEngine");
 try {
   const imported = require('../shared/slots/slotEngine');
+  console.log("🧪 Importerad modul (slotEngine):", Object.keys(imported || {}));
   if (!imported || typeof imported.generateSlotChunks !== 'function') {
     console.log("❌ generateSlotChunks saknas eller är inte en funktion");
-    throw new Error("generateSlotChunks is not defined or invalid");
+    throw new Error("❌ generateSlotChunks is not defined or invalid – typ av värde: " + typeof imported.generateSlotChunks);
   }
   generateSlotChunks = imported.generateSlotChunks;
   console.log("✅ generateSlotChunks är en giltig funktion");
