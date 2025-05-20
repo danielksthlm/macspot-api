@@ -97,16 +97,16 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // Test-anrop till generateSlotChunks
+    // Riktigt anrop till generateSlotChunks
     const chosenSlotsResult = await generateSlotChunks({
-      days: [], // vi skickar tom array som test
+      days,
       context,
-      contact: { metadata: {} },
+      contact,
       contact_id,
       meeting_type,
       meeting_length: 20,
-      bookingsByDay: {},
-      weeklyMinutesByType: {},
+      bookingsByDay,
+      weeklyMinutesByType: {}, // detta kan fyllas i nästa steg
       settings,
       graphClient: null,
       appleClient: null,
