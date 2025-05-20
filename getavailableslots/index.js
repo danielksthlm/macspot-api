@@ -32,6 +32,23 @@ module.exports = async function (context, req) {
       return;
     }
 
+    context.log("✅ Steg 2: Laddar booking_settings...");
+
+    const loadSettings = require('../shared/config/settingsLoader');
+    const verifyBookingSettings = require('../shared/config/verifySettings');
+
+    let settings;
+    try {
+      settings = await loadSettings(pool, context);
+      context.log("✅ Steg 2a: Inställningar laddade – nycklar:", Object.keys(settings).join(', '));
+      verifyBookingSettings(settings, context);
+      context.log("✅ Steg 2b: Inställningar verifierade");
+    } catch (err) {
+      context.log("🔥 Fel vid laddning/verifiering av settings:", err.message);
+      context.res = { status: 500, body: { error: "Settings error", detail: err.message } };
+      return;
+    }
+
     context.res = {
       status: 200,
       body: {
