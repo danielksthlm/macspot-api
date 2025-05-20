@@ -1,3 +1,10 @@
+const { createDebugLogger } = require('../shared/utils/debugLogger');
+const loadSettings = require('../shared/config/settingsLoader');
+const verifyBookingSettings = require('../shared/config/verifySettings');
+const pool = require('../shared/db/pgPool');
+const graphClient = require('../shared/calendar/msGraph')();
+const appleClient = require('../shared/calendar/appleCalendar')();
+const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 try {
   module.exports = async function (context, req) {
     try {
@@ -243,4 +250,3 @@ try {
   console.error('🔥 EXTERNT FEL I FUNKTION:', outerErr.message);
 }
 
-const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
