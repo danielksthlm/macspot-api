@@ -39,6 +39,13 @@ module.exports = async function (context, req) {
 
     context.log("✅ Hoppar kontroll av graphClient/AppleClient i detta steg");
 
+    context.log("🧩 Kontakt-id som används:", contact_id);
+    if (contact_id) {
+      const contactRes = await db.query('SELECT * FROM contact WHERE id = $1', [contact_id]);
+      const contact = contactRes.rows[0];
+      context.log("👤 Kontakt hittad:", contact ? `${contact.first_name || ''} ${contact.last_name || ''}` : "❌ Ingen kontakt hittad");
+    }
+
     context.res = {
       status: 200,
       body: { message: "✅ DB + settingsLoader OK", keys: Object.keys(settings) }
