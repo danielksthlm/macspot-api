@@ -1,8 +1,6 @@
 const pool = require("../shared/db/pgPool");
 console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
-// const { generateSlotChunks } = require('../shared/slots/slotEngine');
-context.log("✅ generateSlotChunks import ok");
 
 module.exports = async function (context, req) {
   context.log("🧪 Azure Function entrypoint nådd");
