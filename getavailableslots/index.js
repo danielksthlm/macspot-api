@@ -18,16 +18,17 @@ const pool = require('../shared/db/pgPool');
 console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("🧪 Försöker importera generateSlotChunks");
-const { generateSlotChunks } = require('../shared/slots/slotEngine');
-if (typeof generateSlotChunks !== 'function') {
-  console.log("❌ generateSlotChunks är inte en funktion!");
-} else {
-  console.log("✅ generateSlotChunks är en funktion och redo att användas");
-}
-if (typeof generateSlotChunks !== 'function') {
-  console.log("❌ generateSlotChunks är inte en funktion (efter import)");
-} else {
-  console.log("✅ generateSlotChunks är en funktion (efter import)");
+let generateSlotChunks;
+try {
+  const imported = require('../shared/slots/slotEngine');
+  generateSlotChunks = imported.generateSlotChunks;
+  if (typeof generateSlotChunks !== 'function') {
+    console.log("❌ generateSlotChunks är inte en funktion!");
+  } else {
+    console.log("✅ generateSlotChunks är en funktion och redo att användas");
+  }
+} catch (err) {
+  console.log("❌ Fel vid import av generateSlotChunks:", err.message);
 }
 console.log("🧪 generateSlotChunks importerat från slotEngine.js");
 console.log("✅ generateSlotChunks import ok");
