@@ -16,23 +16,17 @@ const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("🧪 getavailableslots/index.js – samtliga imports klara");
 console.log("✅ Prepping to export handler");
 context.log('🧪 Handler definieras i getavailableslots/index.js');
-try {
-  console.log("✅ Reached module.exports definition");
-  module.exports = async function (context, req) {
-    console.log("🧪 getavailableslots/index.js – handler påbörjad");
-    context.log('🧪 Handler körs – första rad i handler');
-    try {
-      context.log('🔧 Initialiserar graphClient...');
-      graphClient = createGraphClient();
-      context.log('✅ graphClient initierad');
-      if (!req || !req.body) {
-        context.log.error('❌ Ingen request body mottagen');
-        context.res = { status: 400, body: { error: 'Missing request body' } };
-        return;
-      }
-    } catch (outerError) {
-      context.log.error('🔥 FATALT FEL före try-blocket:', outerError.message);
-      context.res = { status: 500, body: { error: 'Fatal error before try block', stack: outerError.stack } };
+console.log("✅ Reached module.exports definition");
+module.exports = async function (context, req) {
+  console.log("🧪 getavailableslots/index.js – handler påbörjad");
+  context.log('🧪 Handler körs – första rad i handler');
+  try {
+    context.log('🔧 Initialiserar graphClient...');
+    graphClient = createGraphClient();
+    context.log('✅ graphClient initierad');
+    if (!req || !req.body) {
+      context.log.error('❌ Ingen request body mottagen');
+      context.res = { status: 400, body: { error: 'Missing request body' } };
       return;
     }
     const startTimeMs = Date.now();
@@ -262,10 +256,12 @@ try {
         body: { error: error.message, stack: error.stack }
       };
     }
-  };
-} catch (outerErr) {
-  console.error('🔥 EXTERNT FEL I FUNKTION:', outerErr.message);
-}
+  } catch (outerError) {
+    context.log.error('🔥 FATALT FEL före try-blocket:', outerError.message);
+    context.res = { status: 500, body: { error: 'Fatal error before try block', stack: outerError.stack } };
+    return;
+  }
+};
 
 context.log('🧪 getavailableslots/index.js laddad färdigt')
 console.log("✅ End of getavailableslots/index.js reached");
