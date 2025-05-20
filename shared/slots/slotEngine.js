@@ -1,7 +1,5 @@
 console.log("🧪 slotEngine.js laddades");
 
-const slotGroupPicked = {};
-
 const pool = require('../db/pgPool');
 
 const { DateTime } = require("luxon");
@@ -88,6 +86,7 @@ async function generateSlotChunks({
   debugHelper
 }) {
   const { debugLog, skipReasons } = debugHelper || {};
+  const slotGroupPicked = {};
   const slotMap = {};
   const chosen = [];
 
