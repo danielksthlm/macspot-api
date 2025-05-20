@@ -7,7 +7,8 @@ const verifyBookingSettings = require('../shared/config/verifySettings');
 console.log("✅ Loading pgPool");
 const pool = require('../shared/db/pgPool');
 console.log("✅ Loading msGraph");
-const graphClient = require('../shared/calendar/msGraph')();
+const createGraphClient = require('../shared/calendar/msGraph');
+let graphClient;
 console.log("✅ Loading appleCalendar");
 const appleClient = require('../shared/calendar/appleCalendar')();
 console.log("✅ Loading appleMaps");
@@ -15,6 +16,9 @@ const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 try {
   module.exports = async function (context, req) {
     try {
+      context.log('🔧 Initialiserar graphClient...');
+      graphClient = createGraphClient();
+      context.log('✅ graphClient initierad');
       if (!req || !req.body) {
         context.log.error('❌ Ingen request body mottagen');
         context.res = { status: 400, body: { error: 'Missing request body' } };
