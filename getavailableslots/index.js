@@ -17,6 +17,7 @@ const pool = require('../shared/db/pgPool');
 console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 const { generateSlotChunks } = require('../shared/slots/slotEngine');
+console.log("🧪 generateSlotChunks importerat från slotEngine.js");
 console.log("✅ generateSlotChunks import ok");
 console.log("🧪 getavailableslots/index.js – samtliga imports klara");
 console.log("✅ Alla imports genomförda – exporterar handler");
@@ -189,6 +190,13 @@ module.exports = async function (context, req) {
 
       // Parallellisera dag-loop i chunkar om 7
       // --- Ny slot-generation via generateSlotChunks ---
+      context.log("🧪 Innan generateSlotChunks anrop");
+      context.log("📦 Parametrar till generateSlotChunks:", {
+        totalDays: days.length,
+        contact_id,
+        meeting_type,
+        meeting_length
+      });
       const { chosenSlots, slotMapResult, slotLogSummary } = await generateSlotChunks({
         days,
         context,
@@ -206,6 +214,7 @@ module.exports = async function (context, req) {
         timezone,
         debugHelper: { debugLog, skipReasons }
       });
+      context.log("🧪 Efter generateSlotChunks – kontroll om vi ens når hit");
       const slotMap = slotMapResult;
       const chosen = chosenSlots;
       const slotCount = chosen.length;
