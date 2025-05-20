@@ -28,6 +28,9 @@ console.log("✅ appleMaps import ok");
 module.exports = async function (context, req) {
   context.log("🧪 Azure Function entrypoint nådd");
   context.log("🧪 Function initierad");
+  console.log("🧪 Kontrollpunkt: Azure Function körs med method:", req?.method);
+  console.log("🧪 Payload body:", JSON.stringify(req?.body || {}, null, 2));
+  console.log("🧪 Miljövariabler:", Object.keys(process.env).filter(k => k.startsWith("PG") || k.startsWith("APPLE") || k.startsWith("MS")).join(", "));
   context.res = {
     status: 200,
     body: { message: "✅ Alla require är OK" }
