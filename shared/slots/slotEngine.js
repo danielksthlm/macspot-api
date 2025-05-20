@@ -1,5 +1,7 @@
 console.log("🧪 slotEngine.js laddades");
 
+const slotGroupPicked = {};
+
 const pool = require('../db/pgPool');
 
 const { DateTime } = require("luxon");
