@@ -4,7 +4,7 @@ const pool = require('../db/pgPool');
 
 const { DateTime } = require("luxon");
 const { resolveOriginAddress } = require("../calendar/resolveOrigin");
-const { resolveTravelTime } = require("../maps/travelTimeResolver");
+const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
