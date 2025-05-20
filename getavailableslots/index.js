@@ -220,6 +220,17 @@ module.exports = async function (context, req) {
         timezone,
         debugHelper: { debugLog, skipReasons }
       });
+      // Loggradsverifiering direkt efter generateSlotChunks
+      if (!chosenSlots || !slotMapResult) {
+        context.log("❌ generateSlotChunks returnerade null eller undefined");
+        context.res = {
+          status: 500,
+          body: { error: "generateSlotChunks failed to return expected data" }
+        };
+        return;
+      } else {
+        context.log(`✅ generateSlotChunks gav ${chosenSlots.length} slots och ${Object.keys(slotMapResult).length} map-keys`);
+      }
       context.log("🧪 Efter generateSlotChunks – kontroll om vi ens når hit");
       context.log("📊 chosenSlots:", Array.isArray(chosenSlots) ? chosenSlots.length : 'undefined');
       context.log("📊 slotMapResult keys:", slotMapResult ? Object.keys(slotMapResult).length : 'undefined');
