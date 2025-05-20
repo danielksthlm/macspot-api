@@ -13,11 +13,13 @@ console.log("✅ Loading appleCalendar");
 const appleClient = require('../shared/calendar/appleCalendar')();
 console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
+console.log("🧪 getavailableslots/index.js – samtliga imports klara");
 console.log("✅ Prepping to export handler");
 context.log('🧪 Handler definieras i getavailableslots/index.js');
 try {
   console.log("✅ Reached module.exports definition");
   module.exports = async function (context, req) {
+    console.log("🧪 getavailableslots/index.js – handler påbörjad");
     context.log('🧪 Handler körs – första rad i handler');
     try {
       context.log('🔧 Initialiserar graphClient...');
