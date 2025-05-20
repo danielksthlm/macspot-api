@@ -1,3 +1,5 @@
+const { DateTime } = require("luxon");
+console.log("✅ luxon import ok");
 console.log("🧪 getavailableslots/index.js – FÖRSTA RADEN I FILEN KÖRS");
 console.log("✅ Loading debugLogger");
 const { createDebugLogger } = require('../shared/utils/debugLogger');
