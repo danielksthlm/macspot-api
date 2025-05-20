@@ -1,4 +1,7 @@
 const db = require("../shared/db/pgPool");
+const createMsGraphClient = require('../shared/calendar/msGraph');
+const createAppleClient = require('../shared/calendar/appleCalendar');
+const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
 
@@ -129,10 +132,10 @@ module.exports = async function (context, req) {
       bookingsByDay,
       weeklyMinutesByType,
       settings,
-      graphClient: null,
-      appleClient: null,
+      graphClient: createMsGraphClient(),
+      appleClient: createAppleClient(context),
       travelCache: new Map(),
-      accessToken: null,
+      accessToken: await getAppleMapsAccessToken(context),
       timezone: settings.timezone || 'Europe/Stockholm',
       debugHelper: { debugLog: context.log, skipReasons: {} },
       client: client,
