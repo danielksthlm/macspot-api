@@ -2,8 +2,21 @@ const pool = require("../shared/db/pgPool");
 const loadSettings = require("../shared/config/settingsLoader");
 const verifyBookingSettings = require("../shared/config/verifySettings");
 const { createDebugLogger } = require("../shared/utils/debugLogger");
-const graphClient = require("../shared/calendar/msGraph")();
-const appleClient = require("../shared/calendar/appleCalendar")();
+let graphClient = null;
+let appleClient = null;
+try {
+  graphClient = require("../shared/calendar/msGraph")();
+  console.log("✅ msGraph import ok");
+} catch (err) {
+  console.log("❌ msGraph import failed:", err.message);
+}
+
+try {
+  appleClient = require("../shared/calendar/appleCalendar")();
+  console.log("✅ appleCalendar import ok");
+} catch (err) {
+  console.log("❌ appleCalendar import failed:", err.message);
+}
 console.log("✅ pool + settingsLoader import ok");
 console.log("✅ debugLogger import ok");
 
