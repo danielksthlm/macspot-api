@@ -13,7 +13,9 @@ console.log("✅ Loading appleCalendar");
 const appleClient = require('../shared/calendar/appleCalendar')();
 console.log("✅ Loading appleMaps");
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
+console.log("✅ Prepping to export handler");
 try {
+  console.log("✅ Reached module.exports definition");
   module.exports = async function (context, req) {
     try {
       context.log('🔧 Initialiserar graphClient...');
@@ -260,3 +262,5 @@ try {
 } catch (outerErr) {
   console.error('🔥 EXTERNT FEL I FUNKTION:', outerErr.message);
 }
+
+console.log("✅ End of getavailableslots/index.js reached");
