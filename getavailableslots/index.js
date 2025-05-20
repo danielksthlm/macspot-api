@@ -1,11 +1,25 @@
-const { createDebugLogger } = require('../shared/utils/debugLogger');
-const loadSettings = require('../shared/config/settingsLoader');
-const verifyBookingSettings = require('../shared/config/verifySettings');
-const pool = require('../shared/db/pgPool');
-const graphClient = require('../shared/calendar/msGraph')();
-const appleClient = require('../shared/calendar/appleCalendar')();
-const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 try {
+  const { createDebugLogger } = require('../shared/utils/debugLogger');
+  console.log('✅ DebugLogger loaded');
+
+  const loadSettings = require('../shared/config/settingsLoader');
+  console.log('✅ loadSettings loaded');
+
+  const verifyBookingSettings = require('../shared/config/verifySettings');
+  console.log('✅ verifyBookingSettings loaded');
+
+  const pool = require('../shared/db/pgPool');
+  console.log('✅ pgPool loaded');
+
+  const graphClient = require('../shared/calendar/msGraph')();
+  console.log('✅ graphClient instansierad');
+
+  const appleClient = require('../shared/calendar/appleCalendar')();
+  console.log('✅ appleClient instansierad');
+
+  const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
+  console.log('✅ getAppleMapsAccessToken loaded');
+
   module.exports = async function (context, req) {
     try {
       if (!req || !req.body) {
@@ -249,4 +263,3 @@ try {
 } catch (outerErr) {
   console.error('🔥 EXTERNT FEL I FUNKTION:', outerErr.message);
 }
-
