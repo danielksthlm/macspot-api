@@ -2,6 +2,12 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime
+import jsonschema
+
+total_rader = 0
+total_funktioner = 0
+total_komplexitet = 0
+total_todo = 0
 
 # Lista över filnamn
 import glob
@@ -34,15 +40,29 @@ saknade_filer = []
 # Läs och skriv innehåll
 with open(output_fil, "w", encoding="utf-8") as utfil:
     # Trädstruktur
+    from collections import defaultdict
+
+    def bygg_träd(paths):
+        träd = lambda: defaultdict(träd)
+        rot = träd()
+        for path in paths:
+            delar = os.path.relpath(path, root_path).split(os.sep)
+            curr = rot
+            for del_ in delar:
+                curr = curr[del_]
+        return rot
+
+    def skriv_träd(node, depth=0):
+        for namn in sorted(node.keys()):
+            prefix = "│   " * depth + "├── "
+            utfil.write(f"{prefix}{namn}\n")
+            skriv_träd(node[namn], depth + 1)
+
     root_path = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/"
-    utfil.write("📂 KODTRÄD\n")
-    utfil.write("==========\n")
-    sorted_paths = sorted([os.path.relpath(f, root_path) for f in filnamn_lista])
-    for path in sorted_paths:
-        parts = path.split(os.sep)
-        for i, part in enumerate(parts):
-            prefix = "│   " * i + "├── "
-            utfil.write(f"{prefix}{part}\n")
+    filtrerat = [f for f in filnamn_lista if "node_modules" not in f]
+    struktur = bygg_träd(filtrerat)
+    utfil.write("📂 KODTRÄD\n==========\n")
+    skriv_träd(struktur)
     utfil.write("==========\n\n")
 
     for filnamn in filnamn_lista:
@@ -126,6 +146,23 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             # Senast ändrad
             senast_andrad_ts = os.path.getmtime(filnamn)
             senast_andrad = datetime.fromtimestamp(senast_andrad_ts).strftime("%Y-%m-%d %H:%M:%S")
+
+            total_rader += antal_rader
+            total_funktioner += funktion_count
+            total_komplexitet += komplex_count
+            total_todo += todo_count
+
+            if 'fil_summering' not in locals():
+                fil_summering = []
+            fil_summering.append([
+                visat_filnamn,
+                antal_rader,
+                funktion_count,
+                komplex_count,
+                kommentar_rader,
+                import_count
+            ])
+
             # Skriv metadata-block
             utfil.write("====================\n")
             utfil.write(f"📄 Fil: {visat_filnamn}\n")
@@ -148,19 +185,60 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             utfil.write(f"END: {visat_filnamn}\n\n")
             saknade_filer.append(visat_filnamn)
 
-    # Lista alla function.json och host.json i hela macspot-api
-    utfil.write("📁 JSON-KONFIGURATIONER (function.json / host.json)\n")
+    # Lista alla relevanta konfigurationsfiler i hela macspot-api
+    utfil.write("📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)\n")
     utfil.write("====================================\n\n")
-    json_filer = glob.glob(os.path.join(root_path, "**", "function.json"), recursive=True)
-    json_filer += glob.glob(os.path.join(root_path, "**", "host.json"), recursive=True)
+    config_filer = []
+    for filnamn in ["function.json", "host.json", "package.json", ".funcignore"]:
+        config_filer += glob.glob(os.path.join(root_path, "**", filnamn), recursive=True)
+    config_filer = [f for f in config_filer if "node_modules" not in f]
 
-    if json_filer:
-        for json_fil in sorted(json_filer):
-            rel_path = os.path.relpath(json_fil, root_path)
-            utfil.write(f"- {rel_path}\n")
+    host_schema = {
+      "type": "object",
+      "properties": {
+        "version": {"type": "string"},
+        "extensionBundle": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "version": {"type": "string"}
+          },
+          "required": ["id", "version"]
+        }
+      },
+      "required": ["version"]
+    }
+
+    if config_filer:
+        for config_fil in sorted(config_filer):
+            rel_path = os.path.relpath(config_fil, root_path)
+            utfil.write(f"📄 {rel_path}\n")
+            try:
+                if os.path.basename(config_fil) == "host.json":
+                    import json
+                    data = json.load(open(config_fil))
+                    jsonschema.validate(instance=data, schema=host_schema)
+                with open(config_fil, "r", encoding="utf-8") as cf:
+                    for rad in cf:
+                        utfil.write("   " + rad)
+            except jsonschema.exceptions.ValidationError as ve:
+                utfil.write(f"   // ❌ Ogiltig host.json: {ve.message}\n")
+            except Exception as e:
+                utfil.write(f"   // ⚠️ Kunde inte läsa filen: {e}\n")
+            utfil.write("\n")
     else:
-        utfil.write("Inga function.json eller host.json hittades.\n")
-    utfil.write("\n")
+        utfil.write("Inga function.json, host.json, package.json eller .funcignore hittades i projektet.\n\n")
+
+    utfil.write("📈 SUMMERING AV ALLA JS-FILER\n")
+    utfil.write("====================================\n")
+    utfil.write(f"📏 Totalt antal rader kod: {total_rader}\n")
+    utfil.write(f"🧩 Totalt antal funktioner: {total_funktioner}\n")
+    utfil.write(f"🧠 Total komplexitetspoäng: {total_komplexitet}\n")
+    utfil.write(f"🧪 Antal TODO/FIXME totalt: {total_todo}\n\n")
+    utfil.write("📊 Per fil:\n")
+    utfil.write("fil,rader,funktioner,komplexitet,kommentarer,imports\n")
+    for row in fil_summering:
+        utfil.write(",".join(str(x) for x in row) + "\n")
 
 if saknade_filer:
     print("⚠️ Följande filer hittades inte:")
@@ -227,3 +305,9 @@ def generera_databasstruktur(output_path):
         print("⚠️ Fel vid hämtning av databasstruktur:", e)
 
 generera_databasstruktur(output_fil)
+
+# Exportera summeringsdata som CSV
+with open(output_fil.replace(".txt", ".csv"), "w", encoding="utf-8") as csvfil:
+    csvfil.write("fil,rader,funktioner,komplexitet,kommentarer,imports\n")
+    for row in fil_summering:
+        csvfil.write(",".join(str(x) for x in row) + "\n")
