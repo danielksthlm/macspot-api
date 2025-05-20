@@ -10,6 +10,17 @@ const verifyBookingSettings = require('../shared/config/verifySettings');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
 
 module.exports = async function (context, req) {
+  try {
+    if (!req || !req.body) {
+      context.log.error('❌ Ingen request body mottagen');
+      context.res = { status: 400, body: { error: 'Missing request body' } };
+      return;
+    }
+  } catch (outerError) {
+    context.log.error('🔥 FATALT FEL före try-blocket:', outerError.message);
+    context.res = { status: 500, body: { error: 'Fatal error before try block', stack: outerError.stack } };
+    return;
+  }
   const startTimeMs = Date.now();
   context.log(`📥 Request mottagen: ${JSON.stringify(req.body || {}, null, 2)}`);
   let msGraphAccessToken = null;
