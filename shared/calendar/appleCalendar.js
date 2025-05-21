@@ -8,6 +8,10 @@ function createAppleClient(context) {
     const username = process.env.CALDAV_USER;
     const password = process.env.CALDAV_PASSWORD;
 
+    context.log("🧪 getEvent() kallas med:", { calendarId, eventId });
+    context.log("🌐 caldavUrl:", caldavUrl);
+    context.log("👤 username:", username);
+
     if (!caldavUrl || !username || !password) {
       context.log("⚠️ Missing CalDAV credentials");
       return null;
@@ -36,6 +40,7 @@ function createAppleClient(context) {
       }
 
       const xml = await res.text();
+      context.log("📄 CalDAV raw XML:", xml);
       const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false });
       const responses = parsed['d:multistatus']?.['d:response'];
       let calendarData;
