@@ -83,6 +83,9 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       const events = await appleClient.fetchEventsByDateRange(startRange, endRange);
       const firstEvent = events[0];
       if (firstEvent && firstEvent.location) {
+        originEndTime = firstEvent.dtend
+          ? new Date(firstEvent.dtend)
+          : new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
         latestOrigin = firstEvent.location;
         originSource = 'apple';
         debugLog(`✅ Hittade origin från Apple: ${latestOrigin}`);
@@ -103,8 +106,12 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   }
 
   // Write to DB cache unless fallback
-  let originEndTime = null;
+  let originEndTime = originEndTime || null;
   if (originSource === 'fallback') {
+    originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+  }
+  // Ensure originEndTime fallback value before DB insert (unless fallback)
+  if (!originEndTime && originSource !== 'fallback') {
     originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
   }
   if (originSource !== 'fallback') {
