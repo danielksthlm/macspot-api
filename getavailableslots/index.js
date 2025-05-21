@@ -150,8 +150,9 @@ module.exports = async function (context, req) {
     context.res = {
       status: 200,
       body: {
-        message: "✅ getavailableslots är kontaktbar och fungerar i minimal version",
-        received: { email, meeting_type }
+        message: "✅ getavailableslots är kontaktbar och fungerar i full version",
+        received: { email, meeting_type, meeting_length },
+        slots: chosenSlotsResult?.chosenSlots || []
       }
     };
     client.release();
