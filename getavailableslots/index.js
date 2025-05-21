@@ -125,6 +125,7 @@ module.exports = async function (context, req) {
 
     // Riktigt anrop till generateSlotChunks
     const slotGroupPicked = {};
+    const startSlotGen = Date.now();
     const chosenSlotsResult = await generateSlotChunks({
       days,
       context,
@@ -144,6 +145,8 @@ module.exports = async function (context, req) {
       client: client,
       slotGroupPicked
     });
+    const durationMs = Date.now() - startSlotGen;
+    context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     context.log("✅ generateSlotChunks kördes utan fel");
     context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
