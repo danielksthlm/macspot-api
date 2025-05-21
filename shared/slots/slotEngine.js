@@ -8,7 +8,7 @@ const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
-async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient }) {
+async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length }) {
   const timezone = settings.timezone || "Europe/Stockholm";
   const hoursToTry = [10, 14];
   const slots = [];
@@ -55,6 +55,17 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       continue;
     }
 
+    const endTime = new Date(dateObj.getTime() + meeting_length * 60000);
+    const dayStart = new Date(dateObj);
+    const dayEnd = new Date(dateObj);
+    dayStart.setHours(parseInt(settings.open_time.split(':')[0], 10), parseInt(settings.open_time.split(':')[1], 10));
+    dayEnd.setHours(parseInt(settings.close_time.split(':')[0], 10), parseInt(settings.close_time.split(':')[1], 10));
+
+    if (endTime > dayEnd) {
+      context.log(`⛔ Slot ${eventId} går utanför öppettid (${settings.close_time}) – hoppar`);
+      continue;
+    }
+
     slots.push({
       slot_iso: eventId,
       slot_local: DateTime.fromJSDate(dateObj).setZone(timezone).toISO(),
@@ -63,7 +74,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       originEndTime: originInfo.originEndTime,
       source: originInfo.originSource,
       require_approval: settings.require_approval,
-      meeting_length: settings.default_meeting_length_digital?.[0] || 20,
+      meeting_length,
       weekday,
       slot_part
     });
@@ -120,7 +131,8 @@ async function generateSlotChunks({
       pool: context.client || pool,
       context,
       graphClient,
-      appleClient
+      appleClient,
+      meeting_length
     });
 
     for (const slot of slotCandidates) {

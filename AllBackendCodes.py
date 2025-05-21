@@ -34,7 +34,7 @@ filnamn_lista = [
 ]
 
 # Slutlig sammanslagen fil
-output_fil = os.path.join("/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/", f"AllBackendCodes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+output_fil = os.path.join("/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/AllBackEndCodes_history", f"AllBackendCodes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
 
 saknade_filer = []
 # Läs och skriv innehåll
