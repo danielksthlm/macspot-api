@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+require('dotenv').config();
 
 console.log("🧪 shared/db/pgPool.js laddades");
 
@@ -8,7 +9,7 @@ const pool = new Pool({
   database: process.env.PGDATABASE,
   password: process.env.PGPASSWORD,
   port: parseInt(process.env.PGPORT || '5432', 10),
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.PG_USE_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
 module.exports = pool;

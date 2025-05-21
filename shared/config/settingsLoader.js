@@ -1,5 +1,6 @@
+const pool = require("../db/pgPool");
 console.log("🧪 settingsLoader.js laddades");
-module.exports = async function loadSettings(pool, context) {
+module.exports = async function loadSettings(context) {
   try {
     const settings = {};
     const isDebug = process.env.DEBUG === 'true';
@@ -42,3 +43,15 @@ module.exports = async function loadSettings(pool, context) {
     throw err;
   }
 };
+
+function getCloudSecretsOnly() {
+  const secrets = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith('MS365_')) {
+      secrets[key] = value;
+    }
+  }
+  return secrets;
+}
+
+module.exports.getCloudSecretsOnly = getCloudSecretsOnly;
