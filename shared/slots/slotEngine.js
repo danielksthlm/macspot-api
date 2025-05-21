@@ -126,9 +126,9 @@ async function generateSlotChunks({
 
   const eventCache = new Map();
 
-  for (const day of days) {
+  const slotCandidatePromises = days.map(day => {
     const dayStr = day.toISOString().split("T")[0];
-    const slotCandidates = await generateSlotCandidates({
+    return generateSlotCandidates({
       day: dayStr,
       settings,
       contact,
@@ -139,13 +139,19 @@ async function generateSlotChunks({
       meeting_length,
       eventCache
     });
+  });
 
+  const slotCandidatesPerDay = await Promise.all(slotCandidatePromises);
+
+  days.forEach((day, index) => {
+    const dayStr = day.toISOString().split("T")[0];
+    const slotCandidates = slotCandidatesPerDay[index];
     for (const slot of slotCandidates) {
       const key = `${dayStr}_${slot.slot_part}`;
       if (!slotMap[key]) slotMap[key] = [];
       slotMap[key].push(slot);
     }
-  }
+  });
 
   for (const [key, candidates] of Object.entries(slotMap)) {
     if (candidates.length === 0) continue;
