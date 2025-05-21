@@ -76,11 +76,14 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   }
 
   // Try fetching from Apple calendar if not found
-  if (!latestOrigin && appleClient && typeof appleClient.getEvent === 'function') {
+  if (!latestOrigin && appleClient && typeof appleClient.fetchEventsByDateRange === 'function') {
     try {
-      const appleEvent = await appleClient.getEvent(calendarId, eventId);
-      if (appleEvent && appleEvent.location) {
-        latestOrigin = appleEvent.location;
+      const startRange = `${eventDateOnly}T00:00:00Z`;
+      const endRange = `${eventDateOnly}T23:59:59Z`;
+      const events = await appleClient.fetchEventsByDateRange(startRange, endRange);
+      const firstEvent = events[0];
+      if (firstEvent && firstEvent.location) {
+        latestOrigin = firstEvent.location;
         originSource = 'apple';
         debugLog(`✅ Hittade origin från Apple: ${latestOrigin}`);
       }
@@ -88,7 +91,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       context.log(`⚠️ Apple error in resolveOriginAddress: ${err.message}`);
     }
   } else if (!latestOrigin && appleClient) {
-    context.log(`⚠️ appleClient saknar getEvent-metod eller är null`);
+    context.log(`⚠️ appleClient saknar fetchEventsByDateRange-metod eller är null`);
   }
 
   // Fallback if not found
