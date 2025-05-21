@@ -10,7 +10,7 @@ const appleCalendar = require("../calendar/appleCalendar");
 
 async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, eventCache }) {
   const timezone = settings.timezone || "Europe/Stockholm";
-  const hoursToTry = [10, 14];
+  const hoursToTry = [8, 12]; // UTC → 10:00 och 14:00 svensk tid
   const slots = [];
 
   for (const hour of hoursToTry) {
