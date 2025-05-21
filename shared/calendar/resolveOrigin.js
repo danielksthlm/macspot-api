@@ -66,7 +66,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       const msEvent = await graphClient.getEvent(calendarId, eventId);
       if (msEvent && msEvent.location) {
         latestOrigin = msEvent.location;
-        originSource = 'msgraph';
+        originSource = 'Microsoft 365';
         debugLog(`✅ Hittade origin från MS Graph: ${latestOrigin}`);
       }
     } catch (err) {
@@ -85,7 +85,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       const firstEvent = events[0];
       if (firstEvent && firstEvent.location) {
         latestOrigin = firstEvent.location;
-        originSource = 'apple';
+        originSource = 'Apple Calendar';
         debugLog(`✅ Hittade origin från Apple: ${latestOrigin}`);
 
         if (firstEvent.dtend && typeof firstEvent.dtend === 'string') {
