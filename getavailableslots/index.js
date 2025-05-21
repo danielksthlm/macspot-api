@@ -146,6 +146,7 @@ module.exports = async function (context, req) {
       slotGroupPicked
     });
     context.log("✅ generateSlotChunks kördes utan fel");
+    context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
     context.res = {
       status: 200,
