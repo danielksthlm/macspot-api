@@ -29,48 +29,55 @@ function createAppleClient(context) {
           <d:propfind xmlns:d="DAV:">
             <d:prop>
               <d:getetag/>
-              <d:calendar-data xmlns="urn:ietf:params:xml:ns:caldav"/>
             </d:prop>
           </d:propfind>`
       });
 
       if (!res.ok) {
-        context.log("⚠️ CalDAV fetch failed:", res.statusText);
+        context.log("⚠️ CalDAV PROPFIND failed:", res.statusText);
         return null;
       }
 
       const xml = await res.text();
-      context.log("📄 CalDAV raw XML:", xml);
       const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false });
       const responses = parsed['d:multistatus']?.['d:response'];
-      let calendarData;
+      const files = Array.isArray(responses) ? responses : [responses];
 
-      if (Array.isArray(responses)) {
-        for (const response of responses) {
-          const data = response['d:propstat']?.['d:prop']?.['cal:calendar-data'];
-          if (data) {
-            calendarData = data;
-            break;
+      for (const item of files) {
+        const href = item?.['d:href'];
+        if (!href || !href.endsWith('.ics')) continue;
+
+        const eventUrl = `${caldavUrl.replace(/\/$/, '')}${href}`;
+        const icsRes = await fetch(eventUrl, {
+          method: "GET",
+          headers: {
+            "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
           }
+        });
+
+        if (!icsRes.ok) {
+          context.log(`⚠️ Misslyckades hämta ICS-fil: ${href}`);
+          continue;
         }
-      } else {
-        calendarData = responses?.['d:propstat']?.['d:prop']?.['cal:calendar-data'];
+
+        const icsText = await icsRes.text();
+        const locationMatch = icsText.match(/LOCATION:(.*)/);
+        const endTimeMatch = icsText.match(/DTEND(?:;[^:]*)?:(.*)/);
+
+        const location = locationMatch ? locationMatch[1].trim() : null;
+        const endTime = endTimeMatch ? endTimeMatch[1].trim() : null;
+
+        if (location && endTime) {
+          context.log("✅ Hittade event med location och endTime:", { location, endTime });
+          return { location, endTime };
+        }
       }
 
-      if (!calendarData) {
-        context.log("⚠️ No calendar-data found in CalDAV response.");
-        return null;
-      }
+      context.log("⚠️ Inget event med både location och endTime hittades.");
+      return null;
 
-      const locationMatch = calendarData.match(/LOCATION:(.*)/);
-      const endTimeMatch = calendarData.match(/DTEND(?:;[^:]*)?:(.*)/);
-
-      const location = locationMatch ? locationMatch[1].trim() : null;
-      const endTime = endTimeMatch ? endTimeMatch[1].trim() : null;
-
-      return { location, endTime };
     } catch (err) {
-      context.log("⚠️ Error parsing CalDAV response:", err.message);
+      context.log("⚠️ Error i getEvent():", err.message);
       return null;
     }
   }
