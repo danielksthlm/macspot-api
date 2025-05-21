@@ -8,7 +8,7 @@ const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
-async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length }) {
+async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, eventCache }) {
   const timezone = settings.timezone || "Europe/Stockholm";
   const hoursToTry = [10, 14];
   const slots = [];
@@ -33,7 +33,8 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       graphClient,
       appleClient,
       fallbackOrigin: settings.default_home_address,
-      settings
+      settings,
+      eventCache
     });
 
     if (!originInfo?.origin) {
@@ -123,6 +124,8 @@ async function generateSlotChunks({
     }
   }
 
+  const eventCache = new Map();
+
   for (const day of days) {
     const dayStr = day.toISOString().split("T")[0];
     const slotCandidates = await generateSlotCandidates({
@@ -133,7 +136,8 @@ async function generateSlotChunks({
       context,
       graphClient,
       appleClient,
-      meeting_length
+      meeting_length,
+      eventCache
     });
 
     for (const slot of slotCandidates) {

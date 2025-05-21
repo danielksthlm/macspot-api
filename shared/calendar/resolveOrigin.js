@@ -1,13 +1,17 @@
 console.log("🧪 resolveOrigin.js laddades");
 const memoryCache = {};
 
-async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin, settings }) {
+async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin, settings, eventCache }) {
   const cacheKey = `${calendarId}:${eventId}`;
   const debugLog = (msg) => {
     if (process.env.DEBUG === 'true' && context?.log) context.log(msg);
   };
   debugLog(`🔍 resolveOriginAddress → calendarId: ${calendarId}, eventId: ${eventId}`);
   const eventDateOnly = eventId.split('T')[0];
+
+  const useCacheEvents = eventCache?.has(eventDateOnly);
+  const cachedEvents = useCacheEvents ? eventCache.get(eventDateOnly) : null;
+
   if (memoryCache[cacheKey]) {
     // Provide originEndTime as well
     let originEndTime = null;
@@ -81,7 +85,8 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     try {
       const startRange = `${eventDateOnly}T00:00:00Z`;
       const endRange = `${eventDateOnly}T23:59:59Z`;
-      const events = await appleClient.fetchEventsByDateRange(startRange, endRange);
+      const events = cachedEvents || await appleClient.fetchEventsByDateRange(startRange, endRange);
+      if (!cachedEvents && eventCache) eventCache.set(eventDateOnly, events);
       const firstEvent = events[0];
       if (firstEvent && firstEvent.location) {
         latestOrigin = firstEvent.location;
