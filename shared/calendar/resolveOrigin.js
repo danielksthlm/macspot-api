@@ -83,12 +83,21 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       const events = await appleClient.fetchEventsByDateRange(startRange, endRange);
       const firstEvent = events[0];
       if (firstEvent && firstEvent.location) {
-        originEndTime = firstEvent.dtend
-          ? new Date(firstEvent.dtend)
-          : new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
         latestOrigin = firstEvent.location;
         originSource = 'apple';
         debugLog(`✅ Hittade origin från Apple: ${latestOrigin}`);
+
+        if (firstEvent.dtend && typeof firstEvent.dtend === 'string') {
+          const dt = firstEvent.dtend.replace(/[^0-9T]/g, '');
+          const parsed = new Date(dt.length === 8 ? `${dt}T00:00:00Z` : dt);
+          if (!isNaN(parsed.getTime())) {
+            originEndTime = parsed;
+          } else {
+            originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+          }
+        } else {
+          originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+        }
       }
     } catch (err) {
       context.log(`⚠️ Apple error in resolveOriginAddress: ${err.message}`);
