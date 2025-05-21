@@ -34,7 +34,11 @@ module.exports = async function loadSettings(pool, context) {
     debugLog('✅ Alla inställningar tolkade och klara');
     return settings;
   } catch (err) {
-    context.log(`⚠️ Fel vid laddning av booking_settings: ${err.message}`);
+    if (context && context.log) {
+      context.log(`⚠️ Fel vid laddning av booking_settings: ${err.message}`);
+    } else {
+      console.warn(`⚠️ Fel vid laddning av booking_settings: ${err.message}`);
+    }
     throw err;
   }
 };
