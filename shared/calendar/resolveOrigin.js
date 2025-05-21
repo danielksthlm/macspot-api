@@ -59,6 +59,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
 
   // Try fetching from MS Graph
   let latestOrigin;
+  let originEndTime = null;
   let originSource = 'unknown';
   if (graphClient && typeof graphClient.getEvent === 'function') {
     try {
@@ -115,7 +116,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   }
 
   // Write to DB cache unless fallback
-  let originEndTime = originEndTime || null;
+  originEndTime = originEndTime || null;
   if (originSource === 'fallback') {
     originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
   }

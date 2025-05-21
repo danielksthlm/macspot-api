@@ -30,7 +30,12 @@ filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/maps/resolveTravelTime.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/bookings/index.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/utils/debugLogger.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/slots/slotEngine.js"
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/slots/slotEngine.js",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_from_cloud.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_to_cloud.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_static_tables.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py"
 ]
 
 # Slutlig sammanslagen fil
@@ -68,6 +73,23 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
     for filnamn in filnamn_lista:
         visat_filnamn = os.path.basename(filnamn)
         rel_path = os.path.relpath(filnamn, root_path)
+        # Bestäm kodtyp baserat på sökvägen
+        if "/shared/" in rel_path:
+            kodtyp = "🔧 Shared-modul"
+        elif "/validate_contact/" in rel_path:
+            kodtyp = "📬 Kontaktvalidering"
+        elif "/meeting_types/" in rel_path:
+            kodtyp = "📅 Mötestyp-endpoint"
+        elif "/getavailableslots/" in rel_path:
+            kodtyp = "🧠 Slot-generator"
+        elif "/refreshCalendarOrigins/" in rel_path:
+            kodtyp = "🔁 Kalender-refresh"
+        elif "/refreshTravelTimes/" in rel_path:
+            kodtyp = "🚗 Restids-refresh"
+        elif "/bookings/" in rel_path:
+            kodtyp = "📤 Boknings-API"
+        else:
+            kodtyp = "📄 Övrigt"
         if os.path.exists(filnamn):
             # Läs filens rader
             with open(filnamn, "r", encoding="utf-8") as infil:
@@ -148,6 +170,16 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             senast_andrad_ts = os.path.getmtime(filnamn)
             senast_andrad = datetime.fromtimestamp(senast_andrad_ts).strftime("%Y-%m-%d %H:%M:%S")
 
+            # Bestäm kodspråk baserat på filändelse
+            if filnamn.endswith(".js"):
+                kodspråk = "🟨 JavaScript"
+            elif filnamn.endswith(".py"):
+                kodspråk = "🐍 Python"
+            elif filnamn.endswith(".json"):
+                kodspråk = "🧾 JSON"
+            else:
+                kodspråk = "📄 Okänt format"
+
             total_rader += antal_rader
             total_funktioner += funktion_count
             total_komplexitet += komplex_count
@@ -167,6 +199,8 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             # Skriv metadata-block
             utfil.write("====================\n")
             utfil.write(f"📄 Fil: {rel_path}\n")
+            utfil.write(f"📂 Kodtyp: {kodtyp}\n")
+            utfil.write(f"🗂 Filtyp: {kodspråk}\n")
             utfil.write(f"📅 Senast ändrad: {senast_andrad}\n")
             utfil.write(f"📏 Antal rader: {antal_rader}\n")
             utfil.write(f"🧩 Antal funktioner: {funktion_count}\n")
@@ -306,4 +340,3 @@ def generera_databasstruktur(output_path):
         print("⚠️ Fel vid hämtning av databasstruktur:", e)
 
 generera_databasstruktur(output_fil)
-
