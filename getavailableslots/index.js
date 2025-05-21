@@ -152,7 +152,10 @@ module.exports = async function (context, req) {
       body: {
         message: "✅ getavailableslots är kontaktbar och fungerar i full version",
         received: { email, meeting_type, meeting_length },
-        slots: chosenSlotsResult?.chosenSlots || []
+        slots: (chosenSlotsResult?.chosenSlots || []).map(slot => ({
+          ...slot,
+          score: slot.score ?? null
+        }))
       }
     };
     client.release();
