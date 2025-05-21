@@ -5,8 +5,14 @@ const fetch = require("node-fetch");
 
 function createMsGraphClient() {
   let token = null;
+  let tokenExpiresAt = null;
 
   async function getAccessToken() {
+    const now = Date.now();
+    if (token && tokenExpiresAt && now < tokenExpiresAt - 60000) {
+      return token;
+    }
+
     const tenantId = process.env.MS365_TENANT_ID;
     const clientId = process.env.MS365_CLIENT_ID;
     const clientSecret = process.env.MS365_CLIENT_SECRET;
@@ -29,6 +35,7 @@ function createMsGraphClient() {
     }
     const data = await res.json();
     token = data.access_token;
+    tokenExpiresAt = now + data.expires_in * 1000;
     return token;
   }
 
@@ -44,15 +51,24 @@ function createMsGraphClient() {
         authProvider: (done) => done(null, authToken)
       });
 
-      const result = await client
-        .api(`/users/${calendarId}/events/${encodeURIComponent(eventId)}`)
-        .select("location,end")
-        .get();
+      try {
+        const result = await client
+          .api(`/users/${calendarId}/events/${encodeURIComponent(eventId)}`)
+          .select("subject,location,start,end")
+          .get();
 
-      const location = result.location?.displayName || null;
-      const endTime = result.end?.dateTime || null;
+        const location = result.location?.displayName || null;
+        const endTime = result.end?.dateTime || null;
 
-      return { location, endTime };
+        return { location, endTime };
+      } catch (err) {
+        if (err.statusCode === 404) {
+          console.warn(`⚠️ getEvent: event ${eventId} saknas`);
+          return { location: null, endTime: null, deleted: true };
+        }
+        console.error("⚠️ getEvent error (Graph):", err.message);
+        return null;
+      }
     } catch (err) {
       console.error("⚠️ getEvent error (Graph):", err.message);
       return null;
