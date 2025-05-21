@@ -76,16 +76,15 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   }
   debugLog(`🕳️ Inget cacheträff i DB för ${eventDateOnly}`);
 
+  let latestOrigin;
+  let originEndTime = null;
+  let originSource = 'unknown';
+
   if (!latestOrigin && memoryCache[`${calendarId}:${eventDateOnly}`]) {
     const { origin, originSource, originEndTime } = memoryCache[`${calendarId}:${eventDateOnly}`];
     debugLog(`🔁 Återanvänder memoryCache för dag: ${eventDateOnly}`);
     return { origin, originSource, originEndTime };
   }
-
-  // Try fetching from MS Graph
-  let latestOrigin;
-  let originEndTime = null;
-  let originSource = 'unknown';
   if (graphClient && typeof graphClient.getEvent === 'function') {
     if (!latestOrigin && !memoryCache[`${calendarId}:${eventDateOnly}`]) {
       try {
