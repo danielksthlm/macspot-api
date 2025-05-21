@@ -21,8 +21,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const { email, meeting_type } = req.body;
-    const { contact_id } = req.body;
+    const { email, meeting_type, meeting_length, contact_id } = req.body;
     context.log("✅ Request body innehåller:", { email, meeting_type });
     context.log("✅ Steg 1: Anropar DB med contact_id:", contact_id);
 
@@ -132,7 +131,7 @@ module.exports = async function (context, req) {
       contact,
       contact_id,
       meeting_type,
-      meeting_length: 20,
+      meeting_length,
       bookingsByDay,
       weeklyMinutesByType,
       settings,
