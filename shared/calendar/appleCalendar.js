@@ -18,59 +18,29 @@ function createAppleClient(context) {
     }
 
     try {
-      const res = await fetch(caldavUrl, {
-        method: "PROPFIND",
+      const eventUrl = `${caldavUrl.replace(/\/$/, '')}/${eventId}.ics`;
+      const icsRes = await fetch(eventUrl, {
+        method: "GET",
         headers: {
-          "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
-          "Content-Type": "application/xml",
-          "Depth": "1"
-        },
-        body: `<?xml version="1.0"?>
-          <d:propfind xmlns:d="DAV:">
-            <d:prop>
-              <d:getetag/>
-            </d:prop>
-          </d:propfind>`
+          "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
+        }
       });
 
-      if (!res.ok) {
-        context.log("⚠️ CalDAV PROPFIND failed:", res.statusText);
+      if (!icsRes.ok) {
+        context.log(`⚠️ Misslyckades hämta ICS-fil: ${eventUrl}`);
         return null;
       }
 
-      const xml = await res.text();
-      const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false });
-      const responses = parsed['d:multistatus']?.['d:response'];
-      const files = Array.isArray(responses) ? responses : [responses];
+      const icsText = await icsRes.text();
+      const locationMatch = icsText.match(/LOCATION:(.*)/);
+      const endTimeMatch = icsText.match(/DTEND(?:;[^:]*)?:(.*)/);
 
-      for (const item of files) {
-        const href = item?.['d:href'];
-        if (!href || !href.endsWith('.ics')) continue;
+      const location = locationMatch ? locationMatch[1].trim() : null;
+      const endTime = endTimeMatch ? endTimeMatch[1].trim() : null;
 
-        const eventUrl = `${caldavUrl.replace(/\/$/, '')}${href}`;
-        const icsRes = await fetch(eventUrl, {
-          method: "GET",
-          headers: {
-            "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
-          }
-        });
-
-        if (!icsRes.ok) {
-          context.log(`⚠️ Misslyckades hämta ICS-fil: ${href}`);
-          continue;
-        }
-
-        const icsText = await icsRes.text();
-        const locationMatch = icsText.match(/LOCATION:(.*)/);
-        const endTimeMatch = icsText.match(/DTEND(?:;[^:]*)?:(.*)/);
-
-        const location = locationMatch ? locationMatch[1].trim() : null;
-        const endTime = endTimeMatch ? endTimeMatch[1].trim() : null;
-
-        if (location && endTime) {
-          context.log("✅ Hittade event med location och endTime:", { location, endTime });
-          return { location, endTime };
-        }
+      if (location && endTime) {
+        context.log("✅ Hittade event med location och endTime:", { location, endTime });
+        return { location, endTime };
       }
 
       context.log("⚠️ Inget event med både location och endTime hittades.");
