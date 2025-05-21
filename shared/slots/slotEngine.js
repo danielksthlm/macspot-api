@@ -18,6 +18,11 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const dateObj = new Date(eventId);
     const weekday = dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
     const slot_part = hour < 12 ? "fm" : "em";
+    const isWeekend = ["saturday", "sunday"].includes(weekday);
+    if (settings.block_weekends && isWeekend) {
+      context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
+      continue;
+    }
 
     const originInfo = await resolveOriginAddress({
       eventId,
