@@ -83,20 +83,31 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     };
 
     // --- Score calculation logic ---
-    // Use bookingsByDay if available in context or settings (fallback to empty object)
+    // Använd context.bookingsByDay som källa till befintliga bokningar per dag
     const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
     const slotDateIso = dateObj.toISOString().split("T")[0];
-    const start = dateObj.getTime();
-    const end = start + meeting_length * 60000;
-    const previous = (bookingsByDay[slotDateIso] || []).filter(b => b.end <= start);
-    const next = (bookingsByDay[slotDateIso] || []).filter(b => b.start >= end);
+    const slotStart = dateObj.getTime();
+    const slotEnd = slotStart + meeting_length * 60000;
 
-    const gapBefore = previous.length > 0 ? (start - previous[previous.length - 1].end) / 60000 : null;
-    const gapAfter = next.length > 0 ? (next[0].start - end) / 60000 : null;
+    const existing = bookingsByDay[slotDateIso] || [];
+    let gapBefore = null;
+    let gapAfter = null;
 
+    for (const b of existing) {
+      const bStart = b.start;
+      const bEnd = b.end;
+
+      if (bEnd <= slotStart) {
+        gapBefore = slotStart - bEnd;
+      } else if (bStart >= slotEnd && gapAfter === null) {
+        gapAfter = bStart - slotEnd;
+      }
+    }
+
+    // Standardpoäng är 10. Dra av poäng för stor lucka före eller efter.
     let fragmentationPenalty = 0;
-    if ((gapBefore && gapBefore > 45) || (gapAfter && gapAfter > 45)) {
-      fragmentationPenalty += 1;
+    if ((gapBefore && gapBefore > 45 * 60000) || (gapAfter && gapAfter > 45 * 60000)) {
+      fragmentationPenalty = 1;
     }
 
     slot.score = 10 - fragmentationPenalty;
