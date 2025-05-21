@@ -2,6 +2,7 @@ const db = require("../shared/db/pgPool");
 const createMsGraphClient = require('../shared/calendar/msGraph');
 const createAppleClient = require('../shared/calendar/appleCalendar');
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
+const { createDebugLogger } = require('../shared/utils/debugLogger');
 console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
 
@@ -123,6 +124,8 @@ module.exports = async function (context, req) {
       weeklyMinutesByType[type][week] = (weeklyMinutesByType[type][week] || 0) + (b.end - b.start) / 60000;
     }
 
+    const debugHelper = createDebugLogger(context);
+
     // Riktigt anrop till generateSlotChunks
     const slotGroupPicked = {};
     const startSlotGen = Date.now();
@@ -141,7 +144,7 @@ module.exports = async function (context, req) {
       travelCache: new Map(),
       accessToken: await getAppleMapsAccessToken(context),
       timezone: settings.timezone || 'Europe/Stockholm',
-      debugHelper: { debugLog: context.log, skipReasons: {} },
+      debugHelper,
       client: client,
       slotGroupPicked
     });
