@@ -76,20 +76,28 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   }
   debugLog(`🕳️ Inget cacheträff i DB för ${eventDateOnly}`);
 
+  if (!latestOrigin && memoryCache[`${calendarId}:${eventDateOnly}`]) {
+    const { origin, originSource, originEndTime } = memoryCache[`${calendarId}:${eventDateOnly}`];
+    debugLog(`🔁 Återanvänder memoryCache för dag: ${eventDateOnly}`);
+    return { origin, originSource, originEndTime };
+  }
+
   // Try fetching from MS Graph
   let latestOrigin;
   let originEndTime = null;
   let originSource = 'unknown';
   if (graphClient && typeof graphClient.getEvent === 'function') {
-    try {
-      const msEvent = await graphClient.getEvent(calendarId, eventId);
-      if (msEvent && msEvent.location) {
-        latestOrigin = msEvent.location;
-        originSource = 'Microsoft 365';
-        debugLog(`✅ Hittade origin från MS Graph: ${latestOrigin}`);
+    if (!latestOrigin && !memoryCache[`${calendarId}:${eventDateOnly}`]) {
+      try {
+        const msEvent = await graphClient.getEvent(calendarId, eventId);
+        if (msEvent && msEvent.location) {
+          latestOrigin = msEvent.location;
+          originSource = 'Microsoft 365';
+          debugLog(`✅ Hittade origin från MS Graph: ${latestOrigin}`);
+        }
+      } catch (err) {
+        context.log(`⚠️ MS Graph error in resolveOriginAddress: ${err.message}`);
       }
-    } catch (err) {
-      context.log(`⚠️ MS Graph error in resolveOriginAddress: ${err.message}`);
     }
   } else if (graphClient) {
     context.log(`⚠️ graphClient saknar getEvent-metod eller är null`);
@@ -140,6 +148,12 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     }
     debugLog(`⚠️ Fallback används som origin: ${latestOrigin}`);
   }
+
+  memoryCache[`${calendarId}:${eventDateOnly}`] = {
+    origin: latestOrigin,
+    originSource,
+    originEndTime
+  };
 
   // Write to DB cache unless fallback
   originEndTime = originEndTime || null;
