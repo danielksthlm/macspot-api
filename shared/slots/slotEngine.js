@@ -195,7 +195,17 @@ async function generateSlotChunks({
       continue;
     }
 
-    const best = candidates.sort((a, b) => (b.score || 0) - (a.score || 0))[0] || candidates[0];
+    const preferredHours = [10, 14];
+    const best = candidates.sort((a, b) => {
+      if ((b.score || 0) !== (a.score || 0)) {
+        return (b.score || 0) - (a.score || 0);
+      }
+      const aHour = new Date(a.slot_iso).getUTCHours();
+      const bHour = new Date(b.slot_iso).getUTCHours();
+      const aPriority = preferredHours.includes(aHour) ? 0 : 1;
+      const bPriority = preferredHours.includes(bHour) ? 0 : 1;
+      return aPriority - bPriority;
+    })[0] || candidates[0];
     slotGroupPicked[key] = true;
     chosen.push(best);
   }
