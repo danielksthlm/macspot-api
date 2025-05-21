@@ -24,9 +24,10 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       continue;
     }
 
+    context.log(`📧 calendarId som används: ${contact.email || contact.booking_email}`);
     const originInfo = await resolveOriginAddress({
       eventId,
-      calendarId: contact.contact_id,
+      calendarId: contact.email || contact.booking_email,
       pool,
       context,
       graphClient,
