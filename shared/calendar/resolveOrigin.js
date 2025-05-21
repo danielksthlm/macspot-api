@@ -109,9 +109,15 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
 
   // Fallback if not found
   if (!latestOrigin) {
-    debugLog(`🚨 Ingen träff i varken cache, DB, Graph eller Apple – använder fallback`);
-    latestOrigin = fallbackOrigin || '';
-    originSource = 'fallback';
+    if (originEndTime) {
+      debugLog(`⚠️ LOCATION saknas men endTime finns – använder fallback som origin`);
+      latestOrigin = fallbackOrigin || '';
+      originSource = 'fallback';
+    } else {
+      debugLog(`🚨 Ingen träff i varken cache, DB, Graph eller Apple – använder fallback`);
+      latestOrigin = fallbackOrigin || '';
+      originSource = 'fallback';
+    }
     debugLog(`⚠️ Fallback används som origin: ${latestOrigin}`);
   }
 
