@@ -326,62 +326,66 @@
       if (shouldRestoreTimes && !calendarWrapper.contains(calendarTimes)) {
         calendarWrapper.appendChild(calendarTimes);
       }
+    },
+
+    initAvailableSlotFetch: function() {
+      const cltReady = document.getElementById('clt_ready')?.value;
+      if (cltReady !== 'true' || !window.formState) {
+        console.warn('❌ Kan inte hämta tillgängliga tider – formState eller clt_ready saknas');
+        return;
+      }
+
+      console.log('📡 Hämtar tillgängliga tider för:', window.formState);
+      if (!window.formState.contact_id) {
+        console.warn('⚠️ contact_id saknas i formState – fetch avbryts');
+      }
+
+      fetch('https://macspotbackend.azurewebsites.net/api/getavailableslots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: window.formState.email,
+          meeting_type: window.formState.meeting_type,
+          meeting_length: window.formState.meeting_length,
+          contact_id: window.formState.contact_id
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log('🧪 Rått slotData från API:', data);
+        if (!Array.isArray(data.slots)) {
+          console.warn('⚠️ API svarar utan slot-array:', data);
+        }
+        if (Array.isArray(data.slots)) {
+          const grouped = {};
+          data.slots.forEach(slot => {
+            const localDate = new Date(slot.slot_iso);
+            const localYear = localDate.getFullYear();
+            const localMonth = String(localDate.getMonth() + 1).padStart(2, '0');
+            const localDay = String(localDate.getDate()).padStart(2, '0');
+            const date = `${localYear}-${localMonth}-${localDay}`;
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push({
+              slot_iso: slot.slot_iso,
+              slot_local: slot.slot_local || slot.slot_iso
+            });
+          });
+          console.log('📦 Skickar grouped slots till renderCalendar:', grouped);
+          if (typeof window.CalendarModule.renderCalendar === 'function') {
+            const firstDateStr = Object.keys(grouped).sort()[0];
+            const firstDate = new Date(firstDateStr);
+            window.CalendarModule.renderCalendar(grouped, firstDate);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('❌ Fetch error in getavailableslots:', err.message || err);
+        alert('Fel vid hämtning av tider. Kontrollera din internetanslutning eller att servern är tillgänglig.');
+      });
     }
   };
 
-window.setAvailableSlots = function(groupedSlots) {
-  if (!window.CalendarModule || typeof window.CalendarModule.renderCalendar !== 'function') {
-    return;
-  }
-  if (Object.keys(groupedSlots).length === 0) {
-    return;
-  }
 
-  window.initialSlotRendered = false;
-  window.latestAvailableSlots = groupedSlots;
-
-  const firstAvailableDateStr = Object.keys(groupedSlots).sort()[0];
-  const firstAvailableDate = new Date(firstAvailableDateStr);
-  window.firstAvailableDate = firstAvailableDate;
-
-  const monthLabel = document.getElementById('calendar_month');
-  if (monthLabel) {
-    monthLabel.textContent = firstAvailableDate.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
-  }
-
-  const wrapper = document.getElementById('calendar_wrapper');
-  if (wrapper) wrapper.style.display = 'flex';
-
-  const grid = document.getElementById('calendar_grid');
-  if (grid) {
-    window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
-  } else {
-    const waitForCalendarGrid = setInterval(() => {
-      const g = document.getElementById('calendar_grid');
-      if (g) {
-        clearInterval(waitForCalendarGrid);
-        window.CalendarModule.renderCalendar(groupedSlots, firstAvailableDate);
-      }
-    }, 100);
-  }
-};
-
-  // Vänta på att #calendar_wrapper laddas in i DOM
-  let waitForCalendarWrapper2b = setInterval(() => {
-    const calendarWrapper = document.getElementById('calendar_wrapper');
-    if (calendarWrapper) {
-      clearInterval(waitForCalendarWrapper2b);
-      let waitForCalendarGrid = setInterval(() => {
-        const grid = document.getElementById('calendar_grid');
-        if (grid) {
-          clearInterval(waitForCalendarGrid);
-          if (window.latestAvailableSlots && window.firstAvailableDate) {
-            window.CalendarModule.renderCalendar(window.latestAvailableSlots, window.firstAvailableDate);
-          }
-        }
-      }, 100);
-    }
-  }, 100);
 // --- Inserted CSS for today and available day styling ---
 const calendarStyle = document.createElement('style');
 calendarStyle.textContent = `

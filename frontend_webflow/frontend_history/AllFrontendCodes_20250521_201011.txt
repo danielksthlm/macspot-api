@@ -1,0 +1,368 @@
+📂 KODTRÄD
+==========
+├── webflow
+│   ├── Embed Block 1.js
+│   ├── Embed Block 2.js
+│   ├── Embed Block 2b.js
+│   ├── Embed Block 3.js
+==========
+
+START: Embed Block 1.js
+// ⚠️ Filen 'Embed Block 1.js' hittades inte
+END: Embed Block 1.js
+
+START: Embed Block 2.js
+// ⚠️ Filen 'Embed Block 2.js' hittades inte
+END: Embed Block 2.js
+
+START: Embed Block 2b.js
+// ⚠️ Filen 'Embed Block 2b.js' hittades inte
+END: Embed Block 2b.js
+
+START: Embed Block 3.js
+// ⚠️ Filen 'Embed Block 3.js' hittades inte
+END: Embed Block 3.js
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 .funcignore
+   # Exclude dev-only files and folders
+   .git
+   .vscode
+   .env
+   *.log
+   test/
+   tests/
+   
+   # Explicitly include all required files and folders
+   !host.json
+   !package.json
+   !package-lock.json
+   
+   !node_modules/
+   !node_modules/**
+   
+   !shared/
+   !shared/**
+   
+   !bookings/
+   !bookings/**
+   !getavailableslots/
+   !getavailableslots/**
+   !validate_contact/
+   !validate_contact/**
+   !meeting_types/
+   !meeting_types/**
+   !refreshCalendarOrigins/
+   !refreshCalendarOrigins/**
+   !refreshTravelTimes/
+   !refreshTravelTimes/**
+📄 bookings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "bookings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 getavailableslots/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "getavailableslots"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 host.json
+   {
+     "version": "2.0",
+     "extensionBundle": {
+       "id": "Microsoft.Azure.Functions.ExtensionBundle",
+       "version": "[4.*, 5.0.0)"
+     },
+     "extensions": {
+       "http": {
+         "cors": {
+           "allowedOrigins": [
+             "https://www.klrab.se"
+           ],
+           "supportCredentials": false
+         }
+       }
+     }
+   }
+📄 meeting_types/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": [ "get" ],
+         "route": "meeting_types"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 package.json
+   {
+     "name": "macspot-api",
+     "version": "1.0.0",
+     "description": "Azure Functions backend för MacSpot CRM/ERP",
+     "scripts": {
+       "start": "func start",
+       "dev": "func start --verbose",
+       "deploy": "func azure functionapp publish macspotbackend",
+       "build": "echo 'Nothing to build'"
+     },
+     "dependencies": {
+       "@azure/functions": "^4.7.0",
+       "@azure/msal-node": "^3.5.1",
+       "@microsoft/microsoft-graph-client": "^3.0.0",
+       "dav": "^1.8.0",
+       "dotenv": "^16.5.0",
+       "isomorphic-fetch": "^3.0.0",
+       "jsonwebtoken": "^9.0.0",
+       "luxon": "^3.4.4",
+       "node-fetch": "^2.7.0",
+       "node-ical": "^0.20.1",
+       "p-limit": "^6.2.0",
+       "pg": "^8.15.6",
+       "uuid": "^9.0.0",
+       "xml2js": "^0.6.2"
+     }
+   }
+
+📄 refreshCalendarOrigins/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 refreshTravelTimes/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 validate_contact/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post"],
+         "route": "validate_contact"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 0
+🧩 Totalt antal funktioner: 0
+🧠 Total komplexitetspoäng: 0
+🧪 Antal TODO/FIXME totalt: 0
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: available_slots_cache
+  • id (uuid)
+  • travel_time_min (integer)
+  • generated_at (timestamp without time zone)
+  • expires_at (timestamp without time zone)
+  • meeting_length (integer)
+  • slot_day (date)
+  • slot_score (integer)
+  • meeting_type (text)
+  • slot_part (text)
+  • slot_iso (text)
+  🔑 [p] available_slots_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: slot_cache
+  • created_at (timestamp without time zone)
+  • slot_day (date)
+  • slots (jsonb)
+  • id (uuid)
+  • meeting_length (integer)
+  • booking_email (text)
+  • meeting_type (text)
+  • slot_part (text)
+  🔑 [p] slot_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: calendar_origin_cache
+  • created_at (timestamp without time zone)
+  • timestamp (timestamp with time zone)
+  • event_date (date)
+  • id (integer)
+  • end_time (timestamp without time zone)
+  • address (text)
+  • source (text)
+  🔑 [c] calendar_origin_cache_source_check: CHECK ((source = ANY (ARRAY['Apple Calendar'::text, 'Microsoft 365'::text])))
+  🔑 [p] calendar_origin_cache_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - id=71, event_date=2025-05-21, source=Apple Calendar, address=–, end_time=2025-05-21 06:00:00, created_at=2025-05-21 14:43:51.546125, timestamp=2025-05-21 14:43:51.546125+00:00
+    - id=72, event_date=2025-05-23, source=Apple Calendar, address=–, end_time=2025-05-23 06:00:00, created_at=2025-05-21 14:43:55.076780, timestamp=2025-05-21 14:43:55.076780+00:00
+    - id=73, event_date=2025-05-26, source=Apple Calendar, address=–, end_time=2025-05-26 06:00:00, created_at=2025-05-21 14:43:56.126523, timestamp=2025-05-21 14:43:56.126523+00:00
+    - id=74, event_date=2025-06-02, source=Apple Calendar, address=–, end_time=2025-06-02 06:00:00, created_at=2025-05-21 14:44:04.998700, timestamp=2025-05-21 14:44:04.998700+00:00
+    - id=75, event_date=2025-06-09, source=Apple Calendar, address=–, end_time=2025-06-09 06:00:00, created_at=2025-05-21 14:44:13.830924, timestamp=2025-05-21 14:44:13.830924+00:00
+
+📁 Tabell: travel_time_cache
+  • travel_minutes (integer)
+  • updated_at (timestamp with time zone)
+  • is_fallback (boolean)
+  • hour (integer)
+  • created_at (timestamp with time zone)
+  • to_address (text)
+  • from_address (text)
+  🔑 [u] unique_travel_key: UNIQUE (from_address, to_address, hour)
+  🧪 Topp 5 rader:
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=12, travel_minutes=20, created_at=2025-05-19 08:35:30.341217+00:00, updated_at=2025-05-19 08:35:30.341217+00:00, is_fallback=False
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=8, travel_minutes=22, created_at=2025-05-19 08:51:46.047719+00:00, updated_at=2025-05-19 08:51:46.047719+00:00, is_fallback=False
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=10, travel_minutes=23, created_at=2025-05-19 12:00:01.057723+00:00, updated_at=2025-05-19 12:00:01.057723+00:00, is_fallback=False
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=14, travel_minutes=23, created_at=2025-05-19 12:00:01.639717+00:00, updated_at=2025-05-19 12:00:01.639717+00:00, is_fallback=False
+
+📁 Tabell: event_log
+  • received_at (timestamp with time zone)
+  • record_id (uuid)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  • id (uuid)
+  • payload (jsonb)
+  • action (text)
+  • event_type (text)
+  • source (text)
+  • table_name (text)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - source=None, event_type=None, payload=None, received_at=2025-05-16 09:40:53.307336+00:00, id=903c2758-e7e6-4f11-9a31-1871596e195c, action=INSERT, table_name=contact, record_id=c4e2d9dd-545e-4e05-99fe-16d377a87698, timestamp=2025-05-16 09:40:53.307336+00:00, booking_id=None
+    - source=None, event_type=booking_created, payload=None, received_at=2025-05-18 11:56:16.897217+00:00, id=fb33d0d1-ff78-4506-82dd-026fd86cd781, action=None, table_name=None, record_id=None, timestamp=2025-05-18 11:56:16.897217+00:00, booking_id=fb6b2112-8dbf-4bed-aba4-c2882989db21
+    - source=None, event_type=booking_created, payload=None, received_at=2025-05-18 12:06:54.686150+00:00, id=89690767-0414-4c48-b61d-8f9d350718e5, action=None, table_name=None, record_id=None, timestamp=2025-05-18 12:06:54.686150+00:00, booking_id=3ecff74d-cb9c-4e9f-9db5-b0a7b12666ee
+    - source=None, event_type=None, payload=None, received_at=2025-05-18 12:32:42.290134+00:00, id=420ca821-9117-46b4-b9cb-6eedef51f4cb, action=INSERT, table_name=contact, record_id=14e1bef9-2833-40d5-b4fe-7576f7cffd6c, timestamp=2025-05-18 12:32:42.290134+00:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-05-18 12:37:08.028330+00:00, id=931849cb-3a69-4861-83ba-258fe1de5e98, action=UPDATE, table_name=contact, record_id=14e1bef9-2833-40d5-b4fe-7576f7cffd6c, timestamp=2025-05-18 12:37:08.028330+00:00, booking_id=None
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • meeting_type (text)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+  🧪 Topp 5 rader:
+    - start_time=2025-05-20 08:00:00+00:00, end_time=2025-05-20 08:20:00+00:00, meeting_type=facetime, metadata={}, created_at=2025-05-18 10:48:56.390000+00:00, contact_id=None, id=378a6541-8e61-465d-a37d-6242ba770dc7, updated_at=2025-05-18 10:48:56.390000+00:00, booking_email=None
+    - start_time=2025-05-20 12:00:00+00:00, end_time=2025-05-20 12:20:00+00:00, meeting_type=facetime, metadata={}, created_at=2025-05-18 11:12:10.769000+00:00, contact_id=None, id=f861a2c5-f1ca-4f00-91af-276bac7f326d, updated_at=2025-05-18 11:12:10.769000+00:00, booking_email=None
+    - start_time=2025-05-20 12:00:00+00:00, end_time=2025-05-20 12:20:00+00:00, meeting_type=facetime, metadata={}, created_at=2025-05-18 11:13:04.323000+00:00, contact_id=None, id=feccbea8-6a8f-44d8-9f9d-cf468b55bc0c, updated_at=2025-05-18 11:13:04.323000+00:00, booking_email=None
+    - start_time=2025-05-20 12:00:00+00:00, end_time=2025-05-20 12:20:00+00:00, meeting_type=facetime, metadata={}, created_at=2025-05-18 11:13:07.009000+00:00, contact_id=None, id=40f2b6ab-51ba-4c50-844c-6d9ff3db52d2, updated_at=2025-05-18 11:13:07.009000+00:00, booking_email=None
+    - start_time=2025-05-21 08:00:00+00:00, end_time=2025-05-21 08:20:00+00:00, meeting_type=facetime, metadata={}, created_at=2025-05-18 11:29:28.739000+00:00, contact_id=None, id=4c0d2868-f99d-4156-b92e-4e7a97fd1153, updated_at=2025-05-18 11:29:28.739000+00:00, booking_email=None
+
+📁 Tabell: pending_changes
+  • booking_id (uuid)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • payload (jsonb)
+  • id (uuid)
+  • record_id (uuid)
+  • table_name (text)
+  • operation (text)
+  • change_type (text)
+  • direction (text)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - id=7d417b09-6288-490b-a73c-3f3b2792817e, table_name=contact, record_id=c4e2d9dd-545e-4e05-99fe-16d377a87698, change_type=INSERT, direction=out, processed=False, created_at=2025-05-16 09:40:53.307336+00:00, operation=INSERT, payload={'id': 'c4e2d9dd-545e-4e05-99fe-16d377a87698', 'email': None, 'metadata': {'city': '', 'phone': '0709561480', 'address': '', 'company': 'AnyNode', 'country': '', 'last_name': 'Källberg', 'first_name': 'Daniel', 'postal_code': ''}, 'created_at': '2025-05-16T09:40:53.307336+00:00', 'updated_at': '2025-05-16T09:40:53.307336+00:00', 'booking_email': 'daniel@anynode.se'}, booking_id=None
+    - id=6463cae5-e1e8-4899-903b-feccaf981229, table_name=bookings, record_id=378a6541-8e61-465d-a37d-6242ba770dc7, change_type=INSERT, direction=out, processed=False, created_at=2025-05-18 10:48:56.394310+00:00, operation=INSERT, payload={'id': '378a6541-8e61-465d-a37d-6242ba770dc7', 'end_time': '2025-05-20T08:20:00+00:00', 'metadata': {}, 'contact_id': None, 'created_at': '2025-05-18T10:48:56.39+00:00', 'start_time': '2025-05-20T08:00:00+00:00', 'updated_at': '2025-05-18T10:48:56.39+00:00', 'meeting_type': 'facetime', 'booking_email': None}, booking_id=378a6541-8e61-465d-a37d-6242ba770dc7
+    - id=62176d8e-90ff-48d9-bfe6-9375995dede3, table_name=bookings, record_id=378a6541-8e61-465d-a37d-6242ba770dc7, change_type=INSERT, direction=cloud_to_local, processed=False, created_at=2025-05-18 10:48:56.440000+00:00, operation=None, payload=None, booking_id=378a6541-8e61-465d-a37d-6242ba770dc7
+    - id=c6553a94-29ae-4721-b381-898f78f0d67c, table_name=bookings, record_id=f861a2c5-f1ca-4f00-91af-276bac7f326d, change_type=INSERT, direction=out, processed=False, created_at=2025-05-18 11:12:10.772513+00:00, operation=INSERT, payload={'id': 'f861a2c5-f1ca-4f00-91af-276bac7f326d', 'end_time': '2025-05-20T12:20:00+00:00', 'metadata': {}, 'contact_id': None, 'created_at': '2025-05-18T11:12:10.769+00:00', 'start_time': '2025-05-20T12:00:00+00:00', 'updated_at': '2025-05-18T11:12:10.769+00:00', 'meeting_type': 'facetime', 'booking_email': None}, booking_id=f861a2c5-f1ca-4f00-91af-276bac7f326d
+    - id=4d1006a6-2ff8-4c60-a573-e2091d5d3917, table_name=bookings, record_id=f861a2c5-f1ca-4f00-91af-276bac7f326d, change_type=INSERT, direction=cloud_to_local, processed=False, created_at=2025-05-18 11:12:10.803000+00:00, operation=None, payload=None, booking_id=f861a2c5-f1ca-4f00-91af-276bac7f326d
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  • email (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - metadata={'city': '', 'phone': '0709561480', 'address': '', 'company': 'AnyNode', 'country': '', 'last_name': 'Källberg', 'first_name': 'Daniel', 'postal_code': ''}, created_at=2025-05-16 09:40:53.307336+00:00, id=c4e2d9dd-545e-4e05-99fe-16d377a87698, booking_email=daniel@anynode.se, updated_at=2025-05-16 09:40:53.307336+00:00, email=None
+    - metadata={'city': 'Stockholm', 'address': 'Maria Skolgata 79A', 'postal_code': '118 53'}, created_at=2025-05-18 12:32:42.290134+00:00, id=14e1bef9-2833-40d5-b4fe-7576f7cffd6c, booking_email=None, updated_at=2025-05-18 12:32:42.290134+00:00, email=daniel@anynode.se
+
+📁 Tabell: booking_settings
+  • value (jsonb)
+  • updated_at (timestamp with time zone)
+  • key (text)
+  • value_type (text)
+  🧪 Topp 5 rader:
+    - key=max_days_in_advance, value=30, value_type=int, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=buffer_between_meetings, value=15, value_type=int, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=max_weekly_booking_minutes, value=360, value_type=int, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=default_office_address, value=Maria Skolgata 79A, 118 53 Stockholm, value_type=string, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=fallback_travel_time_minutes, value=90, value_type=int, updated_at=2025-04-23 12:48:49.778155+00:00
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+

@@ -1,5 +1,6 @@
-const { Pool } = require('pg');
+const pool = require('../shared/db/pgPool');
 const { v4: uuidv4 } = require('uuid');
+const { createDebugLogger } = require('../shared/utils/debugLogger');
 
 module.exports = async function (context, req) {
   const requiredFields = ['meeting_type', 'meeting_length', 'slot_iso'];
@@ -32,16 +33,10 @@ module.exports = async function (context, req) {
     }
   }
 
-  const pool = new Pool({
-    user: process.env.PGUSER,
-    host: process.env.PGHOST,
-    database: process.env.PGDATABASE,
-    password: process.env.PGPASSWORD,
-    port: parseInt(process.env.PGPORT || '5432', 10),
-    ssl: { rejectUnauthorized: false }
-  });
-
   const db = await pool.connect();
+  const debugHelper = createDebugLogger(context);
+  const debugLog = debugHelper.debugLog;
+  debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
   try {
     // Läs in booking_settings
     const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
@@ -137,16 +132,18 @@ module.exports = async function (context, req) {
       'INSERT INTO event_log (event_type, booking_id) VALUES ($1, $2)',
       ['booking_created', id]
     );
+    debugLog(`✅ Bokning skapad: ${id}, typ: ${meeting_type}, längd: ${meeting_length}`);
 
     context.res = {
       status: 200,
       body: {
         status: 'booked',
         booking_id: id,
-        calendar_invite_sent: false // kan uppdateras om Graph-mail läggs in här
+        calendar_invite_sent: false
       }
     };
   } catch (err) {
+    context.log.error("❌ Booking error:", err.message);
     context.res = {
       status: 500,
       body: { error: err.message }
@@ -155,79 +152,3 @@ module.exports = async function (context, req) {
     db.release();
   }
 };
-
-// --- Send confirmation email via Microsoft Graph ---
-const fetch = require('node-fetch');
-
-async function sendConfirmationEmail({ to, startTime, endTime, meeting_type, meeting_link, first_name, sender_email }) {
-  const token = await getGraphAccessToken();
-
-  const subject = `Din bokning är bekräftad – ${meeting_type}`;
-  const content = `
-    <p>Hej ${first_name || ''},</p>
-    <p>Din bokning den ${startTime.toLocaleDateString()} kl ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} är nu bekräftad.</p>
-    <p><strong>Mötestyp:</strong> ${meeting_type}</p>
-    <p><strong>Länk:</strong> <a href="${meeting_link}">${meeting_link}</a></p>
-    <p>Vi ser fram emot att ses!</p>
-    <p>Vänligen,<br/>Daniel</p>
-  `;
-
-  const body = {
-    message: {
-      subject,
-      body: {
-        contentType: 'HTML',
-        content
-      },
-      toRecipients: [
-        {
-          emailAddress: {
-            address: to
-          }
-        }
-      ]
-    },
-    saveToSentItems: true
-  };
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000); // max 8s
-
-  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender_email)}/sendMail`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body),
-    signal: controller.signal
-  });
-
-  clearTimeout(timeout);
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`E-postmisslyckande: ${err}`);
-  }
-}
-
-async function getGraphAccessToken() {
-  const params = new URLSearchParams();
-  params.append('client_id', process.env.GRAPH_CLIENT_ID);
-  params.append('client_secret', process.env.GRAPH_CLIENT_SECRET);
-  params.append('scope', 'https://graph.microsoft.com/.default');
-  params.append('grant_type', 'client_credentials');
-  const response = await fetch(`https://login.microsoftonline.com/${process.env.GRAPH_TENANT_ID}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Misslyckad tokenhämtning: ${err}`);
-  }
-
-  const data = await response.json();
-  return data.access_token;
-}
