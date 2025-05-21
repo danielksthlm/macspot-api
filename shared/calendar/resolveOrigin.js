@@ -41,6 +41,21 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     context.log(`⚠️ DB error in resolveOriginAddress: ${err.message}`);
   }
   if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+    // Special case: if source is fallback, return immediately
+    if (dbRes.rows[0].source === 'fallback') {
+      const originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+      memoryCache[cacheKey] = {
+        origin: dbRes.rows[0].address,
+        originSource: dbRes.rows[0].source,
+        originEndTime
+      };
+      debugLog(`🛑 DB-träff var fallback – hoppar övriga försök`);
+      return {
+        origin: dbRes.rows[0].address,
+        originSource: dbRes.rows[0].source,
+        originEndTime
+      };
+    }
     let originEndTime = null;
     if (dbRes.rows[0].source === 'fallback') {
       originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
