@@ -1,3 +1,16 @@
+/**
+ * resolveOriginAddress
+ * --------------------
+ * Hämtar origin-adress för ett kalender-event från:
+ * 1. Memory-cache
+ * 2. PostgreSQL-cache (om SKIP_DB inte är satt)
+ * 3. MS Graph
+ * 4. Apple Calendar
+ * Fallback används vid miss.
+ *
+ * Miljövariabler:
+ * - SKIP_DB=true  → hoppar över all databaslogik (läs/skriv)
+ */
 console.log("🧪 resolveOrigin.js laddades");
 const memoryCache = {};
 
