@@ -31,14 +31,16 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
 
   // Try database cache first
   let dbRes;
-  try {
-    dbRes = await pool.query(
-      'SELECT address, source, end_time FROM calendar_origin_cache WHERE event_date = $1',
-      [eventDateOnly]
-    );
-    debugLog(`📂 DB-kontroll: Hittade ${dbRes?.rows?.length || 0} rader för ${eventDateOnly}`);
-  } catch (err) {
-    context.log(`⚠️ DB error in resolveOriginAddress: ${err.message}`);
+  if (!process.env.SKIP_DB) {
+    try {
+      dbRes = await pool.query(
+        'SELECT address, source, end_time FROM calendar_origin_cache WHERE event_date = $1',
+        [eventDateOnly]
+      );
+      debugLog(`📂 DB-kontroll: Hittade ${dbRes?.rows?.length || 0} rader för ${eventDateOnly}`);
+    } catch (err) {
+      context.log(`⚠️ DB error in resolveOriginAddress: ${err.message}`);
+    }
   }
   if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
     // Special case: if source is fallback, return immediately
@@ -163,7 +165,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   if (!originEndTime && originSource !== 'fallback') {
     originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
   }
-  if (originSource !== 'fallback') {
+  if (!process.env.SKIP_DB && originSource !== 'fallback') {
     try {
       await pool.query(
         `INSERT INTO calendar_origin_cache (event_date, source, address, end_time)

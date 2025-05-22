@@ -82,7 +82,7 @@ async function getLatestAppleEvent(dateTime) {
         }
       }
 
-      if (eventTime && eventTime >= new Date()) {
+      if (eventTime && eventTime.toISOString().startsWith("2025-05-23")) {
         upcoming.push({
           summary,
           dtStartRaw,
@@ -114,7 +114,7 @@ async function getLatestAppleEvent(dateTime) {
 }
 
 (async () => {
-  const testDate = new Date();
+  const testDate = new Date("2025-05-23T00:00:00");
   const result = await getLatestAppleEvent(testDate);
   console.log('📦 Resultat:', result);
 })();
