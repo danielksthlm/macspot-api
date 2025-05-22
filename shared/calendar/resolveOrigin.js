@@ -107,7 +107,9 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   if (graphClient && typeof graphClient.getEvent === 'function') {
     if (!latestOrigin && !memoryCache[`${calendarId}:${eventDateOnly}`]) {
       try {
-        const msEvent = await graphClient.getEvent(calendarId, eventId);
+        const graphCalendarId = settings.ms_sender_email;
+        const appleCalendarId = process.env.CALDAV_USER;
+        const msEvent = await graphClient.getEvent(graphCalendarId, eventId);
         if (msEvent && msEvent.location) {
           latestOrigin = msEvent.location;
           originSource = 'Microsoft 365';
@@ -126,7 +128,8 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     try {
       const startRange = `${eventDateOnly}T00:00:00Z`;
       const endRange = `${eventDateOnly}T23:59:59Z`;
-      const events = cachedEvents || await appleClient.fetchEventsByDateRange(startRange, endRange);
+      const appleCalendarId = process.env.CALDAV_USER;
+      const events = cachedEvents || await appleClient.fetchEventsByDateRange(startRange, endRange, appleCalendarId);
       if (!cachedEvents && eventCache) eventCache.set(eventDateOnly, events);
       let mostRecent = null;
       const eventStartTime = new Date(eventId);
