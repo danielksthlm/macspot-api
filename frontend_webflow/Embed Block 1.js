@@ -1,4 +1,21 @@
 <script>
+  // --- Globala bokningsinställningar ---
+  let bookingSettings = null;
+
+  async function loadBookingSettings() {
+    try {
+      const res = await fetch('https://macspotbackend.azurewebsites.net/api/booking_settings');
+      if (res.ok) {
+        bookingSettings = await res.json();
+        console.log('✅ Loaded booking_settings:', bookingSettings);
+      } else {
+        console.warn('⚠️ Kunde inte hämta booking_settings');
+      }
+    } catch (err) {
+      console.error('❌ Fel vid hämtning av booking_settings:', err);
+    }
+  }
+
   // Återställer formulärstate (mötestyp, mötestid, tider, clt_ready)
   function resetFormState() {
     console.log('🔄 Återställer formulärstate');
@@ -295,7 +312,10 @@
   }
 
   // Kontrollera att validateEmail() kopplas vid input
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
+    // Ladda bokningsinställningar
+    await loadBookingSettings();
+
     // Sätt clt_ready till 'false' vid sidladdning
     const cltReady = document.getElementById('clt_ready');
     if (cltReady) cltReady.value = 'false';
@@ -446,6 +466,19 @@
   }
 
   function updateCustomerFieldVisibilityAndState(data, meetingType) {
+    // Hämta required_fields från bookingSettings om det finns
+    const requiredFields = bookingSettings?.required_fields?.[meetingType] || [];
+
+    function shouldShowField(fieldName) {
+      return requiredFields.includes(fieldName);
+    }
+    // --- LOGGAR direkt efter shouldShowField ---
+    console.log('🧪 bookingSettings.required_fields:', bookingSettings?.required_fields?.[meetingType]);
+    console.log('🧪 Backend missing_fields:', data.missing_fields);
+    const allFieldIds = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    const shownFields = allFieldIds.filter(shouldShowField);
+    console.log('🧪 Fält som kommer visas i formuläret:', shownFields);
+
     const submitButton = document.getElementById('contact-update-button');
     // Dölj submit-knappen direkt efter den definierats
     if (submitButton) {
@@ -463,17 +496,8 @@
     const meetingLengthEl = document.querySelector('input[name="meeting_length"]:checked');
     const meetingLength = meetingLengthEl ? meetingLengthEl.value : '';
     const addressField = document.querySelector('#address_fields');
-    const allFieldIds = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
-    const fieldLabels = {
-      first_name: 'Förnamn',
-      last_name: 'Efternamn',
-      phone: 'Telefonnummer',
-      company: 'Företag',
-      address: 'Gatuadress',
-      postal_code: 'Postnummer',
-      city: 'Stad',
-      country: 'Land'
-    };
+    // allFieldIds redan definierad ovan
+    const fieldLabels = bookingSettings?.field_labels || {};
     const allFields = allFieldIds.map(id => document.getElementById(id)).filter(Boolean);
     const missingFieldsContainer = document.getElementById('missing_fields_messages');
     if (missingFieldsContainer) missingFieldsContainer.innerHTML = '';
@@ -486,19 +510,16 @@
     });
     if (addressField) addressField.style.display = 'none';
 
-    // Visa alltid dessa fält om kunden är ny eller har missing_fields
-    const alwaysShow = ['first_name', 'last_name', 'phone', 'company'];
+    // 2. Ersätt nuvarande allFields.forEach(input => { ... })-block med:
     allFields.forEach(input => {
+      const isVisible = shouldShowField(input.id);
+      console.log(`🔍 Fält: ${input.id}, ska visas? ${isVisible}`);
       const fieldName = input.id;
-      const isAddressField = ['address', 'postal_code', 'city', 'country'].includes(fieldName);
-      const shouldShow = data.status === 'new_customer' && alwaysShow.includes(fieldName);
-      const isMissing = data.missing_fields && data.missing_fields.includes(fieldName);
-      const showField = shouldShow || isMissing;
-      if (showField) {
+      if (shouldShowField(fieldName)) {
         input.classList.remove('hidden');
         input.classList.add('needs-filling');
         input.style.display = 'block';
-        if (missingFieldsContainer && isMissing) {
+        if (missingFieldsContainer && data.missing_fields?.includes(fieldName)) {
           const p = document.createElement('p');
           p.className = 'missing-field-message';
           p.textContent = `Saknat fält: ${fieldLabels[fieldName] || fieldName}`;
@@ -506,19 +527,6 @@
         }
       }
     });
-
-    // Visa #address_fields om meetingType === 'atclient' och (ny kund eller någon adress i missing_fields)
-    const addressFieldIds = ['address', 'postal_code', 'city', 'country'];
-    const addressRequired =
-      meetingType === 'atclient' &&
-      (
-        data.status === 'new_customer' ||
-        (data.missing_fields && addressFieldIds.some(id => data.missing_fields.includes(id)))
-      );
-    if (addressRequired && addressField) {
-      addressField.style.display = 'block';
-      console.log('✅ Visar #address_fields pga atclient + ny kund eller missing_fields');
-    }
 
     // Visa knapp baserat på status och om alla synliga fält är ifyllda
     if (submitButton) {
