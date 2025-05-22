@@ -1,4 +1,9 @@
 console.log("🧪 getMsToken.js laddades");
+
+// Logga utvalda miljövariabler för felsökning
+context.log("🔍 MS365_CLIENT_ID:", process.env.MS365_CLIENT_ID?.slice(0, 8));
+context.log("🔍 MS365_CLIENT_SECRET:", process.env.MS365_CLIENT_SECRET ? "[satt]" : "[saknas]");
+context.log("🔍 MS365_TENANT_ID:", process.env.MS365_TENANT_ID?.slice(0, 8));
 const fetch = require('node-fetch');
 
 module.exports = async function getMsToken(context = { log: console.log }) {
@@ -27,6 +32,7 @@ module.exports = async function getMsToken(context = { log: console.log }) {
     if (!res.ok) {
       const errorText = await res.text();
       context.log(`⚠️ Tokenhämtning misslyckades: ${res.status} ${res.statusText}\nSvar: ${errorText}`);
+      context.log("🪵 Fullständigt svar från Graph:", errorText);
       return null;
     }
 
