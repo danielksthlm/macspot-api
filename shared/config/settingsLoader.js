@@ -33,6 +33,20 @@ async function getSettings(context) {
       }
     }
     debugLog('✅ Alla inställningar tolkade och klara');
+    settings.required_fields = {
+      zoom: ['first_name', 'last_name', 'phone', 'company'],
+      atclient: ['first_name', 'last_name', 'phone', 'address', 'postal_code', 'city', 'country']
+    };
+    settings.field_labels = {
+      first_name: 'Förnamn',
+      last_name: 'Efternamn',
+      phone: 'Telefonnummer',
+      company: 'Företag',
+      address: 'Gatuadress',
+      postal_code: 'Postnummer',
+      city: 'Stad',
+      country: 'Land'
+    };
     return settings;
   } catch (err) {
     if (context && context.log) {
