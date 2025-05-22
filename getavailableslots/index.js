@@ -12,7 +12,6 @@ module.exports = async function (context, req) {
   context.log("🧪 Azure Function entrypoint nådd");
   context.log("🧪 graphClient.getEvent:", typeof graphClient.getEvent === "function");
   context.log("🧪 appleClient.getEvent:", typeof appleClient.getEvent === "function");
-  context.log("📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder");
 
   try {
     const client = await db.connect();
@@ -179,6 +178,6 @@ module.exports = async function (context, req) {
     context.log("🔥 FEL i minimal testfunktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
-  context.log("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
   context.log("🎯 Slut på exekvering av getavailableslots");
+  context.log("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
 };
