@@ -14,11 +14,15 @@ module.exports = async function getMsToken(context = { log: console.log }) {
     params.append('scope', 'https://graph.microsoft.com/.default');
     params.append('grant_type', 'client_credentials');
 
+    context.log("📡 Försöker hämta token från:", tokenEndpoint);
+
     const res = await fetch(tokenEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params
     });
+
+    context.log(`📬 Response status: ${res.status}`);
 
     if (!res.ok) {
       const errorText = await res.text();
