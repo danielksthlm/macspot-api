@@ -17,8 +17,7 @@ function createMsGraphClient() {
 
       const authToken = await getMsToken({ log: console.log });
       if (!authToken) {
-        console.warn("⚠️ accessToken saknas – använder fallback");
-        return null;
+        throw new Error("🛑 Tokenhämtning misslyckades – accessToken saknas. Funktion avbryts.");
       }
       const client = Client.init({
         authProvider: (done) => done(null, authToken)
@@ -59,8 +58,7 @@ function createMsGraphClient() {
 
       const authToken = await getMsToken({ log: console.log });
       if (!authToken) {
-        console.warn("⚠️ accessToken saknas – använder fallback");
-        return null;
+        throw new Error("🛑 Tokenhämtning misslyckades – accessToken saknas. Funktion avbryts.");
       }
       const client = Client.init({
         authProvider: (done) => done(null, authToken)

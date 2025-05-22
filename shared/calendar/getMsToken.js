@@ -1,3 +1,4 @@
+require('dotenv').config(); // Ladda miljövariabler från .env
 const fetch = require('node-fetch');
 
 console.log("🧪 getMsToken.js laddades");
@@ -43,3 +44,14 @@ module.exports = async function getMsToken(context = { log: console.log }) {
     return null;
   }
 };
+
+if (require.main === module) {
+  (async () => {
+    const token = await module.exports();
+    if (token) {
+      console.log("✅ Token hämtad:", token.slice(0, 20) + "...");
+    } else {
+      console.log("❌ Kunde inte hämta token.");
+    }
+  })();
+}

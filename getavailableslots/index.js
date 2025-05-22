@@ -126,6 +126,13 @@ module.exports = async function (context, req) {
 
     const debugHelper = createDebugLogger(context);
 
+    const appleMapsToken = await getAppleMapsAccessToken(context);
+    if (appleMapsToken) {
+      context.log("✅ Apple Maps token hämtad – längd:", appleMapsToken.length);
+    } else {
+      context.log("⚠️ Apple Maps token saknas – fallback kommer att användas");
+    }
+
     // Riktigt anrop till generateSlotChunks
     const slotGroupPicked = {};
     const startSlotGen = Date.now();
@@ -142,7 +149,7 @@ module.exports = async function (context, req) {
       graphClient,
       appleClient,
       travelCache: new Map(),
-      accessToken: await getAppleMapsAccessToken(context),
+      accessToken: appleMapsToken,
       timezone: settings.timezone || 'Europe/Stockholm',
       debugHelper,
       client: client,
