@@ -1,6 +1,6 @@
 const pool = require("../db/pgPool");
 console.log("🧪 settingsLoader.js laddades");
-module.exports = async function loadSettings(context) {
+async function getSettings(context) {
   try {
     const settings = {};
     const isDebug = process.env.DEBUG === 'true';
@@ -42,7 +42,7 @@ module.exports = async function loadSettings(context) {
     }
     throw err;
   }
-};
+}
 
 function getCloudSecretsOnly() {
   const secrets = {};
@@ -54,4 +54,4 @@ function getCloudSecretsOnly() {
   return secrets;
 }
 
-module.exports.getCloudSecretsOnly = getCloudSecretsOnly;
+module.exports = { getSettings, getCloudSecretsOnly };
