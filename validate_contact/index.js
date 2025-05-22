@@ -92,6 +92,7 @@ module.exports = async function (context, req) {
         status: 200,
         body: {
           status: "incomplete",
+          contact_id: contact.id,
           missing_fields: missingFields
         }
       };

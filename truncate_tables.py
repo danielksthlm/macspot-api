@@ -16,6 +16,7 @@ REMOTE_TABLES = [
     "event_log",
     "pending_changes",
     "slot_cache",
+    "calendar_origin_cache",
     "travel_time_cache"
 ]
 
