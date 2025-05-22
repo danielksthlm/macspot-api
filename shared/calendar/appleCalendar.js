@@ -32,6 +32,8 @@ function createAppleClient(context) {
       }
 
       const icsText = await icsRes.text();
+      context.log("🧾 Full ICS-innehåll:");
+      context.log(icsText);
       context.log("🔍 locationMatch:", icsText.match(/LOCATION:(.*)/));
       context.log("🔍 endTimeMatch:", icsText.match(/DTEND(?:;[^:]*)?:(.*)/));
       const locationMatch = icsText.match(/LOCATION:(.*)/);
