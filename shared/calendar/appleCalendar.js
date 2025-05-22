@@ -4,6 +4,7 @@ const xml2js = require("xml2js");
 
 function createAppleClient(context) {
   async function getEvent(calendarId, eventId) {
+    context.log("🍏 appleClient.getEvent() anropad med:", { calendarId, eventId });
     const caldavUrl = process.env.CALDAV_CALENDAR_URL;
     const username = process.env.CALDAV_USER;
     const password = process.env.CALDAV_PASSWORD;
@@ -32,6 +33,7 @@ function createAppleClient(context) {
       }
 
       const icsText = await icsRes.text();
+      context.log("🧾 Förhandsvisning av ICS-innehåll (första 500 tecken):", icsText.slice(0, 500));
       context.log("🧾 Full ICS-innehåll:");
       context.log(icsText);
       context.log("🔍 locationMatch:", icsText.match(/LOCATION:(.*)/));
