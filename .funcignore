@@ -29,3 +29,5 @@ tests/
 !refreshCalendarOrigins/**
 !refreshTravelTimes/
 !refreshTravelTimes/**
+!booking_settings/
+!booking_settings/**
