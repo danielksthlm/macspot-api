@@ -8,6 +8,7 @@ const getMsToken = require("./getMsToken");
 function createMsGraphClient() {
 
   async function getEvent(calendarId, eventId) {
+    console.log(`🧪 getEvent() kallas med calendarId=${calendarId}, eventId=${eventId}`);
     try {
       if (!calendarId || !eventId) {
         console.warn("❌ getEvent missing calendarId or eventId (Graph)");

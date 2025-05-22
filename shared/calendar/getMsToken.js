@@ -3,6 +3,7 @@ const fetch = require('node-fetch');
 console.log("🧪 getMsToken.js laddades");
 
 module.exports = async function getMsToken(context = { log: console.log }) {
+  context.log("🧪 getMsToken() anropades – initierar tokenhämtning");
   context.log("🔍 MS365_CLIENT_ID:", process.env.MS365_CLIENT_ID?.slice(0, 8));
   context.log("🔍 MS365_CLIENT_SECRET:", process.env.MS365_CLIENT_SECRET ? "[satt]" : "[saknas]");
   context.log("🔍 MS365_TENANT_ID:", process.env.MS365_TENANT_ID?.slice(0, 8));
