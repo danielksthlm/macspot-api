@@ -128,20 +128,40 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       const endRange = `${eventDateOnly}T23:59:59Z`;
       const events = cachedEvents || await appleClient.fetchEventsByDateRange(startRange, endRange);
       if (!cachedEvents && eventCache) eventCache.set(eventDateOnly, events);
-      const firstEvent = events[0];
-      if (firstEvent && firstEvent.location) {
-        latestOrigin = firstEvent.location;
-        originSource = 'Apple Calendar';
-        debugLog(`✅ Hittade origin från Apple: ${latestOrigin}`);
-
-        if (firstEvent.dtend && typeof firstEvent.dtend === 'string') {
-          const dt = firstEvent.dtend.replace(/[^0-9T]/g, '');
-          const parsed = new Date(dt.length === 8 ? `${dt}T00:00:00Z` : dt);
-          if (!isNaN(parsed.getTime())) {
-            originEndTime = parsed;
-          } else {
-            originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+      let mostRecent = null;
+      const eventStartTime = new Date(eventId);
+      for (const e of events) {
+        const dtend = new Date(e.dtend || '');
+        if (dtend && dtend <= eventStartTime) {
+          if (!mostRecent || dtend > new Date(mostRecent.dtend || 0)) {
+            mostRecent = e;
           }
+        }
+      }
+
+      // Om ingen med location hittades, ta det senaste med dtend
+      if (!mostRecent) {
+        for (const e of events) {
+          const dtend = new Date(e.dtend || '');
+          if (dtend && dtend <= eventStartTime) {
+            if (!mostRecent || dtend > new Date(mostRecent.dtend || 0)) {
+              mostRecent = e;
+            }
+          }
+        }
+      }
+
+      if (mostRecent) {
+        latestOrigin = mostRecent.location || fallbackOrigin || '';
+        originSource = mostRecent.location ? 'Apple Calendar' : 'fallback';
+        debugLog(`✅ Hittade origin från Apple (eller fallback): ${latestOrigin}`);
+
+        if (mostRecent.dtend && typeof mostRecent.dtend === 'string') {
+          const dt = mostRecent.dtend.replace(/[^0-9T]/g, '');
+          const parsed = new Date(dt.length === 8 ? `${dt}T00:00:00Z` : dt);
+          originEndTime = !isNaN(parsed.getTime())
+            ? parsed
+            : new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
         } else {
           originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
         }
