@@ -3,11 +3,12 @@
 const { DateTime } = require('luxon');
 const pool = require('../shared/db/pgPool');
 const { resolveOriginAddress } = require('../shared/calendar/resolveOrigin');
-const settingsLoader = require('../shared/config/settingsLoader');
+
+const { getSettings } = require('../shared/config/settingsLoader');
 
 module.exports = async function (context, myTimer) {
   const today = new Date();
-  const settings = await settingsLoader(pool, context);
+  const settings = await getSettings(context);
   const maxDays = settings.max_days_in_advance || 14;
   const days = Array.from({ length: maxDays }, (_, i) => {
     const date = new Date();

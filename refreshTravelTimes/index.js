@@ -1,10 +1,10 @@
 const { DateTime } = require('luxon');
 const fetch = require('node-fetch');
 const pool = require('../shared/db/pgPool');
-const loadSettings = require('../shared/config/settingsLoader');
+const { getSettings } = require('../shared/config/settingsLoader');
 
 module.exports = async function (context, myTimer) {
-  const settings = await loadSettings(pool, context);
+  const settings = await getSettings(context);
   const fallbackTravelTime = settings.fallback_travel_time_minutes || 20;
   const today = new Date();
   const timezone = settings.timezone || 'Europe/Stockholm';

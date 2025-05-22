@@ -1,3 +1,4 @@
+const { getSettings } = require('../shared/config/settingsLoader');
 const pool = require('../shared/db/pgPool');
 const { v4: uuidv4 } = require('uuid');
 
@@ -31,9 +32,8 @@ module.exports = async function (context, req) {
 
     if (typeof metadata !== 'object' || metadata === null) metadata = {};
 
-    const settingsRes = await pool.query('SELECT value FROM booking_settings WHERE key = $1', ['meeting_digital']);
-    const raw = settingsRes.rows[0]?.value;
-    const digitalTypes = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
+    const settings = await getSettings(context);
+    const digitalTypes = Array.isArray(settings.meeting_digital) ? settings.meeting_digital : [];
     const isDigital = digitalTypes.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atoffice';
 
     const alwaysRequired = ['first_name', 'last_name', 'phone', 'company'];

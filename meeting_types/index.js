@@ -1,4 +1,5 @@
 const pool = require('../shared/db/pgPool');
+const { getSettings } = require('../shared/config/settingsLoader');
 
 module.exports = async function (context, req) {
   const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
@@ -14,18 +15,7 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const settingsRes = await pool.query(
-      "select key, value from booking_settings where key in ('meeting_types', 'default_meeting_length_atclient', 'default_meeting_length_atoffice', 'default_meeting_length_digital')"
-    );
-
-    const settings = {};
-    for (const row of settingsRes.rows) {
-      try {
-        settings[row.key] = JSON.parse(row.value);
-      } catch {
-        settings[row.key] = row.value;
-      }
-    }
+    const settings = await getSettings(context);
 
     const rawTypes = settings['meeting_types'];
     const meetingTypes = Array.isArray(rawTypes) ? rawTypes.map(t => t.toLowerCase()) : [];

@@ -1,3 +1,4 @@
+const { getSettings } = require('../shared/config/settingsLoader');
 const pool = require('../shared/db/pgPool');
 const { v4: uuidv4 } = require('uuid');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
@@ -39,23 +40,7 @@ module.exports = async function (context, req) {
   debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
   try {
     // Läs in booking_settings
-    const settingsRes = await db.query('SELECT key, value, value_type FROM booking_settings');
-    const settings = {};
-    for (const row of settingsRes.rows) {
-      let val = row.value;
-      if (row.value_type === 'int') {
-        val = parseInt(val);
-      } else if (row.value_type === 'bool') {
-        val = val === 'true' || val === true;
-      } else if (row.value_type === 'json' || row.value_type === 'array') {
-        try {
-          val = JSON.parse(typeof val === 'string' ? val : JSON.stringify(val));
-        } catch (_) {}
-      } else if (typeof val === 'string') {
-        val = val.replace(/^"(.*)"$/, '$1'); // trimma citattecken
-      }
-      settings[row.key] = val;
-    }
+    const settings = await getSettings(context);
 
     const id = uuidv4();
     // Kontrollera om en bokning redan finns

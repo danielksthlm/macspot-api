@@ -49,12 +49,12 @@ module.exports = async function (context, req) {
 
     context.log("✅ Steg 2: Laddar booking_settings...");
 
-    const loadSettings = require('../shared/config/settingsLoader');
+    const { getSettings } = require('../shared/config/settingsLoader');
     const verifyBookingSettings = require('../shared/config/verifySettings');
 
     let settings;
     try {
-      settings = await loadSettings(db, context);
+      settings = await getSettings(context);
       context.log("✅ Steg 2a: Inställningar laddade – nycklar:", Object.keys(settings).join(', '));
       verifyBookingSettings(settings, context);
       context.log("✅ Steg 2b: Inställningar verifierade");
