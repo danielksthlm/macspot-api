@@ -153,12 +153,20 @@ module.exports = async function (context, req) {
       timezone: settings.timezone || 'Europe/Stockholm',
       debugHelper,
       client: client,
-      slotGroupPicked
+      slotGroupPicked,
+      logSlotContext: true
     });
     const durationMs = Date.now() - startSlotGen;
     context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     context.log("✅ generateSlotChunks kördes utan fel");
     context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
+
+    if (chosenSlotsResult?.chosenSlots?.length) {
+      for (const slot of chosenSlotsResult.chosenSlots) {
+        const slotHour = new Date(slot.slot_iso).getUTCHours();
+        context.log(`📆 Slot: ${slot.slot_iso}, Part: ${slot.slot_part}, Origin: ${slot.origin}, Source: ${slot.source}`);
+      }
+    }
 
     context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
     context.res = {
