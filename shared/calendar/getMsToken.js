@@ -1,7 +1,7 @@
 console.log("🧪 getMsToken.js laddades");
 const fetch = require('node-fetch');
 
-module.exports = async function getMsToken(context) {
+module.exports = async function getMsToken(context = { log: console.log }) {
   if (!process.env.MS365_CLIENT_ID || !process.env.MS365_CLIENT_SECRET || !process.env.MS365_TENANT_ID) {
     context.log("❌ En eller flera miljövariabler för MS Graph saknas.");
     return null;
