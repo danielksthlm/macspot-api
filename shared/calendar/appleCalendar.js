@@ -10,6 +10,7 @@ function createAppleClient(context) {
     const password = process.env.CALDAV_PASSWORD;
 
     context.log("🧪 getEvent() kallas med:", { calendarId, eventId });
+    context.log("🍏 appleClient.getEvent() startar – kontrollera om .ics-innehåll innehåller LOCATION och DTEND...");
     context.log("🌐 caldavUrl:", caldavUrl);
     context.log("👤 username:", username);
 
