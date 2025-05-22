@@ -1,8 +1,33 @@
 <script>
+// Globala flaggor för valhantering och månad
+window.userHasManuallySelectedDate = false;
+window.initialSlotRendered = false;
+window.lastRenderedMonth = null;
+
+// Maxbokningsdatum: 60 dagar framåt
+const maxBookingDate = new Date();
+maxBookingDate.setDate(maxBookingDate.getDate() + 60); // 60 dagar framåt
+
 window.CalendarModule = {
   renderCalendar: function(groupedSlots, firstDate) {
+    // Hide calendar if meeting type or meeting length is not selected
+    const cltType = document.getElementById('clt_meetingtype')?.value;
+    const cltLength = document.getElementById('clt_meetinglength')?.value;
+    if (!cltType || !cltLength) {
+      const wrapper = document.getElementById('calendar_wrapper');
+      if (wrapper) {
+        wrapper.style.display = 'none';
+        wrapper.style.opacity = '0';
+        wrapper.style.visibility = 'hidden';
+      }
+      return;
+    }
     if (!(firstDate instanceof Date) || isNaN(firstDate.getTime())) {
       console.warn('❌ Ogiltigt startdatum i renderCalendar');
+      return;
+    }
+    if (!groupedSlots || typeof groupedSlots !== 'object') {
+      console.warn('❌ groupedSlots saknas eller är ogiltigt i renderCalendar');
       return;
     }
 
@@ -13,9 +38,9 @@ window.CalendarModule = {
       wrapper.style.visibility = 'visible';
     }
     const grid = document.getElementById('calendar_grid');
-    const weekLabelEls = grid?.querySelectorAll('.weeklabel') || [];
-    const weekNumberEls = grid?.querySelectorAll('.weeknumber') || [];
-    const dayEls = grid?.querySelectorAll('.day') || [];
+    const weekLabelEls = grid.querySelectorAll('.weeklabel');
+    const weekNumberEls = grid.querySelectorAll('.weeknumber');
+    const dayEls = grid.querySelectorAll('.day');
 
     if (!wrapper || !grid || dayEls.length === 0) {
       console.warn('❌ Nödvändiga element saknas i DOM');
@@ -30,17 +55,72 @@ window.CalendarModule = {
       monthEl.textContent = currentMonth.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
     }
 
-    // Setup ISO week labels
+    // Inserted: Setup calendar navigation arrows and month label click
+    // --- Calculate latest allowed month based on groupedSlots (not maxBookingDate) ---
+    const latestSlotDateStr = Object.keys(groupedSlots).sort().slice(-1)[0];
+    const latestSlotDate = new Date(latestSlotDateStr);
+    const latestAllowedMonth = new Date(latestSlotDate.getFullYear(), latestSlotDate.getMonth(), 1);
+    const leftArrow = document.getElementById('cal_arrow_left');
+    const rightArrow = document.getElementById('cal_arrow_right');
+    if (leftArrow && rightArrow) {
+      // Ny logik för att begränsa och rotera månader
+      const firstAllowedMonth = new Date();
+      firstAllowedMonth.setDate(1);
+      const lastAllowedMonth = latestAllowedMonth;
+
+      leftArrow.onclick = () => {
+        const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+        window.userHasManuallySelectedDate = false;
+        if (
+          currentMonth.getFullYear() === firstAllowedMonth.getFullYear() &&
+          currentMonth.getMonth() === firstAllowedMonth.getMonth()
+        ) {
+          // Roterar bakåt från första → sista
+          window.CalendarModule.renderCalendar(groupedSlots, lastAllowedMonth);
+        } else {
+          window.CalendarModule.renderCalendar(groupedSlots, prevMonth);
+        }
+      };
+
+      rightArrow.onclick = () => {
+        const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1);
+        window.userHasManuallySelectedDate = false;
+        if (
+          currentMonth.getFullYear() === lastAllowedMonth.getFullYear() &&
+          currentMonth.getMonth() === lastAllowedMonth.getMonth()
+        ) {
+          // Roterar framåt från sista → första
+          window.CalendarModule.renderCalendar(groupedSlots, firstAllowedMonth);
+        } else {
+          window.CalendarModule.renderCalendar(groupedSlots, nextMonth);
+        }
+      };
+      leftArrow.style.cursor = 'pointer';
+      rightArrow.style.cursor = 'pointer';
+    }
+    if (monthEl) {
+      monthEl.onclick = () => {
+        const today = new Date();
+        window.CalendarModule.renderCalendar(window.latestAvailableSlots, today);
+      };
+      monthEl.style.cursor = 'pointer';
+    }
+
     const labels = ['', 'M', 'T', 'O', 'T', 'F', 'L', 'S'];
-    weekLabelEls.forEach((el, idx) => el.textContent = labels[idx] || '');
+    weekLabelEls.forEach((el, index) => {
+      el.textContent = labels[index] || '';
+    });
 
     const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const jsDay = firstDay.getDay();
-    const startOffset = jsDay === 0 ? 6 : jsDay - 1;
-    const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    const rawLastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    const lastDay = rawLastDay > maxBookingDate ? maxBookingDate : rawLastDay;
+    const jsDay = (firstDay.getDay() + 6) % 7; // ensures Monday = 0
+    const startOffset = jsDay;
     const totalDays = startOffset + lastDay.getDate();
     const numWeeks = Math.ceil(totalDays / 7);
+    const maxDayElements = dayEls.length;
 
+    window.firstAvailableInMonthSelected = false;
     let dayIndex = 0;
     for (let week = 0; week < numWeeks; week++) {
       const monday = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + week * 7);
@@ -51,49 +131,82 @@ window.CalendarModule = {
 
       for (let wd = 0; wd < 7; wd++) {
         const gridIndex = week * 7 + wd;
-        if (dayIndex >= dayEls.length) break;
+        if (dayIndex >= maxDayElements) break;
         const dayEl = dayEls[dayIndex];
+        if (!dayEl) {
+          dayIndex++;
+          continue;
+        }
         const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + gridIndex);
-        const isoDate = cellDate.toISOString().split('T')[0];
+        // ISO-format för datum (YYYY-MM-DD, svensk lokal)
+        const isoDate = cellDate.toLocaleDateString('sv-SE').replaceAll('.', '-');
 
         if (cellDate.getMonth() !== currentMonth.getMonth()) {
           dayEl.textContent = '';
           dayEl.removeAttribute('data-date');
           dayEl.classList.remove('today', 'available', 'selected');
-        } else {
-          dayEl.textContent = cellDate.getDate();
-          dayEl.dataset.date = isoDate;
+          dayIndex++;
+          continue;
+        }
+        // Visa alla dagar i månaden, men endast tillgängliga dagar blir klickbara
+        dayEl.textContent = cellDate.getDate();
+        dayEl.dataset.date = isoDate;
 
-          const isToday = cellDate.toDateString() === new Date().toDateString();
-          dayEl.classList.toggle('today', isToday);
+        const isToday = cellDate.toDateString() === new Date().toDateString();
+        if (isToday) dayEl.classList.add('today');
+        else dayEl.classList.remove('today');
 
-          const isAvailable = groupedSlots[isoDate]?.length > 0;
-          dayEl.classList.toggle('available', isAvailable);
+        const availableSlots = groupedSlots[isoDate];
+        const isAvailable = Array.isArray(availableSlots) && availableSlots.length > 0;
+        if (isAvailable) {
+          dayEl.classList.add('available');
+          const cloned = dayEl.cloneNode(true);
+          cloned.classList.add('available');
+          if (isToday) cloned.classList.add('today');
+          cloned.addEventListener('click', () => {
+            // Manuell val
+            window.userHasManuallySelectedDate = true;
+            const allDays = document.querySelectorAll('.day');
+            allDays.forEach(d => d.classList.remove('selected'));
+            cloned.classList.add('selected');
+            const selectedDateEl = document.getElementById('selected_date');
+            if (selectedDateEl) {
+              const weekday = cellDate.toLocaleDateString('sv-SE', { weekday: 'long' });
+              const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${cellDate.getDate()} ${cellDate.toLocaleDateString('sv-SE', { month: 'short' })}`;
+              selectedDateEl.textContent = formatted;
+            }
+            window.CalendarModule.highlightDate(cloned);
+            window.CalendarModule.renderTimes(groupedSlots[isoDate]);
+          });
+          dayEl.replaceWith(cloned);
 
-          if (isAvailable) {
-            const cloned = dayEl.cloneNode(true);
-            dayEl.replaceWith(cloned);
-            cloned.addEventListener('click', () => {
-              window.CalendarModule.highlightDate(cloned);
-              window.CalendarModule.renderTimes(groupedSlots[isoDate]);
-            });
-
-            if (!document.querySelector('.day.selected')) {
+          // Om månad just bytts (pga pilklick) och ingen dag är vald – välj första tillgängliga dag i denna månad
+          const isSameMonth = currentMonth.getMonth() === cellDate.getMonth() && currentMonth.getFullYear() === cellDate.getFullYear();
+          if (!window.firstAvailableInMonthSelected && isSameMonth && !window.userHasManuallySelectedDate) {
+            // Kontrollera att datumet verkligen är den första tillgängliga i denna månad
+            const currentMonthStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+            const isoMonthStr = isoDate.slice(0, 7); // YYYY-MM
+            if (isoMonthStr === currentMonthStr) {
+              // Ensure only one .day has 'selected' class
+              const allDays = document.querySelectorAll('.day');
+              allDays.forEach(d => d.classList.remove('selected'));
               cloned.classList.add('selected');
+              const selectedDateEl = document.getElementById('selected_date');
+              if (selectedDateEl) {
+                const weekday = cellDate.toLocaleDateString('sv-SE', { weekday: 'long' });
+                const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${cellDate.getDate()} ${cellDate.toLocaleDateString('sv-SE', { month: 'short' })}`;
+                selectedDateEl.textContent = formatted;
+              }
               cloned.scrollIntoView({ behavior: 'smooth', block: 'center' });
               window.CalendarModule.renderTimes(groupedSlots[isoDate]);
               window.initialSlotRendered = true;
               window.lastRenderedMonth = currentMonthKey;
-            }
-
-            if (!window.userHasManuallySelectedDate &&
-                (!window.initialSlotRendered || window.lastRenderedMonth !== currentMonthKey)) {
-              window.initialSlotRendered = true;
-              window.lastRenderedMonth = currentMonthKey;
-              window.CalendarModule.highlightDate(cloned);
-              window.CalendarModule.renderTimes(groupedSlots[isoDate]);
+              window.firstAvailableInMonthSelected = true;
             }
           }
+        } else {
+          dayEl.classList.remove('available');
+          dayEl.classList.remove('selected');
         }
         dayIndex++;
       }
@@ -102,6 +215,7 @@ window.CalendarModule = {
     for (let i = numWeeks; i < weekNumberEls.length; i++) {
       weekNumberEls[i].textContent = '';
     }
+
     for (let i = dayIndex; i < dayEls.length; i++) {
       const el = dayEls[i];
       el.textContent = '';
@@ -117,6 +231,18 @@ window.CalendarModule = {
       weekNumberCount: weekNumberEls.length
     });
     console.log('✅ Kalender renderad');
+
+    // Förval första tillgängliga dag - logik flyttad till inuti isAvailable ovan, samt skyddas av userHasManuallySelectedDate.
+
+    // Hide calendar if meeting type or meeting length is cleared after selection
+    const cltTypeCheck = document.getElementById('clt_meetingtype')?.value;
+    const cltLengthCheck = document.getElementById('clt_meetinglength')?.value;
+    const wrapperCheck = document.getElementById('calendar_wrapper');
+    if (!cltTypeCheck || !cltLengthCheck) {
+      if (wrapperCheck) {
+        wrapperCheck.style.display = 'none';
+      }
+    }
   },
   renderTimes: function(times) {
     const timeGrid = document.getElementById('time_grid');
@@ -129,7 +255,10 @@ window.CalendarModule = {
 
     const timeItems = timeGrid.querySelectorAll('.timeitems');
     timeItems.forEach((item, idx) => {
-      const label = item.querySelector('.time-label') || item.querySelector('span.w-form-label');
+      const label = item.querySelector('span.time-label') || item.querySelector('span.w-form-label');
+      if (label) {
+        label.className = 'time-label w-form-label';
+      }
       const input = item.querySelector('input[type="radio"]');
       const slot = times[idx];
 
@@ -138,13 +267,23 @@ window.CalendarModule = {
         return;
       }
 
+      if (label && label.textContent === 'Radio') {
+        label.textContent = '';
+      }
+
       const labelText = typeof slot === 'object' && slot.slot_local
         ? slot.slot_local.slice(11, 16)
         : typeof slot === 'string'
         ? slot.slice(11, 16)
         : '';
 
-      label.textContent = labelText;
+      if (labelText) {
+        label.textContent = labelText;
+      } else {
+        item.style.display = 'none';
+        return;
+      }
+
       input.value = slot.slot_iso || slot;
       input.dataset.slotIso = slot.slot_iso || slot;
       input.name = 'meeting_time';
@@ -183,7 +322,10 @@ window.CalendarModule = {
   highlightDate: function(date) {
     // Highlight date logic
     console.log('Highlighting date:', date);
-    // Implementation details...
+    // Scroll the highlighted date into view
+    if (date && typeof date.scrollIntoView === 'function') {
+      date.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   },
   initAvailableSlotFetch: function() {
     const cltReady = document.getElementById('clt_ready')?.value;
@@ -257,17 +399,38 @@ window.getISOWeek = function(date) {
 // Inserted CSS
 const style = document.createElement('style');
 style.innerHTML = `
-  .calendar-wrapper {
-    font-family: Arial, sans-serif;
-  }
-  .calendar-day {
-    padding: 5px;
-    cursor: pointer;
-  }
-  .calendar-day.highlighted {
-    background-color: #007BFF;
-    color: white;
-  }
+.day.today,
+.day.available,
+.day.available.selected {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+}
+
+.day.today {
+  border: 1px solid #B2B2B2;
+}
+
+.day.available {
+  background-color: #B2B2B2;
+  color: #F5F5F5;
+  cursor: pointer;
+}
+
+.day.available:hover {
+  background-color: #e9a56f;
+  color: #F5F5F5;
+}
+
+.day.available.selected {
+  background-color: #e9a56f;
+  color: #F5F5F5;
+  border: 1px solid #B2B2B2;
+}
 `;
 document.head.appendChild(style);
 // Expose initAvailableSlotFetch globally
