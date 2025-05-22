@@ -24,7 +24,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       continue;
     }
 
-    context.log(`📧 calendarId som används: ${contact.email || contact.booking_email}`);
+    context.log(`📧 calendarId: använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – logg ej direkt kopplad till faktisk användning`);
     const originInfo = await resolveOriginAddress({
       eventId,
       calendarId: contact.email || contact.booking_email,
