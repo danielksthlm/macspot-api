@@ -469,23 +469,20 @@
     // Hämta required_fields från bookingSettings om det finns
     const requiredFields = bookingSettings?.required_fields?.[meetingType] || [];
 
-    function shouldShowField(fieldName) {
-      return requiredFields.includes(fieldName);
-    }
     // --- LOGGAR direkt efter shouldShowField ---
     console.log('🧪 bookingSettings.required_fields:', bookingSettings?.required_fields?.[meetingType]);
     console.log('🧪 Backend missing_fields:', data.missing_fields);
     const allFieldIds = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
-    const shownFields = allFieldIds.filter(shouldShowField);
+    const metadata = data.metadata || {};
+    const shownFields = Array.isArray(data.missing_fields) ? data.missing_fields : [];
     console.log('🧪 Fält som kommer visas i formuläret:', shownFields);
 
     const submitButton = document.getElementById('contact-update-button');
     // Dölj submit-knappen direkt efter den definierats
     if (submitButton) {
       submitButton.style.display = 'none';
-      submitButton.style.opacity = '0';
-      submitButton.style.pointerEvents = 'none';
-      submitButton.style.visibility = 'hidden';
+      // submitButton.style.pointerEvents = 'none';
+      // submitButton.style.visibility = 'hidden';
     }
     const cltEmail = document.getElementById('clt_email');
     const cltMeetingType = document.getElementById('clt_meetingtype');
@@ -502,39 +499,50 @@
     const missingFieldsContainer = document.getElementById('missing_fields_messages');
     if (missingFieldsContainer) missingFieldsContainer.innerHTML = '';
 
-    // Döljer alla kontaktfält och address_fields
-    allFields.forEach(f => {
-      f.classList.add('hidden');
-      f.classList.remove('needs-filling');
-      f.style.display = 'none';
-    });
-    if (addressField) addressField.style.display = 'none';
+    // --- NY LOGIK för visning av address_fields och kontaktfält ---
+    const addressFieldIds = ['address', 'postal_code', 'city', 'country'];
+    const addressWrapper = document.getElementById('address_fields');
 
-    // 2. Ersätt nuvarande allFields.forEach(input => { ... })-block med:
     allFields.forEach(input => {
-      const isVisible = shouldShowField(input.id);
-      console.log(`🔍 Fält: ${input.id}, ska visas? ${isVisible}`);
-      const fieldName = input.id;
-      if (shouldShowField(fieldName)) {
+      const shouldShow = shownFields.includes(input.id);
+      if (shouldShow) {
         input.classList.remove('hidden');
         input.classList.add('needs-filling');
         input.style.display = 'block';
-        if (missingFieldsContainer && data.missing_fields?.includes(fieldName)) {
-          const p = document.createElement('p');
-          p.className = 'missing-field-message';
-          p.textContent = `Saknat fält: ${fieldLabels[fieldName] || fieldName}`;
-          missingFieldsContainer.appendChild(p);
-        }
+      } else {
+        input.classList.remove('needs-filling');
+        input.classList.add('hidden');
+        input.style.display = 'none';
       }
     });
+
+    // Fallback: se till att alla shownFields visas oavsett value
+    shownFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = 'block';
+        el.classList.remove('hidden');
+        el.classList.add('needs-filling');
+      }
+    });
+
+    // Visa address_fields om något av adresselementen krävs i shownFields
+    if (addressWrapper) {
+      const shouldShowAnyAddressField = addressFieldIds.some(id => shownFields.includes(id));
+      addressWrapper.style.display = shouldShowAnyAddressField ? 'block' : 'none';
+      if (shouldShowAnyAddressField) {
+        addressWrapper.classList.remove('hidden');
+      } else {
+        addressWrapper.classList.add('hidden');
+      }
+    }
 
     // Visa knapp baserat på status och om alla synliga fält är ifyllda
     if (submitButton) {
       if (data.status === 'new_customer') {
         submitButton.style.display = 'flex';
-        submitButton.style.opacity = '1';
-        submitButton.style.pointerEvents = 'auto';
-        submitButton.style.visibility = 'visible';
+        // submitButton.style.pointerEvents = 'auto';
+        // submitButton.style.visibility = 'visible';
         if (submitButton.tagName === 'INPUT') {
           submitButton.value = 'Skapa';
         } else {
@@ -543,9 +551,8 @@
         console.log('🆕 Ny kund – visa "Skapa" knapp');
       } else if (data.status === 'existing_customer' && Array.isArray(data.missing_fields) && data.missing_fields.length > 0) {
         submitButton.style.display = 'flex';
-        submitButton.style.opacity = '1';
-        submitButton.style.pointerEvents = 'auto';
-        submitButton.style.visibility = 'visible';
+        // submitButton.style.pointerEvents = 'auto';
+        // submitButton.style.visibility = 'visible';
         if (submitButton.tagName === 'INPUT') {
           submitButton.value = 'Uppdatera';
         } else {
@@ -631,9 +638,8 @@
         // Döljer submit-knappen direkt när clt_ready = true (skapande/uppdatering klar)
         if (submitButton) {
           submitButton.style.display = 'none';
-          submitButton.style.opacity = '0';
-          submitButton.style.pointerEvents = 'none';
-          submitButton.style.visibility = 'hidden';
+          // submitButton.style.pointerEvents = 'none';
+          // submitButton.style.visibility = 'hidden';
           console.log('🚫 Gömmer knapp efter skapande eller uppdatering');
         }
         console.log('✅ formState satt:', window.formState);

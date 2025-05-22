@@ -8,7 +8,7 @@ const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
-async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, eventCache }) {
+async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
   const timezone = settings.timezone || "Europe/Stockholm";
   const hoursToTry = [8, 12]; // UTC → 10:00 och 14:00 svensk tid
   const slots = [];
@@ -18,10 +18,21 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const dateObj = new Date(eventId);
     const weekday = dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
     const slot_part = hour < 12 ? "fm" : "em";
+    const slotHourStr = `${hour.toString().padStart(2, '0')}:00`;
+    if (slotHourStr >= settings.lunch_start && slotHourStr < settings.lunch_end) {
+      context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
+      continue;
+    }
     const isWeekend = ["saturday", "sunday"].includes(weekday);
     if (settings.block_weekends && isWeekend) {
       context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
       continue;
+    }
+    if (meeting_type === 'atclient' && Array.isArray(settings.allowed_atclient_meeting_days)) {
+      if (!settings.allowed_atclient_meeting_days.includes(weekday)) {
+        context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
+        continue;
+      }
     }
 
     context.log(`📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder`);
@@ -104,6 +115,18 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       }
     }
 
+    const bufferMs = (settings.buffer_between_meetings || 0) * 60000;
+    const hasConflict = existing.some(b => {
+      return (
+        (b.end + bufferMs > slotStart && b.end <= slotStart) ||
+        (b.start - bufferMs < slotEnd && b.start >= slotEnd)
+      );
+    });
+    if (hasConflict) {
+      context.log(`⛔ Slot ${eventId} krockar med möte inom buffer – hoppar`);
+      continue;
+    }
+
     // Standardpoäng är 10. Dra av poäng för stor lucka före eller efter.
     let fragmentationPenalty = 0;
     if ((gapBefore && gapBefore > 45 * 60000) || (gapAfter && gapAfter > 45 * 60000)) {
@@ -170,6 +193,7 @@ async function generateSlotChunks({
       graphClient,
       appleClient,
       meeting_length,
+      meeting_type,
       eventCache
     });
   });
@@ -206,6 +230,14 @@ async function generateSlotChunks({
       const bPriority = preferredHours.includes(bHour) ? 0 : 1;
       return aPriority - bPriority;
     })[0] || candidates[0];
+
+    const weekKeyStr = key.split('_')[0];
+    const usedMinutes = (weeklyMinutesByType[meeting_type]?.[weekKeyStr] || 0);
+    if (usedMinutes + best.meeting_length > settings.max_weekly_booking_minutes) {
+      debugLog?.(`⛔ Överskrider veckokvot (${usedMinutes + best.meeting_length} > ${settings.max_weekly_booking_minutes}) – hoppar ${key}`);
+      continue;
+    }
+
     slotGroupPicked[key] = true;
     chosen.push(best);
   }
