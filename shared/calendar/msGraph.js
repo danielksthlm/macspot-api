@@ -9,6 +9,7 @@ function createMsGraphClient() {
 
   async function getEvent(calendarId, eventId) {
     console.log(`🧪 getEvent() kallas med calendarId=${calendarId}, eventId=${eventId}`);
+    console.log(`📡 getEvent(): använder calendarId = ${calendarId}, förväntad = ${process.env.MS365_USER_EMAIL}`);
     try {
       if (!calendarId || !eventId) {
         console.warn("❌ getEvent missing calendarId or eventId (Graph)");

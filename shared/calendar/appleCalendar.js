@@ -66,6 +66,7 @@ function createAppleClient(context) {
     const password = process.env.CALDAV_PASSWORD;
 
     context.log("🧪 fetchEventsByDateRange() kallas med:", { startDate, endDate });
+    context.log(`🍏 fetchEventsByDateRange(): använder CALDAV_USER = ${process.env.CALDAV_USER}`);
 
     if (!caldavUrl || !username || !password) {
       context.log("⚠️ Missing CalDAV credentials");

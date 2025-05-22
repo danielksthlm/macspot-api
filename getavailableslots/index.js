@@ -160,6 +160,7 @@ module.exports = async function (context, req) {
     context.log("✅ generateSlotChunks kördes utan fel");
     context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
+    context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
     context.res = {
       status: 200,
       body: {
@@ -172,9 +173,11 @@ module.exports = async function (context, req) {
       }
     };
     client.release();
+    context.log("✅ Databasanslutning släppt");
   } catch (err) {
     context.log("🔥 FEL i minimal testfunktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
   context.log("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+  context.log("🎯 Slut på exekvering av getavailableslots");
 };
