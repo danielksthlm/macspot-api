@@ -14,6 +14,10 @@
 console.log("🧪 resolveOrigin.js laddades");
 const memoryCache = {};
 
+function cleanAddress(address) {
+  return address.replace(/\n/g, ', ').replace(/\\,/g, ',').replace(/\+/g, ' ').trim();
+}
+
 async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin, settings, eventCache }) {
   const cacheKey = `${calendarId}:${eventId}`;
   const debugLog = (msg) => {
@@ -35,7 +39,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     }
     debugLog(`✅ Hittade origin från cache: ${memoryCache[cacheKey].origin}`);
     return {
-      origin: memoryCache[cacheKey].origin,
+      origin: cleanAddress(memoryCache[cacheKey].origin),
       originSource: memoryCache[cacheKey].originSource,
       originEndTime
     };
@@ -66,7 +70,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
       };
       debugLog(`🛑 DB-träff var fallback – hoppar övriga försök`);
       return {
-        origin: dbRes.rows[0].address,
+        origin: cleanAddress(dbRes.rows[0].address),
         originSource: dbRes.rows[0].source,
         originEndTime
       };
@@ -84,7 +88,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     };
     debugLog(`✅ Hittade origin från DB: ${dbRes.rows[0].address}`);
     return {
-      origin: dbRes.rows[0].address,
+      origin: cleanAddress(dbRes.rows[0].address),
       originSource: dbRes.rows[0].source,
       originEndTime
     };
@@ -98,7 +102,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   if (!latestOrigin && memoryCache[`${calendarId}:${eventDateOnly}`]) {
     const { origin, originSource, originEndTime } = memoryCache[`${calendarId}:${eventDateOnly}`];
     debugLog(`🔁 Återanvänder memoryCache för dag: ${eventDateOnly}`);
-    return { origin, originSource, originEndTime };
+    return { origin: cleanAddress(origin), originSource, originEndTime };
   }
   if (graphClient && typeof graphClient.getEvent === 'function') {
     if (!latestOrigin && !memoryCache[`${calendarId}:${eventDateOnly}`]) {
@@ -198,7 +202,7 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
   };
   debugLog(`🧠 resolveOriginAddress resultat: ${latestOrigin} (källa: ${originSource})`);
   context.log(`📤 resolveOriginAddress return: ${latestOrigin} (källa: ${originSource}, endTime: ${originEndTime?.toISOString?.() || 'null'})`);
-  return { origin: latestOrigin, originSource, originEndTime };
+  return { origin: cleanAddress(latestOrigin), originSource, originEndTime };
 }
 
 module.exports = { resolveOriginAddress };
