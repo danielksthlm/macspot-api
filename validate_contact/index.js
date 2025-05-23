@@ -6,7 +6,14 @@ module.exports = async function (context, req) {
   try {
     const email = req.body?.email || req.query?.email;
     const meeting_type = req.body?.meeting_type || req.query?.meeting_type;
-    context.log.info('📥 validate_contact triggered with:', { email, meeting_type });
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('🛠 DEBUG MODE ENABLED');
+    }
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('📥 validate_contact triggered with:', { email, meeting_type });
+    }
 
     if (!email || !meeting_type) {
       context.res = { status: 400, body: { error: "email and meeting_type are required" } };
@@ -20,6 +27,11 @@ module.exports = async function (context, req) {
 
     const contactRes = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('📄 Hittad kontakt:', contact);
+    }
+
     let metadata = contact?.metadata || {};
 
     if (typeof metadata === 'string') {
@@ -32,6 +44,10 @@ module.exports = async function (context, req) {
 
     if (typeof metadata !== 'object' || metadata === null) metadata = {};
 
+    if (process.env.DEBUG === 'true') {
+      context.log.info('🧾 Metadata:', metadata);
+    }
+
     const settings = await getSettings(context);
     const digitalTypes = Array.isArray(settings.meeting_digital) ? settings.meeting_digital : [];
     const isDigital = digitalTypes.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atoffice';
@@ -42,6 +58,10 @@ module.exports = async function (context, req) {
     const missingFields = requiredFields.filter(
       field => !metadata[field] || typeof metadata[field] !== 'string' || metadata[field].trim() === ''
     );
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('📌 Saknade fält:', missingFields);
+    }
 
     if ((req.body?.write_if_valid || req.query?.write_if_valid) && missingFields.length > 0) {
       let metadataFromClient = req.body?.metadata;
@@ -60,6 +80,10 @@ module.exports = async function (context, req) {
             [newId, email, metadataFromClient]
           );
           context.log.info('✅ Ny kontakt skapad via validate_contact');
+
+          if (process.env.DEBUG === 'true') {
+            context.log.info('📤 Svarar med status: created');
+          }
 
           context.res = {
             status: 200,
@@ -80,6 +104,9 @@ module.exports = async function (context, req) {
     }
 
     if (!contact) {
+      if (process.env.DEBUG === 'true') {
+        context.log.info('📤 Svarar med status: new_customer');
+      }
       context.res = {
         status: 200,
         body: {
@@ -88,6 +115,9 @@ module.exports = async function (context, req) {
         }
       };
     } else if (missingFields.length > 0) {
+      if (process.env.DEBUG === 'true') {
+        context.log.info('📤 Svarar med status: incomplete');
+      }
       context.res = {
         status: 200,
         body: {
@@ -97,6 +127,9 @@ module.exports = async function (context, req) {
         }
       };
     } else {
+      if (process.env.DEBUG === 'true') {
+        context.log.info('📤 Svarar med status: existing_customer');
+      }
       context.res = {
         status: 200,
         body: {
@@ -107,10 +140,12 @@ module.exports = async function (context, req) {
     }
 
   } catch (error) {
-    context.log.error('❌ Error during validate_contact:', {
-      message: error.message,
-      stack: error.stack
-    });
+    if (process.env.DEBUG === 'true') {
+      context.log.error('❌ Error during validate_contact:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
     context.res = {
       status: 500,
       body: { error: error.message, stack: error.stack }
