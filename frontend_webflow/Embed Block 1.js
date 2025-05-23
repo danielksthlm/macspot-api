@@ -12,6 +12,7 @@
 
   document.addEventListener('DOMContentLoaded', async () => {
     bookingSettings = await fetchJSON('/api/booking_settings');
+    console.log('📦 SETTINGS:', bookingSettings);
     document.getElementById('clt_ready').value = 'false';
     document.querySelector('#booking_email')?.addEventListener('input', onEmailInput);
     METADATA_KEYS.concat('clt_contact_id').forEach(id => {
@@ -61,7 +62,7 @@
 
 
   async function validateContact() {
-    const email = getVal('#booking_email'), type = getVal('input[name="meeting_type"]:checked'), len = getVal('input[name="meeting_length"]:checked');
+    const email = getVal('#booking_email'), type = getVal('#clt_meetingtype'), len = getVal('input[name="meeting_length"]:checked');
     if (!email.includes('@') || !type) return;
     const response = await fetchJSON('/api/validate_contact', { email, meeting_type: type }, 'POST');
     const { contact_id, missing_fields, status } = response;
@@ -90,7 +91,12 @@
     updateSubmitButton(status, missing_fields || []);
     // Store missing_fields in window.formState for later use in submitContact
     window.formState.missing_fields = missing_fields || [];
-    toggleFields(missing_fields || [], bookingSettings?.required_fields?.[type] || []);
+    // Use the same required fields logic as in checkReady()
+    console.log('🧪 required_fields:', bookingSettings?.required_fields);
+    const baseRequired = bookingSettings?.required_fields?.base || [];
+    const extraRequired = bookingSettings?.required_fields?.[type?.toLowerCase()] || [];
+    const required = [...new Set([...baseRequired, ...extraRequired])];
+    toggleFields(missing_fields || [], required);
     const debugVals = {
       clt_contact_id: getVal('#clt_contact_id'),
       clt_email: getVal('#clt_email'),
@@ -183,13 +189,17 @@
       return el && typeof el.value === 'string' && el.value.trim();
     });
     const type = getVal('#clt_meetingtype');
-    const required = (bookingSettings?.required_fields?.[type] || []);
+    // Use the same required fields logic as in validateContact()
+    const baseRequired = bookingSettings?.required_fields?.base || [];
+    const extraRequired = bookingSettings?.required_fields?.[type?.toLowerCase()] || [];
+    const required = [...new Set([...baseRequired, ...extraRequired])];
     console.log('🧪 Kontroll checkReady – required:', required);
     const allRequiredFilled = required.every(id => {
       const el = document.getElementById(id);
       const val = el && el.offsetParent !== null
         ? getVal(`#${id}`)
         : (window.formState?.latest_metadata?.[id] || '');
+      console.log('🧪 checkReady field:', id, 'value:', val);
       return typeof val === 'string' && val.trim();
     });
     // Removed clt_contact_id requirement from isReady
@@ -214,7 +224,8 @@
   }
 
   async function fetchJSON(url, body, method = 'GET') {
-    const res = await fetch('https://macspotbackend.azurewebsites.net' + url, {
+    const noCacheUrl = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    const res = await fetch('https://macspotbackend.azurewebsites.net' + noCacheUrl, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined
