@@ -28,8 +28,58 @@ module.exports = async function (context, req) {
     const contactRes = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
 
-    let metadata = contact?.metadata || {};
+    if ((req.body?.write_if_valid || req.query?.write_if_valid) && contact) {
+      // Update existing contact if needed
+      let metadataFromClient = req.body?.metadata;
+      if (typeof metadataFromClient === 'string') {
+        try {
+          metadataFromClient = JSON.parse(metadataFromClient);
+        } catch {
+          metadataFromClient = {};
+        }
+      }
+      if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
+        await pool.query(
+          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
+          [metadataFromClient, email]
+        );
+        context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
+      }
+    }
 
+    if ((req.body?.write_if_valid || req.query?.write_if_valid) && !contact) {
+      let metadataFromClient = req.body?.metadata;
+      if (typeof metadataFromClient === 'string') {
+        try {
+          metadataFromClient = JSON.parse(metadataFromClient);
+        } catch {
+          metadataFromClient = {};
+        }
+      }
+      if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
+        const newId = uuidv4();
+        await pool.query(
+          `INSERT INTO contact (id, booking_email, metadata, created_at) VALUES ($1, $2, $3, NOW())`,
+          [newId, email, metadataFromClient]
+        );
+        context.log.info('✅ Ny kontakt skapad via validate_contact');
+
+        if (process.env.DEBUG === 'true') {
+          context.log.info('📤 Svarar med status: created');
+        }
+
+        context.res = {
+          status: 200,
+          body: {
+            status: "created",
+            contact_id: newId
+          }
+        };
+        return;
+      }
+    }
+
+    let metadata = {};
     if (contact) {
       const refreshed = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
       metadata = refreshed.rows[0]?.metadata || {};
@@ -62,46 +112,6 @@ module.exports = async function (context, req) {
 
     if (process.env.DEBUG === 'true') {
       context.log.info('📌 Saknade fält:', missingFields);
-    }
-
-    if ((req.body?.write_if_valid || req.query?.write_if_valid) && missingFields.length > 0) {
-      let metadataFromClient = req.body?.metadata;
-      if (typeof metadataFromClient === 'string') {
-        try {
-          metadataFromClient = JSON.parse(metadataFromClient);
-        } catch {
-          metadataFromClient = {};
-        }
-      }
-      if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
-        if (!contact) {
-          const newId = uuidv4();
-          await pool.query(
-            `INSERT INTO contact (id, booking_email, metadata, created_at) VALUES ($1, $2, $3, NOW())`,
-            [newId, email, metadataFromClient]
-          );
-          context.log.info('✅ Ny kontakt skapad via validate_contact');
-
-          if (process.env.DEBUG === 'true') {
-            context.log.info('📤 Svarar med status: created');
-          }
-
-          context.res = {
-            status: 200,
-            body: {
-              status: "created",
-              contact_id: newId
-            }
-          };
-          return;
-        } else {
-          await pool.query(
-            `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
-            [metadataFromClient, email]
-          );
-          context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
-        }
-      }
     }
 
     if (!contact) {
