@@ -239,11 +239,13 @@
   }
 
 function hideContactForm() {
+  // Hide only the metadata fields
   METADATA_KEYS.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  const sections = ['contact-update-button', 'meeting_type_group', 'time_slot_group'];
+  // Only hide the contact update button, keep meeting_type_group and time_slot_group visible
+  const sections = ['contact-update-button'];
   sections.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';

@@ -28,11 +28,12 @@ module.exports = async function (context, req) {
     const contactRes = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
     const contact = contactRes.rows[0];
 
-    if (process.env.DEBUG === 'true') {
-      context.log.info('📄 Hittad kontakt:', contact);
-    }
-
     let metadata = contact?.metadata || {};
+
+    if (contact) {
+      const refreshed = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
+      metadata = refreshed.rows[0]?.metadata || {};
+    }
 
     if (typeof metadata === 'string') {
       try {
@@ -99,9 +100,6 @@ module.exports = async function (context, req) {
             [metadataFromClient, email]
           );
           context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
-
-          const refreshed = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
-          metadata = refreshed.rows[0]?.metadata || {};
         }
       }
     }
