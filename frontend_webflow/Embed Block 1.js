@@ -74,11 +74,21 @@
     const metadata = typeof response?.metadata === 'object' ? response.metadata : {};
     // Uppdatera window.formState.metadata innan checkReady och toggleFields
     if (!window.formState) window.formState = {};
-    window.formState.metadata = metadata;
+    if (!window.formState.metadata) {
+      window.formState.metadata = { ...metadata };
+    } else {
+      window.formState.metadata = { ...window.formState.metadata, ...metadata };
+    }
     if (metadata && typeof metadata === 'object') {
       METADATA_KEYS.forEach(key => {
         const el = document.getElementById(key);
-        if (el && metadata[key] !== undefined && metadata[key] !== null) {
+        const existing = window.formState?.metadata?.[key];
+        if (
+          el &&
+          metadata[key] !== undefined &&
+          metadata[key] !== null &&
+          (!el.value.trim() || el.value === existing)
+        ) {
           setVal(`#${key}`, metadata[key]);
         }
       });
@@ -100,9 +110,9 @@
     };
     console.log('🧪 Kontakt-ID:', debugVals.clt_contact_id);
     console.log('🧪 DEBUG:', debugVals);
-    if (getVal('#clt_ready') === 'true' && getVal('#clt_contact_id')) {
-      window.initAvailableSlotFetch?.();
-    }
+    // if (getVal('#clt_ready') === 'true' && getVal('#clt_contact_id')) {
+    //   window.initAvailableSlotFetch?.();
+    // }
   }
 
   function toggleFields(missing, required) {
@@ -126,6 +136,12 @@
     const metadata = Object.fromEntries(
       missing.map(k => [k, getVal(`#${k}`)]).filter(([, v]) => v && v.trim())
     );
+    // Uppdatera window.formState.metadata direkt med de fält som skickas
+    if (!window.formState) window.formState = {};
+    if (!window.formState.metadata) window.formState.metadata = {};
+    Object.entries(metadata).forEach(([k, v]) => {
+      window.formState.metadata[k] = v;
+    });
     const payload = {
       email: getVal('#clt_email'),
       meeting_type: getVal('#clt_meetingtype'),
@@ -146,8 +162,9 @@
     window.formState.meeting_length = getVal('#clt_meetinglength');
     setVal('#clt_ready', 'true');
     checkReady();
-    if (getVal('#clt_ready') === 'true') {
+    if (getVal('#clt_ready') === 'true' && getVal('#clt_contact_id')) {
       window.initAvailableSlotFetch?.();
+      hideContactForm();
     }
   }
 
@@ -170,7 +187,7 @@
     } else if (status === 'existing_customer') {
       btn.style.display = 'none';
     }
-    btn.disabled = true;
+    // btn.disabled = true; // Disabled moved to checkReady
   }
 
   function checkReady() {
@@ -189,7 +206,7 @@
     const isReady = allCltFilled && allRequiredFilled;
     setVal('#clt_ready', isReady ? 'true' : 'false');
     const btn = document.getElementById('contact-update-button');
-    if (btn) btn.disabled = false;
+    if (btn) btn.disabled = !isReady;
   }
 
   function resetState() {
@@ -235,4 +252,16 @@
     div.appendChild(labelEl);
     return div;
   }
+
+function hideContactForm() {
+  METADATA_KEYS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const sections = ['contact-update-button', 'meeting_type_group', 'time_slot_group'];
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
 </script>

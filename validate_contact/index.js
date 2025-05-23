@@ -125,7 +125,7 @@ module.exports = async function (context, req) {
           contact_id: contact.id,
           booking_email: contact.booking_email,
           missing_fields: missingFields,
-          metadata
+          metadata: contact.metadata
         }
       };
     } else {
@@ -138,7 +138,7 @@ module.exports = async function (context, req) {
           status: "existing_customer",
           contact_id: contact.id,
           booking_email: contact.booking_email,
-          metadata
+          metadata: contact.metadata
         }
       };
     }
