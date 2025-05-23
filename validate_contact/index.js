@@ -29,7 +29,7 @@ module.exports = async function (context, req) {
     const contact = contactRes.rows[0];
 
     if ((req.body?.write_if_valid || req.query?.write_if_valid) && contact) {
-      // Update existing contact if needed
+      // Update existing contact if needed, merging metadata
       let metadataFromClient = req.body?.metadata;
       if (typeof metadataFromClient === 'string') {
         try {
@@ -39,9 +39,13 @@ module.exports = async function (context, req) {
         }
       }
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
+        // Fetch existing metadata
+        const existing = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
+        const old = existing.rows[0]?.metadata || {};
+        const merged = { ...old, ...metadataFromClient };
         await pool.query(
           `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
-          [metadataFromClient, email]
+          [merged, email]
         );
         context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
       }
