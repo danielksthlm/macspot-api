@@ -123,6 +123,7 @@ module.exports = async function (context, req) {
         body: {
           status: "incomplete",
           contact_id: contact.id,
+          booking_email: contact.booking_email,
           missing_fields: missingFields,
           metadata
         }
@@ -136,6 +137,7 @@ module.exports = async function (context, req) {
         body: {
           status: "existing_customer",
           contact_id: contact.id,
+          booking_email: contact.booking_email,
           metadata
         }
       };
