@@ -84,10 +84,11 @@
         setVal(`#${key}`, dataSource[key]);
       }
     });
+    if (!window.formState) window.formState = {};
+    window.formState.latest_metadata = metadata;
     checkReady();
     updateSubmitButton(status, missing_fields || []);
     // Store missing_fields in window.formState for later use in submitContact
-    if (!window.formState) window.formState = {};
     window.formState.missing_fields = missing_fields || [];
     toggleFields(missing_fields || [], bookingSettings?.required_fields?.[type] || []);
     const debugVals = {
@@ -116,16 +117,18 @@
     });
 
     const addr = document.getElementById('address_fields');
-    const showAddr = ADDRESS_FIELD_IDS.some(id => required.includes(id) && (!getVal(`#${id}`) || missing.includes(id)));
+    const showAddr = ADDRESS_FIELD_IDS.some(id => required.includes(id));
     if (addr) addr.style.display = showAddr ? 'block' : 'none';
   }
 
   async function submitContact(e) {
     e.preventDefault();
-    const currentStatus = window.formState || {};
-    const missing = currentStatus.missing_fields || METADATA_KEYS;
+    const visible = METADATA_KEYS.filter(k => {
+      const el = document.getElementById(k);
+      return el && el.offsetParent !== null;
+    });
     const metadata = Object.fromEntries(
-      missing.map(k => [k, getVal(`#${k}`)]).filter(([, v]) => v && v.trim())
+      visible.map(k => [k, getVal(`#${k}`)]).filter(([, v]) => v && v.trim())
     );
     const payload = {
       email: getVal('#clt_email'),
@@ -145,7 +148,6 @@
     window.formState.email = getVal('#clt_email');
     window.formState.meeting_type = getVal('#clt_meetingtype');
     window.formState.meeting_length = getVal('#clt_meetinglength');
-    setVal('#clt_ready', 'true');
     checkReady();
     if (getVal('#clt_ready') === 'true' && getVal('#clt_contact_id')) {
       window.initAvailableSlotFetch?.();
@@ -185,7 +187,10 @@
     console.log('🧪 Kontroll checkReady – required:', required);
     const allRequiredFilled = required.every(id => {
       const el = document.getElementById(id);
-      return el && typeof el.value === 'string' && el.value.trim();
+      const val = el && el.offsetParent !== null
+        ? getVal(`#${id}`)
+        : (window.formState?.latest_metadata?.[id] || '');
+      return typeof val === 'string' && val.trim();
     });
     // Removed clt_contact_id requirement from isReady
     const isReady = allCltFilled && allRequiredFilled;

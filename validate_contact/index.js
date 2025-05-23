@@ -107,9 +107,9 @@ module.exports = async function (context, req) {
     const digitalTypes = Array.isArray(settings.meeting_digital) ? settings.meeting_digital : [];
     const isDigital = digitalTypes.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atoffice';
 
-    const alwaysRequired = ['first_name', 'last_name', 'phone', 'company'];
-    const addressRequired = ['address', 'postal_code', 'city', 'country'];
-    const requiredFields = [...alwaysRequired, ...(isDigital ? [] : addressRequired)];
+    // Dynamically get required fields from booking_settings
+    const allRequired = settings.required_fields || {};
+    const requiredFields = Array.isArray(allRequired[meeting_type]) ? allRequired[meeting_type] : [];
     // Beräkna alltid missingFields från metadata som just lästs från databasen
     const missingFields = requiredFields.filter(
       field => !metadata[field] || typeof metadata[field] !== 'string' || metadata[field].trim() === ''
