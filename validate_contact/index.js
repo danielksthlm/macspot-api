@@ -103,6 +103,12 @@ module.exports = async function (context, req) {
       context.log.info('🧾 Metadata:', metadata);
     }
 
+    const METADATA_KEYS = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    const fullMetadata = Object.fromEntries(
+      METADATA_KEYS.map(key => [key, metadata[key] ?? ''])
+    );
+    metadata = fullMetadata;
+
     const settings = await getSettings(context);
     const digitalTypes = Array.isArray(settings.meeting_digital) ? settings.meeting_digital : [];
     const isDigital = digitalTypes.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atoffice';
