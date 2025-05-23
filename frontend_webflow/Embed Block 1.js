@@ -72,27 +72,18 @@
       window.formState.contact_id = contact_id;
     }
     const metadata = typeof response?.metadata === 'object' ? response.metadata : {};
-    // Uppdatera window.formState.metadata innan checkReady och toggleFields
-    if (!window.formState) window.formState = {};
-    if (!window.formState.metadata) {
-      window.formState.metadata = { ...metadata };
-    } else {
-      window.formState.metadata = { ...window.formState.metadata, ...metadata };
-    }
-    if (metadata && typeof metadata === 'object') {
-      METADATA_KEYS.forEach(key => {
-        const el = document.getElementById(key);
-        const existing = window.formState?.metadata?.[key];
-        if (
-          el &&
-          metadata[key] !== undefined &&
-          metadata[key] !== null &&
-          (!el.value.trim() || el.value === existing)
-        ) {
-          setVal(`#${key}`, metadata[key]);
-        }
-      });
-    }
+    // Autofill using the latest formState.metadata as the source of truth
+    const dataSource = metadata;
+    METADATA_KEYS.forEach(key => {
+      const el = document.getElementById(key);
+      if (
+        el &&
+        dataSource[key] !== undefined &&
+        dataSource[key] !== null
+      ) {
+        setVal(`#${key}`, dataSource[key]);
+      }
+    });
     checkReady();
     updateSubmitButton(status, missing_fields || []);
     // Store missing_fields in window.formState for later use in submitContact
@@ -136,12 +127,6 @@
     const metadata = Object.fromEntries(
       missing.map(k => [k, getVal(`#${k}`)]).filter(([, v]) => v && v.trim())
     );
-    // Uppdatera window.formState.metadata direkt med de fält som skickas
-    if (!window.formState) window.formState = {};
-    if (!window.formState.metadata) window.formState.metadata = {};
-    Object.entries(metadata).forEach(([k, v]) => {
-      window.formState.metadata[k] = v;
-    });
     const payload = {
       email: getVal('#clt_email'),
       meeting_type: getVal('#clt_meetingtype'),

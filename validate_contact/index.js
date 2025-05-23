@@ -99,6 +99,9 @@ module.exports = async function (context, req) {
             [metadataFromClient, email]
           );
           context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
+
+          const refreshed = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
+          metadata = refreshed.rows[0]?.metadata || {};
         }
       }
     }
@@ -125,7 +128,7 @@ module.exports = async function (context, req) {
           contact_id: contact.id,
           booking_email: contact.booking_email,
           missing_fields: missingFields,
-          metadata: contact.metadata
+          metadata
         }
       };
     } else {
@@ -138,7 +141,7 @@ module.exports = async function (context, req) {
           status: "existing_customer",
           contact_id: contact.id,
           booking_email: contact.booking_email,
-          metadata: contact.metadata
+          metadata
         }
       };
     }
