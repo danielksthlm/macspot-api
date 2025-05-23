@@ -85,6 +85,9 @@
     }
     checkReady();
     updateSubmitButton(status, missing_fields || []);
+    // Store missing_fields in window.formState for later use in submitContact
+    if (!window.formState) window.formState = {};
+    window.formState.missing_fields = missing_fields || [];
     toggleFields(missing_fields || [], bookingSettings?.required_fields?.[type] || []);
     const debugVals = {
       clt_contact_id: getVal('#clt_contact_id'),
@@ -118,7 +121,11 @@
 
   async function submitContact(e) {
     e.preventDefault();
-    const metadata = Object.fromEntries(METADATA_KEYS.map(k => [k, getVal(`#${k}`)]));
+    const currentStatus = window.formState || {};
+    const missing = currentStatus.missing_fields || METADATA_KEYS;
+    const metadata = Object.fromEntries(
+      missing.map(k => [k, getVal(`#${k}`)]).filter(([, v]) => v && v.trim())
+    );
     const payload = {
       email: getVal('#clt_email'),
       meeting_type: getVal('#clt_meetingtype'),

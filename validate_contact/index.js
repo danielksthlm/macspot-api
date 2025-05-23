@@ -123,7 +123,8 @@ module.exports = async function (context, req) {
         body: {
           status: "incomplete",
           contact_id: contact.id,
-          missing_fields: missingFields
+          missing_fields: missingFields,
+          metadata
         }
       };
     } else {
@@ -134,7 +135,8 @@ module.exports = async function (context, req) {
         status: 200,
         body: {
           status: "existing_customer",
-          contact_id: contact.id
+          contact_id: contact.id,
+          metadata
         }
       };
     }
