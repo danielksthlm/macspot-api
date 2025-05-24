@@ -14,7 +14,8 @@
       meeting_length: data.meeting_length,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
-      slot_iso: data.slot_iso
+      slot_iso: data.slot_iso,
+      email: MacSpotUtils.getVal('#clt_email')
     };
 
     const btn = document.getElementById('submit-booking-button');

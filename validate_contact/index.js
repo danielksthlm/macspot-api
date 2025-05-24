@@ -63,7 +63,7 @@ module.exports = async function (context, req) {
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
         const newId = uuidv4();
         await pool.query(
-          `INSERT INTO contact (id, booking_email, metadata, created_at) VALUES ($1, $2, $3, NOW())`,
+          `INSERT INTO contact (id, email, booking_email, metadata, created_at) VALUES ($1, $2, $2, $3, NOW())`,
           [newId, email, metadataFromClient]
         );
         context.log.info('✅ Ny kontakt skapad via validate_contact');
