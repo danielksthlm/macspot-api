@@ -12,7 +12,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { email, meeting_type, meeting_length, slot_iso, metadata = {} } = req.body;
+  const { email, meeting_type, meeting_length, slot_iso, contact_id, metadata = {} } = req.body;
 
   const parsedLength = parseInt(meeting_length, 10);
   if (isNaN(parsedLength) || parsedLength <= 0) {
@@ -70,15 +70,17 @@ module.exports = async function (context, req) {
       meeting_link = `facetime:${metadata.phone}`;
     }
 
+    metadata.meeting_length = meeting_length;
+
     const fields = {
       id,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       meeting_type,
-      metadata: JSON.stringify(metadata),
+      metadata: metadata,
       created_at,
       updated_at,
-      contact_id: metadata.contact_id || null,
+      contact_id: contact_id || null,
       booking_email: email || null
     };
 

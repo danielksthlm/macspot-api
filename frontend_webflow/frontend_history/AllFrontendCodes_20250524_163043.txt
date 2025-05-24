@@ -1,0 +1,1243 @@
+📂 KODTRÄD
+==========
+├── frontend_webflow
+│   ├── Webflow Contact Before body-tag.js
+│   ├── Webflow Embed Code Block 1.js
+│   ├── Webflow Embed Code Block 2.js
+│   ├── Webflow Embed Code Block 3.js
+==========
+
+====================
+📄 Fil: frontend_webflow/Webflow Embed Code Block 1.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-24 16:22:00
+📏 Antal rader: 334
+🧩 Antal funktioner: 14
+💬 Kommentarstäckning: 13 rader (3.9%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 51 rader
+🧠 Komplexitetspoäng: 32
+🧪 TODO/FIXME: 0
+====================
+START: Webflow Embed Code Block 1.js
+<script>
+  const METADATA_KEYS = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+  const ADDRESS_FIELD_IDS = ['address', 'postal_code', 'city', 'country'];
+  const displayNames = {
+    zoom: 'Digitalt via Zoom',
+    facetime: 'Digitalt via FaceTime',
+    teams: 'Digitalt via Teams',
+    atclient: 'Möte hos dig (ange adress)',
+    atoffice: 'Möte på mitt kontor i Stockholm'
+  };
+  let bookingSettings = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    bookingSettings = await fetchJSON('/api/booking_settings');
+    console.log('📦 SETTINGS:', bookingSettings);
+    document.getElementById('clt_ready').value = 'false';
+    document.querySelector('#booking_email')?.addEventListener('input', onEmailInput);
+    // Ensure checkReady runs when any metadata field is typed in
+    METADATA_KEYS.forEach(id => {
+      document.getElementById(id)?.addEventListener('input', checkReady);
+    });
+    // Removed live validateContact() on metadata field input to prevent overwrites while typing.
+    // METADATA_KEYS.concat('clt_contact_id').forEach(id => {
+    //   document.getElementById(id)?.addEventListener('input', validateContact);
+    // });
+    document.getElementById('contact-update-button')?.addEventListener('click', submitContact);
+  });
+
+  function onEmailInput() {
+    resetState();
+    const email = getVal('#booking_email');
+    setVal('#clt_email', email);
+    checkTriggerValidateContact();
+    if (!email.includes('@')) return;
+    loadMeetingTypes();
+  }
+
+  async function loadMeetingTypes() {
+    const { types, lengths } = await fetchJSON('/api/meeting_types');
+    window.lengths = Object.fromEntries(Object.entries(lengths).map(([k, v]) => [k.toLowerCase(), v]));
+    const container = document.getElementById('meeting_type_select');
+    container.innerHTML = '';
+    types.forEach(type => {
+      const value = type.toLowerCase();
+      container.appendChild(createRadio('meeting_type', value, displayNames[value], () => {
+        setVal('#clt_meetingtype', value);
+        renderMeetingLengths(value);
+        checkTriggerValidateContact();
+      }));
+    });
+    document.getElementById('meeting_type_group').style.display = 'block';
+  }
+
+  function renderMeetingLengths(type) {
+    const container = document.getElementById('time_slot_select');
+    container.innerHTML = '';
+    (window.lengths[type] || [90]).forEach(length => {
+      container.appendChild(createRadio('meeting_length', length, `${length} min`, () => {
+        setVal('#clt_meetinglength', String(length));
+        document.querySelector('#clt_meetinglength')?.setAttribute('value', String(length));
+        console.log('🧪 DEBUG set clt_meetinglength to:', length);
+        checkTriggerValidateContact();
+      }));
+    });
+    document.getElementById('time_slot_group').style.display = 'block';
+  }
+
+
+  async function validateContact() {
+    const email = getVal('#booking_email'), type = getVal('#clt_meetingtype');
+    if (!email.includes('@') || !type) return;
+    const payload = { email, meeting_type: type };
+    const response = await fetchJSON('/api/validate_contact', payload, 'POST');
+    const { contact_id, missing_fields, status, metadata } = response;
+    window.formState = {
+      status,
+      contact_id,
+      email: metadata?.email || email,
+      meeting_type: metadata?.meeting_type || type,
+      meeting_length: metadata?.meeting_length || getVal('#clt_meetinglength')
+    };
+    console.log('🧪 validateContact() contact_id:', contact_id);
+    if (contact_id) {
+      setVal('#clt_contact_id', contact_id);
+    }
+    if (metadata) {
+      if (metadata.email) setVal('#clt_email', metadata.email);
+      if (metadata.meeting_type) setVal('#clt_meetingtype', metadata.meeting_type);
+      if (metadata.meeting_length) setVal('#clt_meetinglength', String(metadata.meeting_length));
+    }
+    const baseRequired = bookingSettings?.required_fields?.base || [];
+    const extraRequired = bookingSettings?.required_fields?.[type?.toLowerCase()] || [];
+    const required = [...new Set([...baseRequired, ...extraRequired])];
+
+    toggleFields(status, missing_fields || [], required, metadata || {});
+
+    checkReady();
+    console.log('📡 meeting_type vid validateContact():', getVal('#clt_meetingtype'));
+    console.log('📡 meeting_length vid validateContact():', getVal('#clt_meetinglength'));
+    console.log('📡 clt_ready vid validateContact():', getVal('#clt_ready'));
+
+    if (status === 'existing_customer') {
+      // Ensure meeting_length is set before triggering initAvailableSlotFetch
+      if (getVal('#clt_ready') === 'true' && contact_id) {
+        console.log('📡 clt_ready är true – triggar initAvailableSlotFetch');
+        window.initAvailableSlotFetch?.({
+          email: getVal('#clt_email'),
+          meeting_type: getVal('#clt_meetingtype'),
+          meeting_length: getVal('#clt_meetinglength'),
+          contact_id: getVal('#clt_contact_id')
+        });
+      }
+    }
+  }
+
+  function toggleFields(status, missing_fields, required, metadata) {
+    const containerVisibleFields = new Set();
+
+    if (status === 'new_customer') {
+      required.forEach(id => containerVisibleFields.add(id));
+    } else if (status === 'incomplete') {
+      missing_fields.forEach(id => containerVisibleFields.add(id));
+      required.forEach(id => containerVisibleFields.add(id));
+    }
+
+    METADATA_KEYS.forEach(key => {
+      const el = document.getElementById(key);
+      if (!el) return;
+      const shouldShow = containerVisibleFields.has(key);
+      el.style.display = shouldShow ? 'block' : 'none';
+      if (shouldShow && metadata[key] !== undefined) {
+        setVal(`#${key}`, metadata[key]);
+      }
+    });
+
+    const btn = document.getElementById('contact-update-button');
+    if (btn) {
+      if (status === 'new_customer') {
+        btn.value = btn.textContent = 'Skapa';
+        btn.style.display = 'block';
+      } else if (status === 'incomplete') {
+        btn.value = btn.textContent = 'Uppdatera';
+        btn.style.display = 'block';
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+
+    const addr = document.getElementById('address_fields');
+    if (addr) {
+      const showAddr = ADDRESS_FIELD_IDS.some(id => containerVisibleFields.has(id));
+      addr.style.display = showAddr ? 'block' : 'none';
+    }
+  }
+
+  async function submitContact(e) {
+    e.preventDefault();
+    const status = window.formState?.status || '';
+    if (status !== 'new_customer' && status !== 'incomplete') {
+      console.warn('🛑 submitContact called but status is neither new_customer nor incomplete:', status);
+      return;
+    }
+    // Only include visible and filled metadata fields
+    const visible = METADATA_KEYS.filter(k => {
+      const el = document.getElementById(k);
+      return el && (el.offsetParent !== null || el.offsetHeight > 0);
+    });
+    const metadata = Object.fromEntries(
+      visible.map(k => [k, getVal(`#${k}`)]).filter(([, v]) => v && v.trim())
+    );
+    const payload = {
+      email: getVal('#clt_email'),
+      meeting_type: getVal('#clt_meetingtype'),
+      metadata,
+      write_if_valid: true
+    };
+    const { contact_id, status: newStatus } = await fetchJSON('/api/validate_contact', payload, 'POST');
+    if (!contact_id) {
+      setVal('#clt_ready', 'false');
+      alert('Kunde inte skapa eller uppdatera kontakt. Kontrollera att alla fält är korrekt ifyllda.');
+      return;
+    }
+    setVal('#clt_contact_id', contact_id);
+    window.formState = {
+      contact_id,
+      email: getVal('#clt_email'),
+      meeting_type: getVal('#clt_meetingtype'),
+      meeting_length: getVal('#clt_meetinglength'),
+      status: newStatus || status
+    };
+
+    checkReady();
+
+    if (getVal('#clt_ready') === 'true' && getVal('#clt_contact_id')) {
+      // After successful creation or update, initAvailableSlotFetch and hide form
+      window.initAvailableSlotFetch?.({
+        email: getVal('#clt_email'),
+        meeting_type: getVal('#clt_meetingtype'),
+        meeting_length: getVal('#clt_meetinglength'),
+        contact_id: getVal('#clt_contact_id')
+      });
+      hideContactForm();
+    }
+  }
+
+  // updateSubmitButton removed; logic now unified in checkReady()
+
+  function checkReady() {
+    const status = window.formState?.status || '';
+    console.log('🧪 checkReady → email:', getVal('#clt_email'));
+    console.log('🧪 checkReady → meeting_type:', getVal('#clt_meetingtype'));
+    console.log('🧪 checkReady → meeting_length:', getVal('#clt_meetinglength'));
+    console.log('🧪 formState.status:', window.formState?.status);
+    if (status === 'existing_customer') {
+      setVal('#clt_ready', 'true');
+      console.log('🧪 checkReady – status:', status, '| clt_ready: true (forced for existing_customer)');
+      return;
+    }
+    const allCltFilled = ['#clt_email', '#clt_meetingtype', '#clt_meetinglength'].every(id => {
+      const el = document.querySelector(id);
+      return el && typeof el.value === 'string' && el.value.trim();
+    });
+    const type = getVal('#clt_meetingtype');
+    // Use the same required fields logic as in validateContact()
+    const baseRequired = bookingSettings?.required_fields?.base || [];
+    const extraRequired = bookingSettings?.required_fields?.[type?.toLowerCase()] || [];
+    const required = [...new Set([...baseRequired, ...extraRequired])];
+    console.log('🧪 Kontroll checkReady – required:', required);
+    console.log('🧪 Kontroll checkReady – baseRequired:', baseRequired);
+    console.log('🧪 Kontroll checkReady – extraRequired:', extraRequired);
+    const allRequiredFilled = required.every(id => {
+      const el = document.getElementById(id);
+      const val = getVal(`#${id}`);
+      console.log('🧪 checkReady field:', id, 'value:', val);
+      return typeof val === 'string' && val.trim();
+    });
+    // Removed clt_contact_id requirement from isReady
+    const isReady = allCltFilled && allRequiredFilled;
+    setVal('#clt_ready', isReady ? 'true' : 'false');
+    console.log('🧪 clt_ready just set:', isReady);
+    const btn = document.getElementById('contact-update-button');
+    if (btn) {
+      if (isReady && status === 'existing_customer') {
+        btn.style.display = 'none';
+        btn.style.visibility = 'hidden';
+      } else if (status === 'incomplete' || status === 'new_customer') {
+        btn.value = btn.textContent = status === 'new_customer' ? 'Skapa' : 'Uppdatera';
+        btn.style.display = 'block';
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+        btn.style.visibility = 'visible';
+        btn.disabled = !isReady;
+      } else {
+        btn.style.display = 'none';
+        btn.style.visibility = 'hidden';
+      }
+    }
+    console.log('🧪 checkReady – status:', status, '| clt_ready:', isReady);
+  }
+
+  function resetState() {
+    ['#clt_ready', '#clt_meetingtype', '#clt_meetinglength', '#clt_contact_id'].forEach(id => setVal(id, ''));
+    console.log('🧪 clt_ready reset to empty string');
+  }
+
+  function getVal(sel) {
+    const el = document.querySelector(sel);
+    return el ? (el.type === 'radio' ? (el.checked ? el.value : '') : (typeof el.value === 'string' ? el.value.trim() : '')) : '';
+  }
+
+  function setVal(sel, val) {
+    const el = document.querySelector(sel);
+    if (el) el.value = val;
+  }
+
+  async function fetchJSON(url, body, method = 'GET') {
+    const noCacheUrl = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    const res = await fetch('https://macspotbackend.azurewebsites.net' + noCacheUrl, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  }
+
+  function createRadio(name, value, label, onChange) {
+    const div = document.createElement('div');
+    const labelEl = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = name;
+    input.value = value;
+    input.addEventListener('change', onChange);
+    labelEl.appendChild(input);
+    const span = document.createElement('span');
+    span.textContent = ` ${label}`;
+    labelEl.appendChild(span);
+    div.appendChild(labelEl);
+    return div;
+  }
+
+function hideContactForm() {
+  // Hide only the metadata fields
+  METADATA_KEYS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // Only hide the contact update button, keep meeting_type_group and time_slot_group visible
+  const sections = ['contact-update-button'];
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+function groupSlotsByDay(slots) {
+  return slots.reduce((acc, slot) => {
+    const day = slot.slot_local?.slice(0, 10);
+    if (!acc[day]) acc[day] = [];
+    acc[day].push(slot);
+    return acc;
+  }, {});
+}
+
+function checkTriggerValidateContact() {
+  const email = getVal('#booking_email');
+  const type = getVal('#clt_meetingtype');
+  const length = getVal('#clt_meetinglength');
+  if (email.includes('@') && type && length) {
+    validateContact();
+  }
+}
+</script>
+END: Webflow Embed Code Block 1.js
+
+====================
+📄 Fil: frontend_webflow/Webflow Embed Code Block 2.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-22 08:34:34
+📏 Antal rader: 438
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 20 rader (4.6%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 48
+🧪 TODO/FIXME: 0
+====================
+START: Webflow Embed Code Block 2.js
+<script>
+// Globala flaggor för valhantering och månad
+window.userHasManuallySelectedDate = false;
+window.initialSlotRendered = false;
+window.lastRenderedMonth = null;
+
+// Maxbokningsdatum: 60 dagar framåt
+const maxBookingDate = new Date();
+maxBookingDate.setDate(maxBookingDate.getDate() + 60); // 60 dagar framåt
+
+window.CalendarModule = {
+  renderCalendar: function(groupedSlots, firstDate) {
+    // Hide calendar if meeting type or meeting length is not selected
+    const cltType = document.getElementById('clt_meetingtype')?.value;
+    const cltLength = document.getElementById('clt_meetinglength')?.value;
+    if (!cltType || !cltLength) {
+      const wrapper = document.getElementById('calendar_wrapper');
+      if (wrapper) {
+        wrapper.style.display = 'none';
+        wrapper.style.opacity = '0';
+        wrapper.style.visibility = 'hidden';
+      }
+      return;
+    }
+    if (!(firstDate instanceof Date) || isNaN(firstDate.getTime())) {
+      console.warn('❌ Ogiltigt startdatum i renderCalendar');
+      return;
+    }
+    if (!groupedSlots || typeof groupedSlots !== 'object') {
+      console.warn('❌ groupedSlots saknas eller är ogiltigt i renderCalendar');
+      return;
+    }
+
+    const wrapper = document.getElementById('calendar_wrapper');
+    if (wrapper) {
+      wrapper.style.display = 'flex';
+      wrapper.style.opacity = '1';
+      wrapper.style.visibility = 'visible';
+    }
+    const grid = document.getElementById('calendar_grid');
+    const weekLabelEls = grid.querySelectorAll('.weeklabel');
+    const weekNumberEls = grid.querySelectorAll('.weeknumber');
+    const dayEls = grid.querySelectorAll('.day');
+
+    if (!wrapper || !grid || dayEls.length === 0) {
+      console.warn('❌ Nödvändiga element saknas i DOM');
+      return;
+    }
+
+    const currentMonth = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+    const currentMonthKey = currentMonth.getFullYear() + '-' + currentMonth.getMonth();
+
+    const monthEl = document.getElementById('calendar_month');
+    if (monthEl) {
+      monthEl.textContent = currentMonth.toLocaleString('sv-SE', { month: 'long', year: 'numeric' });
+    }
+
+    // Inserted: Setup calendar navigation arrows and month label click
+    // --- Calculate latest allowed month based on groupedSlots (not maxBookingDate) ---
+    const latestSlotDateStr = Object.keys(groupedSlots).sort().slice(-1)[0];
+    const latestSlotDate = new Date(latestSlotDateStr);
+    const latestAllowedMonth = new Date(latestSlotDate.getFullYear(), latestSlotDate.getMonth(), 1);
+    const leftArrow = document.getElementById('cal_arrow_left');
+    const rightArrow = document.getElementById('cal_arrow_right');
+    if (leftArrow && rightArrow) {
+      // Ny logik för att begränsa och rotera månader
+      const firstAllowedMonth = new Date();
+      firstAllowedMonth.setDate(1);
+      const lastAllowedMonth = latestAllowedMonth;
+
+      leftArrow.onclick = () => {
+        const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+        window.userHasManuallySelectedDate = false;
+        if (
+          currentMonth.getFullYear() === firstAllowedMonth.getFullYear() &&
+          currentMonth.getMonth() === firstAllowedMonth.getMonth()
+        ) {
+          // Roterar bakåt från första → sista
+          window.CalendarModule.renderCalendar(groupedSlots, lastAllowedMonth);
+        } else {
+          window.CalendarModule.renderCalendar(groupedSlots, prevMonth);
+        }
+      };
+
+      rightArrow.onclick = () => {
+        const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1);
+        window.userHasManuallySelectedDate = false;
+        if (
+          currentMonth.getFullYear() === lastAllowedMonth.getFullYear() &&
+          currentMonth.getMonth() === lastAllowedMonth.getMonth()
+        ) {
+          // Roterar framåt från sista → första
+          window.CalendarModule.renderCalendar(groupedSlots, firstAllowedMonth);
+        } else {
+          window.CalendarModule.renderCalendar(groupedSlots, nextMonth);
+        }
+      };
+      leftArrow.style.cursor = 'pointer';
+      rightArrow.style.cursor = 'pointer';
+    }
+    if (monthEl) {
+      monthEl.onclick = () => {
+        const today = new Date();
+        window.CalendarModule.renderCalendar(window.latestAvailableSlots, today);
+      };
+      monthEl.style.cursor = 'pointer';
+    }
+
+    const labels = ['', 'M', 'T', 'O', 'T', 'F', 'L', 'S'];
+    weekLabelEls.forEach((el, index) => {
+      el.textContent = labels[index] || '';
+    });
+
+    const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const rawLastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    const lastDay = rawLastDay > maxBookingDate ? maxBookingDate : rawLastDay;
+    const jsDay = (firstDay.getDay() + 6) % 7; // ensures Monday = 0
+    const startOffset = jsDay;
+    const totalDays = startOffset + lastDay.getDate();
+    const numWeeks = Math.ceil(totalDays / 7);
+    const maxDayElements = dayEls.length;
+
+    window.firstAvailableInMonthSelected = false;
+    let dayIndex = 0;
+    for (let week = 0; week < numWeeks; week++) {
+      const monday = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + week * 7);
+      const weekNumber = window.getISOWeek(monday);
+      if (week < weekNumberEls.length) {
+        weekNumberEls[week].textContent = 'v' + weekNumber;
+      }
+
+      for (let wd = 0; wd < 7; wd++) {
+        const gridIndex = week * 7 + wd;
+        if (dayIndex >= maxDayElements) break;
+        const dayEl = dayEls[dayIndex];
+        if (!dayEl) {
+          dayIndex++;
+          continue;
+        }
+        const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startOffset + gridIndex);
+        // ISO-format för datum (YYYY-MM-DD, svensk lokal)
+        const isoDate = cellDate.toLocaleDateString('sv-SE').replaceAll('.', '-');
+
+        if (cellDate.getMonth() !== currentMonth.getMonth()) {
+          dayEl.textContent = '';
+          dayEl.removeAttribute('data-date');
+          dayEl.classList.remove('today', 'available', 'selected');
+          dayIndex++;
+          continue;
+        }
+        // Visa alla dagar i månaden, men endast tillgängliga dagar blir klickbara
+        dayEl.textContent = cellDate.getDate();
+        dayEl.dataset.date = isoDate;
+
+        const isToday = cellDate.toDateString() === new Date().toDateString();
+        if (isToday) dayEl.classList.add('today');
+        else dayEl.classList.remove('today');
+
+        const availableSlots = groupedSlots[isoDate];
+        const isAvailable = Array.isArray(availableSlots) && availableSlots.length > 0;
+        if (isAvailable) {
+          dayEl.classList.add('available');
+          const cloned = dayEl.cloneNode(true);
+          cloned.classList.add('available');
+          if (isToday) cloned.classList.add('today');
+          cloned.addEventListener('click', () => {
+            // Manuell val
+            window.userHasManuallySelectedDate = true;
+            const allDays = document.querySelectorAll('.day');
+            allDays.forEach(d => d.classList.remove('selected'));
+            cloned.classList.add('selected');
+            const selectedDateEl = document.getElementById('selected_date');
+            if (selectedDateEl) {
+              const weekday = cellDate.toLocaleDateString('sv-SE', { weekday: 'long' });
+              const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${cellDate.getDate()} ${cellDate.toLocaleDateString('sv-SE', { month: 'short' })}`;
+              selectedDateEl.textContent = formatted;
+            }
+            window.CalendarModule.highlightDate(cloned);
+            window.CalendarModule.renderTimes(groupedSlots[isoDate]);
+          });
+          dayEl.replaceWith(cloned);
+
+          // Om månad just bytts (pga pilklick) och ingen dag är vald – välj första tillgängliga dag i denna månad
+          const isSameMonth = currentMonth.getMonth() === cellDate.getMonth() && currentMonth.getFullYear() === cellDate.getFullYear();
+          if (!window.firstAvailableInMonthSelected && isSameMonth && !window.userHasManuallySelectedDate) {
+            // Kontrollera att datumet verkligen är den första tillgängliga i denna månad
+            const currentMonthStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+            const isoMonthStr = isoDate.slice(0, 7); // YYYY-MM
+            if (isoMonthStr === currentMonthStr) {
+              // Ensure only one .day has 'selected' class
+              const allDays = document.querySelectorAll('.day');
+              allDays.forEach(d => d.classList.remove('selected'));
+              cloned.classList.add('selected');
+              const selectedDateEl = document.getElementById('selected_date');
+              if (selectedDateEl) {
+                const weekday = cellDate.toLocaleDateString('sv-SE', { weekday: 'long' });
+                const formatted = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${cellDate.getDate()} ${cellDate.toLocaleDateString('sv-SE', { month: 'short' })}`;
+                selectedDateEl.textContent = formatted;
+              }
+              cloned.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              window.CalendarModule.renderTimes(groupedSlots[isoDate]);
+              window.initialSlotRendered = true;
+              window.lastRenderedMonth = currentMonthKey;
+              window.firstAvailableInMonthSelected = true;
+            }
+          }
+        } else {
+          dayEl.classList.remove('available');
+          dayEl.classList.remove('selected');
+        }
+        dayIndex++;
+      }
+    }
+
+    for (let i = numWeeks; i < weekNumberEls.length; i++) {
+      weekNumberEls[i].textContent = '';
+    }
+
+    for (let i = dayIndex; i < dayEls.length; i++) {
+      const el = dayEls[i];
+      el.textContent = '';
+      el.removeAttribute('data-date');
+      el.classList.remove('today', 'available', 'selected');
+    }
+
+    console.log('🧪 Kontroll DOM:', {
+      wrapperExists: !!wrapper,
+      gridExists: !!grid,
+      dayCount: dayEls.length,
+      weekLabelCount: weekLabelEls.length,
+      weekNumberCount: weekNumberEls.length
+    });
+    console.log('✅ Kalender renderad');
+
+    // Förval första tillgängliga dag - logik flyttad till inuti isAvailable ovan, samt skyddas av userHasManuallySelectedDate.
+
+    // Hide calendar if meeting type or meeting length is cleared after selection
+    const cltTypeCheck = document.getElementById('clt_meetingtype')?.value;
+    const cltLengthCheck = document.getElementById('clt_meetinglength')?.value;
+    const wrapperCheck = document.getElementById('calendar_wrapper');
+    if (!cltTypeCheck || !cltLengthCheck) {
+      if (wrapperCheck) {
+        wrapperCheck.style.display = 'none';
+      }
+    }
+  },
+  renderTimes: function(times) {
+    const timeGrid = document.getElementById('time_grid');
+    const submitButton = document.getElementById('submit-booking-button');
+    const cltMeetingTime = document.getElementById('clt_meetingtime');
+    if (!timeGrid || !Array.isArray(times)) {
+      console.warn('❌ renderTimes: time_grid saknas eller times är ogiltig');
+      return;
+    }
+
+    const timeItems = timeGrid.querySelectorAll('.timeitems');
+    timeItems.forEach((item, idx) => {
+      const label = item.querySelector('span.time-label') || item.querySelector('span.w-form-label');
+      if (label) {
+        label.className = 'time-label w-form-label';
+      }
+      const input = item.querySelector('input[type="radio"]');
+      const slot = times[idx];
+
+      if (!slot || !input || !label) {
+        item.style.display = 'none';
+        return;
+      }
+
+      if (label && label.textContent === 'Radio') {
+        label.textContent = '';
+      }
+
+      const labelText = typeof slot === 'object' && slot.slot_local
+        ? slot.slot_local.slice(11, 16)
+        : typeof slot === 'string'
+        ? slot.slice(11, 16)
+        : '';
+
+      if (labelText) {
+        label.textContent = labelText;
+      } else {
+        item.style.display = 'none';
+        return;
+      }
+
+      input.value = slot.slot_iso || slot;
+      input.dataset.slotIso = slot.slot_iso || slot;
+      input.name = 'meeting_time';
+      input.id = `radio-${idx}`;
+      label.setAttribute('for', `radio-${idx}`);
+      item.dataset.slotIso = slot.slot_iso || slot;
+      item.style.display = 'block';
+
+      item.onclick = () => {
+        timeItems.forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+
+        if (!window.formState) window.formState = {};
+        window.formState.slot_iso = slot.slot_iso || slot;
+        window.formState.meeting_time = labelText;
+
+        if (cltMeetingTime) cltMeetingTime.value = slot.slot_iso || slot;
+
+        if (submitButton) {
+          submitButton.style.display = 'flex';
+          submitButton.style.opacity = '1';
+          submitButton.style.pointerEvents = 'auto';
+          submitButton.style.visibility = 'visible';
+          if (submitButton.tagName === 'INPUT') {
+            submitButton.value = 'Boka';
+          } else {
+            submitButton.textContent = 'Boka';
+          }
+        }
+
+        const cltReadyEl = document.getElementById('clt_ready');
+        if (cltReadyEl) cltReadyEl.value = 'true';
+      };
+    });
+  },
+  highlightDate: function(date) {
+    // Highlight date logic
+    console.log('Highlighting date:', date);
+    // Scroll the highlighted date into view
+    if (date && typeof date.scrollIntoView === 'function') {
+      date.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  },
+  initAvailableSlotFetch: function() {
+    const cltReady = document.getElementById('clt_ready')?.value;
+    if (cltReady !== 'true' || !window.formState) {
+      console.warn('❌ Kan inte hämta tillgängliga tider – formState eller clt_ready saknas');
+      return;
+    }
+
+    console.log('📡 Hämtar tillgängliga tider för:', window.formState);
+    if (!window.formState.contact_id) {
+      console.warn('⚠️ contact_id saknas i formState – fetch avbryts');
+    }
+
+    fetch('https://macspotbackend.azurewebsites.net/api/getavailableslots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: window.formState.email,
+        meeting_type: window.formState.meeting_type,
+        meeting_length: window.formState.meeting_length,
+        contact_id: window.formState.contact_id
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log('🧪 Rått slotData från API:', data);
+      if (!Array.isArray(data.slots)) {
+        console.warn('⚠️ API svarar utan slot-array:', data);
+      }
+      if (Array.isArray(data.slots)) {
+        const grouped = {};
+        data.slots.forEach(slot => {
+          const localDate = new Date(slot.slot_iso);
+          const localYear = localDate.getFullYear();
+          const localMonth = String(localDate.getMonth() + 1).padStart(2, '0');
+          const localDay = String(localDate.getDate()).padStart(2, '0');
+          const date = `${localYear}-${localMonth}-${localDay}`;
+          if (!grouped[date]) grouped[date] = [];
+          grouped[date].push({
+            slot_iso: slot.slot_iso,
+            slot_local: slot.slot_local || slot.slot_iso
+          });
+        });
+        console.log('📦 Skickar grouped slots till renderCalendar:', grouped);
+        if (typeof window.CalendarModule.renderCalendar === 'function') {
+          const firstDateStr = Object.keys(grouped).sort()[0];
+          const firstDate = new Date(firstDateStr);
+          window.CalendarModule.renderCalendar(grouped, firstDate);
+        }
+      }
+    })
+    .catch(err => {
+      console.error('❌ Fetch error in getavailableslots:', err.message || err);
+      alert('Fel vid hämtning av tider. Kontrollera din internetanslutning eller att servern är tillgänglig.');
+    });
+  }
+};
+
+window.getISOWeek = function(date) {
+  var target = new Date(date.valueOf());
+  var dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  var firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target) / 604800000);
+};
+
+// Inserted CSS
+const style = document.createElement('style');
+style.innerHTML = `
+.day.today,
+.day.available,
+.day.available.selected {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+}
+
+.day.today {
+  border: 1px solid #B2B2B2;
+}
+
+.day.available {
+  background-color: #B2B2B2;
+  color: #F5F5F5;
+  cursor: pointer;
+}
+
+.day.available:hover {
+  background-color: #e9a56f;
+  color: #F5F5F5;
+}
+
+.day.available.selected {
+  background-color: #e9a56f;
+  color: #F5F5F5;
+  border: 1px solid #B2B2B2;
+}
+`;
+document.head.appendChild(style);
+// Expose initAvailableSlotFetch globally
+window.initAvailableSlotFetch = window.CalendarModule.initAvailableSlotFetch;
+</script>
+END: Webflow Embed Code Block 2.js
+
+====================
+📄 Fil: frontend_webflow/Webflow Embed Code Block 3.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-22 08:56:59
+📏 Antal rader: 152
+🧩 Antal funktioner: 3
+💬 Kommentarstäckning: 4 rader (2.6%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 5 rader
+🧠 Komplexitetspoäng: 30
+🧪 TODO/FIXME: 0
+====================
+START: Webflow Embed Code Block 3.js
+<script>
+  async function submitBooking(data) {
+    if (!data.contact_id || !data.slot_iso || !data.meeting_type || !data.meeting_length) {
+      return;
+    }
+
+    const startTime = new Date(data.slot_iso);
+    const endTime = new Date(startTime.getTime() + data.meeting_length * 60000);
+
+    const payload = {
+      contact_id: data.contact_id,
+      meeting_type: data.meeting_type,
+      meeting_length: data.meeting_length,
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      slot_iso: data.slot_iso
+    };
+
+    const btn = document.getElementById('submit-booking-button');
+    if (btn) btn.disabled = true;
+
+    try {
+      const response = await fetch('https://macspotbackend.azurewebsites.net/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        let message = 'okänt fel';
+        try {
+          const errorData = await response.json();
+          message = errorData?.error || message;
+        } catch {
+          message = await response.text();
+        }
+        // Show error UI
+        const errorEl = document.querySelector('.w-form-fail');
+        const successEl = document.querySelector('.w-form-done');
+        if (errorEl) errorEl.style.display = 'block';
+        if (successEl) successEl.style.display = 'none';
+        if (btn) btn.disabled = false;
+        return;
+      }
+
+      // Show success UI
+      const successEl = document.querySelector('.w-form-done');
+      const errorEl = document.querySelector('.w-form-fail');
+      if (successEl) successEl.style.display = 'block';
+      if (errorEl) errorEl.style.display = 'none';
+      window.formState = null;
+      if (btn) {
+        btn.style.display = 'none';
+        btn.disabled = false;
+      }
+
+      // After showing success, reset form and UI after a timeout
+      setTimeout(() => {
+        const form = document.querySelector('form');
+        if (form) form.reset();
+
+        const cltReady = document.getElementById('clt_ready');
+        if (cltReady) cltReady.value = 'false';
+
+        window.formState = null;
+
+        const successEl = document.querySelector('.w-form-done');
+        if (successEl) successEl.style.display = 'none';
+
+        const calendarWrapper = document.getElementById('calendar_wrapper');
+        if (calendarWrapper) calendarWrapper.style.display = 'none';
+
+        const typeGroup = document.getElementById('meeting_type_group');
+        if (typeGroup) typeGroup.style.display = 'none';
+
+        const slotGroup = document.getElementById('time_slot_group');
+        if (slotGroup) slotGroup.style.display = 'none';
+
+        const slotSelect = document.getElementById('time_slot_select');
+        if (slotSelect) slotSelect.innerHTML = '';
+
+        const meetingTypeSelect = document.getElementById('meeting_type_select');
+        if (meetingTypeSelect) meetingTypeSelect.innerHTML = '';
+      }, 10000);
+    } catch (error) {
+      // Show error UI
+      const errorEl = document.querySelector('.w-form-fail');
+      const successEl = document.querySelector('.w-form-done');
+      if (errorEl) errorEl.style.display = 'block';
+      if (successEl) successEl.style.display = 'none';
+      if (btn) btn.disabled = false;
+    }
+  }
+  if (typeof window.submitBooking !== 'function') {
+    window.submitBooking = submitBooking;
+  }
+
+  function initBookingButtonListener() {
+    const btn = document.getElementById('submit-booking-button');
+    if (!btn) return;
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      const cltReadyEl = document.getElementById('clt_ready');
+      const cltContactIdEl = document.getElementById('clt_contact_id');
+      const cltMeetingTypeEl = document.getElementById('clt_meetingtype');
+      const cltMeetingLengthEl = document.getElementById('clt_meetinglength');
+      const cltSlotIsoEl = document.getElementById('clt_meetingtime');
+
+      const cltContactId = cltContactIdEl?.value.trim();
+      const cltMeetingType = cltMeetingTypeEl?.value.trim();
+      const cltMeetingLengthRaw = cltMeetingLengthEl?.value;
+      const cltMeetingLength = parseInt(cltMeetingLengthRaw, 10);
+      if (isNaN(cltMeetingLength)) return;
+      const cltSlotIso = cltSlotIsoEl?.value.trim();
+      const cltReady = cltReadyEl?.value.trim();
+
+      if (!cltContactId || !cltMeetingType || !cltSlotIso || cltReady !== 'true') {
+        return;
+      }
+
+      const bookingPayload = {
+        contact_id: cltContactId,
+        meeting_type: cltMeetingType,
+        meeting_length: cltMeetingLength,
+        slot_iso: cltSlotIso
+      };
+
+      submitBooking(bookingPayload);
+    });
+  }
+  if (typeof window.initBookingButtonListener !== 'function') {
+    window.initBookingButtonListener = initBookingButtonListener;
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    try {
+      if (document.getElementById('calendar_grid')) {
+        initBookingButtonListener();
+      } else {
+        const interval = setInterval(() => {
+          if (document.getElementById('calendar_grid')) {
+            clearInterval(interval);
+            initBookingButtonListener();
+          }
+        }, 100);
+      }
+    } catch (err) {
+    }
+  });
+</script>
+END: Webflow Embed Code Block 3.js
+
+====================
+📄 Fil: frontend_webflow/Webflow Contact Before body-tag.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-24 15:08:13
+📏 Antal rader: 9
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Webflow Contact Before body-tag.js
+<style>
+  #submit-booking-button,
+  #contact-update-button {
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+  }
+</style>
+END: Webflow Contact Before body-tag.js
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 .funcignore
+   # Exclude dev-only files and folders
+   .git
+   .vscode
+   .env
+   *.log
+   test/
+   tests/
+   
+   # Explicitly include all required files and folders
+   !host.json
+   !package.json
+   !package-lock.json
+   
+   !node_modules/
+   !node_modules/**
+   
+   !shared/
+   !shared/**
+   
+   !bookings/
+   !bookings/**
+   !getavailableslots/
+   !getavailableslots/**
+   !validate_contact/
+   !validate_contact/**
+   !meeting_types/
+   !meeting_types/**
+   !refreshCalendarOrigins/
+   !refreshCalendarOrigins/**
+   !refreshTravelTimes/
+   !refreshTravelTimes/**
+   !booking_settings/
+   !booking_settings/**
+   !test_frontend/
+   !test_frontend/**
+📄 booking_settings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "booking_settings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 bookings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "bookings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 getavailableslots/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "getavailableslots"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 host.json
+   {
+     "version": "2.0",
+     "extensionBundle": {
+       "id": "Microsoft.Azure.Functions.ExtensionBundle",
+       "version": "[4.*, 5.0.0)"
+     },
+     "extensions": {
+       "http": {
+         "cors": {
+           "allowedOrigins": [
+             "https://www.klrab.se"
+           ],
+           "supportCredentials": false
+         }
+       }
+     }
+   }
+📄 meeting_types/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": [ "get" ],
+         "route": "meeting_types"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 package.json
+   {
+     "name": "macspot-api",
+     "version": "1.0.0",
+     "description": "Azure Functions backend för MacSpot CRM/ERP",
+     "scripts": {
+       "start": "func start",
+       "dev": "func start --verbose",
+       "deploy": "func azure functionapp publish macspotbackend",
+       "build": "echo 'Nothing to build'"
+     },
+     "dependencies": {
+       "@azure/functions": "^4.7.0",
+       "@azure/msal-node": "^3.5.1",
+       "@microsoft/microsoft-graph-client": "^3.0.0",
+       "dav": "^1.8.0",
+       "dotenv": "^16.5.0",
+       "isomorphic-fetch": "^3.0.0",
+       "jsonwebtoken": "^9.0.0",
+       "luxon": "^3.4.4",
+       "node-fetch": "^2.7.0",
+       "node-ical": "^0.20.1",
+       "p-limit": "^6.2.0",
+       "pg": "^8.15.6",
+       "uuid": "^9.0.0",
+       "xml2js": "^0.6.2"
+     }
+   }
+
+📄 refreshCalendarOrigins/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 refreshTravelTimes/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 test_frontend/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "test_frontend"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 validate_contact/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get", "post"],
+         "route": "validate_contact"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 933
+🧩 Totalt antal funktioner: 17
+🧠 Total komplexitetspoäng: 110
+🧪 Antal TODO/FIXME totalt: 0
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+Webflow Embed Code Block 1.js,334,14,32,13,0
+Webflow Embed Code Block 2.js,438,0,48,20,0
+Webflow Embed Code Block 3.js,152,3,30,4,0
+Webflow Contact Before body-tag.js,9,0,0,0,0

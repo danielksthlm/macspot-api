@@ -12,9 +12,11 @@ total_todo = 0
 import glob
 
 filnamn_lista = [
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/Embed Block 1.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/Embed Block 2.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/Embed Block 3.js"
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/webflow_init.html",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/embed_block_1_contact.js",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/embed_block_2_calendar.js",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/embed_block_3_booking.js",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/styles_init.css"
 ]
 
 # Slutlig sammanslagen fil
