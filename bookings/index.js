@@ -92,8 +92,8 @@ module.exports = async function (context, req) {
         });
         context.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(eventResult, null, 2));
         debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
-        if (eventResult?.joinUrl) {
-          online_link = eventResult.joinUrl;
+        if (eventResult?.joinUrl || eventResult?.onlineMeetingUrl) {
+          online_link = eventResult.onlineMeetingUrl || eventResult.joinUrl;
           metadata.online_link = online_link;
           metadata.subject = eventResult.subject || undefined;
           metadata.location = eventResult.location || undefined;
