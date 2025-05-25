@@ -90,6 +90,7 @@ module.exports = async function (context, req) {
           location: metadata.location || 'Online',
           attendees: [email]
         });
+        context.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(eventResult, null, 2));
         debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
         if (eventResult?.joinUrl) {
           online_link = eventResult.joinUrl;

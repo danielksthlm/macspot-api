@@ -128,6 +128,7 @@ function createMsGraphClient() {
       };
 
       const created = await client.api(`/users/${calendarId}/events`).post(event);
+      console.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(created, null, 2));
       console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
       return {
         eventId: created.id,
