@@ -2,7 +2,7 @@ const { getSettings } = require('../shared/config/settingsLoader');
 const pool = require('../shared/db/pgPool');
 const { v4: uuidv4 } = require('uuid');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
-const { createEvent } = require('../shared/calendar/msGraph')();
+const graphClient = require('../shared/calendar/msGraph')();
 
 module.exports = async function (context, req) {
   context.log('📥 bookings/index.js startar');
@@ -76,7 +76,7 @@ module.exports = async function (context, req) {
       const subject = metadata.subject || settings.default_meeting_subject || 'Möte';
       const location = metadata.location || 'Online';
       try {
-        const eventResult = await createEvent({
+        const eventResult = await graphClient.createEvent({
           start: startTime.toISOString(),
           end: endTime.toISOString(),
           subject,

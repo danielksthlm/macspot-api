@@ -130,6 +130,8 @@ function createMsGraphClient() {
       const created = await client.api(`/users/${calendarId}/events`).post(event);
       if (!created) {
         console.warn("⚠️ createEvent returnerade null");
+        console.warn("📌 createEvent → Kontrollera att din tenant tillåter bokning av Teams-möten via Application Permissions.");
+        console.warn("📌 Detta kan kräva admin-konsent och rätt inställningar i Teams admin center.");
       } else {
         console.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(created, null, 2));
         console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
