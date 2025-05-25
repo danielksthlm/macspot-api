@@ -89,7 +89,57 @@ function createMsGraphClient() {
     }
   }
 
-  return { getEvent, listUpcomingEvents };
+  async function createEvent({ start, end, subject, location, attendees }) {
+    try {
+      const calendarId = process.env.MS365_USER_EMAIL;
+      if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
+
+      const authToken = await getMsToken({ log: console.log });
+      if (!authToken) throw new Error("🛑 Tokenhämtning misslyckades");
+
+      const client = Client.init({
+        authProvider: (done) => done(null, authToken)
+      });
+
+      const event = {
+        subject: subject || "Möte",
+        body: {
+          contentType: "HTML",
+          content: `Detta är en inbjudan till möte: ${subject || "Möte"}`
+        },
+        start: {
+          dateTime: start,
+          timeZone: "Europe/Stockholm"
+        },
+        end: {
+          dateTime: end,
+          timeZone: "Europe/Stockholm"
+        },
+        location: {
+          displayName: location || "Online"
+        },
+        attendees: (attendees || []).map(email => ({
+          emailAddress: { address: email },
+          type: "required"
+        })),
+        allowNewTimeProposals: true,
+        isOnlineMeeting: true,
+        onlineMeetingProvider: "teamsForBusiness"
+      };
+
+      const created = await client.api(`/users/${calendarId}/events`).post(event);
+      console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
+      return {
+        eventId: created.id,
+        onlineMeetingUrl: created.onlineMeeting?.joinUrl || null
+      };
+    } catch (err) {
+      console.error("❌ createEvent error (Graph):", err.message || err);
+      return null;
+    }
+  }
+
+  return { getEvent, listUpcomingEvents, createEvent };
 }
 
 if (process.env.NODE_ENV === 'test') {

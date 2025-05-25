@@ -2,6 +2,7 @@ const { getSettings } = require('../shared/config/settingsLoader');
 const pool = require('../shared/db/pgPool');
 const { v4: uuidv4 } = require('uuid');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
+const { createEvent } = require('../shared/calendar/msGraphClient');
 
 module.exports = async function (context, req) {
   const requiredFields = ['meeting_type', 'meeting_length', 'slot_iso'];
@@ -72,6 +73,30 @@ module.exports = async function (context, req) {
 
     metadata.meeting_length = meeting_length;
 
+    let online_link = null;
+    if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
+      try {
+        const eventResult = await createEvent({
+          contact_id,
+          email,
+          meeting_type,
+          meeting_length: parsedLength,
+          start_time: startTime,
+          end_time: endTime,
+          settings,
+          metadata
+        });
+        if (eventResult?.joinUrl) {
+          online_link = eventResult.joinUrl;
+          metadata.online_link = online_link;
+          metadata.subject = eventResult.subject || undefined;
+          metadata.location = eventResult.location || undefined;
+        }
+      } catch (err) {
+        debugLog('⚠️ createEvent misslyckades: ' + err.message);
+      }
+    }
+
     const fields = {
       id,
       start_time: startTime.toISOString(),
@@ -126,7 +151,7 @@ module.exports = async function (context, req) {
       body: {
         status: 'booked',
         booking_id: id,
-        calendar_invite_sent: false
+        calendar_invite_sent: !!online_link
       }
     };
   } catch (err) {
