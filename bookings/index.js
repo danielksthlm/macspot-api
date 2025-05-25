@@ -88,18 +88,24 @@ module.exports = async function (context, req) {
         } else {
           debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
         }
+        context.log("🔍 Kontroll: Finns onlineMeetingUrl i eventResult?");
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
+          context.log("🔗 onlineMeetingUrl:", online_link);
           metadata.online_link = online_link;
           metadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
           metadata.location = eventResult.location || location || 'Online';
-          // Extrahera mötes-ID och lösenord från bodyPreview om möjligt
-          const body = eventResult.body?.content || '';
-          const idMatch = body.match(/Mötes-ID:\s*(\d[\d\s]*)/);
-          const pwMatch = body.match(/Lösenord:\s*([A-Za-z0-9]+)/);
+        }
 
-          if (idMatch) metadata.meeting_id = idMatch[1].trim();
-          if (pwMatch) metadata.passcode = pwMatch[1].trim();
+        // Extrahera mötesinfo från bodyPreview oavsett joinUrl
+        const body = eventResult?.body?.content || '';
+        const idMatch = body.match(/Mötes-ID:\s*(\d[\d\s]*)/);
+        const pwMatch = body.match(/Lösenord:\s*([A-Za-z0-9]+)/);
+
+        if (idMatch) metadata.meeting_id = idMatch[1].trim();
+        if (pwMatch) metadata.passcode = pwMatch[1].trim();
+        if (body && !eventResult?.onlineMeetingUrl) {
+          metadata.body_preview = body;
         }
       } catch (err) {
         debugLog('⚠️ createEvent misslyckades: ' + err.message);
