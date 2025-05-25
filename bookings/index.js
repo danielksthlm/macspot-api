@@ -92,10 +92,14 @@ module.exports = async function (context, req) {
           location,
           attendees: [email]
         });
-        context.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(eventResult, null, 2));
-        debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
-        if (eventResult?.joinUrl || eventResult?.onlineMeetingUrl) {
-          online_link = eventResult.onlineMeetingUrl || eventResult.joinUrl;
+        if (!eventResult) {
+          context.log("⚠️ createEvent returnerade null");
+        } else {
+          context.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(eventResult, null, 2));
+          debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
+        }
+        if (eventResult?.onlineMeetingUrl) {
+          online_link = eventResult.onlineMeetingUrl;
           metadata.online_link = online_link;
           metadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
           metadata.location = eventResult.location || location || 'Online';

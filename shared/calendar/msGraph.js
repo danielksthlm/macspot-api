@@ -128,16 +128,20 @@ function createMsGraphClient() {
       };
 
       const created = await client.api(`/users/${calendarId}/events`).post(event);
-      console.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(created, null, 2));
-      if (!created.onlineMeeting?.joinUrl) {
-        console.warn("⚠️ Ingen joinUrl genererad i createEvent.");
+      if (!created) {
+        console.warn("⚠️ createEvent returnerade null");
+      } else {
+        console.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(created, null, 2));
+        console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
+        if (!created.onlineMeeting?.joinUrl) {
+          console.warn("⚠️ Ingen joinUrl genererad i createEvent.");
+        }
       }
-      console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
       return {
-        eventId: created.id,
-        onlineMeetingUrl: created.onlineMeeting?.joinUrl || null,
-        subject: created.subject || null,
-        location: created.location?.displayName || null
+        eventId: created?.id || null,
+        onlineMeetingUrl: created?.onlineMeeting?.joinUrl || null,
+        subject: created?.subject || null,
+        location: created?.location?.displayName || null
       };
     } catch (err) {
       console.error("❌ createEvent error (Graph):", err.message || err);
