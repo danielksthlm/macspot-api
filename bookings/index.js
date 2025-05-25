@@ -83,6 +83,7 @@ module.exports = async function (context, req) {
           location: metadata.location || 'Online',
           attendees: [email]
         });
+        debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
         if (eventResult?.joinUrl) {
           online_link = eventResult.joinUrl;
           metadata.online_link = online_link;
@@ -91,6 +92,7 @@ module.exports = async function (context, req) {
         }
       } catch (err) {
         debugLog('⚠️ createEvent misslyckades: ' + err.message);
+        debugLog("❌ Detaljerat fel från createEvent:", err);
       }
     }
 
