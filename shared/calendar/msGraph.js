@@ -135,7 +135,8 @@ function createMsGraphClient() {
         onlineMeetingUrl: created.onlineMeeting?.joinUrl || null
       };
     } catch (err) {
-      console.error("❌ createEvent error (Graph):", err);
+      console.error("❌ createEvent error (Graph):", err.message || err);
+      console.error("📄 Detaljerat Graph-felobjekt:", JSON.stringify(err, null, 2));
       return null;
     }
   }
