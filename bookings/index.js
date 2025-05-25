@@ -162,6 +162,7 @@ module.exports = async function (context, req) {
     };
   } catch (err) {
     context.log.error("❌ Booking error:", err.message);
+    context.log.error("❌ Fullt felobjekt:", err);
     context.res = {
       status: 500,
       body: { error: err.message }
