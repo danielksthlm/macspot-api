@@ -165,7 +165,11 @@ module.exports = async function (context, req) {
     context.log.error("❌ Fullt felobjekt:", err);
     context.res = {
       status: 500,
-      body: { error: err.message }
+      body: {
+        error: err.message,
+        stack: err.stack,
+        full: JSON.stringify(err, Object.getOwnPropertyNames(err))
+      }
     };
   } finally {
     db.release();
