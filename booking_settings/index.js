@@ -1,4 +1,5 @@
 const { getSettings } = require('../shared/config/settingsLoader');
+const graphClient = require('../shared/calendar/msGraph')();
 
 module.exports = async function (context, req) {
   try {
