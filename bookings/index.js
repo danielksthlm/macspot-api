@@ -45,8 +45,6 @@ module.exports = async function (context, req) {
   const db = await pool.connect();
   const debugHelper = createDebugLogger(context);
   const debugLog = debugHelper.debugLog;
-  const token = await require('../shared/calendar/getMsToken')(context);
-  context.log("🔐 Token prefix (40):", token?.substring(0, 40));
   debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
   try {
     // Läs in booking_settings
@@ -90,10 +88,8 @@ module.exports = async function (context, req) {
         } else {
           debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
         }
-        context.log("🔍 Kontroll: Finns onlineMeetingUrl i eventResult?");
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
-          context.log("🔗 onlineMeetingUrl:", online_link);
           metadata.online_link = online_link;
           metadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
           metadata.location = eventResult.location || location || 'Online';

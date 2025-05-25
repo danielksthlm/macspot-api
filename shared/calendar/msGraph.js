@@ -1,4 +1,3 @@
-console.log("🧪 msGraph.js laddades");
 const { Client } = require("@microsoft/microsoft-graph-client");
 require("isomorphic-fetch");
 const fetch = require("node-fetch");
@@ -8,11 +7,8 @@ const getMsToken = require("./getMsToken");
 function createMsGraphClient() {
 
   async function getEvent(calendarId, eventId) {
-    console.log(`🧪 getEvent() kallas med calendarId=${calendarId}, eventId=${eventId}`);
-    console.log(`📡 getEvent(): använder calendarId = ${calendarId}, förväntad = ${process.env.MS365_USER_EMAIL}`);
     try {
       if (!calendarId || !eventId) {
-        console.warn("❌ getEvent missing calendarId or eventId (Graph)");
         return null;
       }
 
@@ -36,7 +32,6 @@ function createMsGraphClient() {
         return { location, endTime };
       } catch (err) {
         if (err.statusCode === 404) {
-          console.warn(`⚠️ getEvent: event ${eventId} saknas`);
           return { location: null, endTime: null, deleted: true };
         }
         console.error("⚠️ getEvent error (Graph):", err.message);
@@ -128,27 +123,13 @@ function createMsGraphClient() {
       };
 
       const created = await client.api(`/users/${calendarId}/events`).post(event);
-      if (!created) {
-        console.warn("⚠️ createEvent returnerade null");
-        console.warn("📌 createEvent → Kontrollera att din tenant tillåter bokning av Teams-möten via Application Permissions.");
-        console.warn("📌 Detta kan kräva admin-konsent och rätt inställningar i Teams admin center.");
-      } else {
-        console.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(created, null, 2));
-        console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
-        if (!created.onlineMeeting?.joinUrl) {
-          console.warn("⚠️ Ingen joinUrl genererad – event skapades men saknar Teams-länk.");
-          console.warn("📌 Kontrollera fältet isOnlineMeeting och onlineMeetingProvider i responsen:");
-          console.warn("🔍 isOnlineMeeting:", created.isOnlineMeeting);
-          console.warn("🔍 onlineMeetingProvider:", created.onlineMeetingProvider);
-          console.warn("🔍 bodyPreview:", created.bodyPreview);
-        }
-      }
+
       return {
         eventId: created?.id || null,
         onlineMeetingUrl: created?.onlineMeeting?.joinUrl || null,
         subject: created?.subject || null,
         location: created?.location?.displayName || null,
-        body: created?.body || null  // ✅ Lägg till detta
+        body: created?.body || null
       };
     } catch (err) {
       console.error("❌ createEvent error (Graph):", err.message || err);
@@ -164,11 +145,5 @@ function createMsGraphClient() {
   return { getEvent, listUpcomingEvents, createEvent };
 }
 
-if (process.env.NODE_ENV === 'test') {
-  const testClient = createMsGraphClient();
-  console.log("🧪 TEST graphClient:", typeof testClient.getEvent === 'function' ? '✅ getEvent finns' : '❌ getEvent saknas');
-}
-
 const client = createMsGraphClient();
-console.log("🧪 msGraph-klient skapad – getEvent är funktion:", typeof client.getEvent === 'function');
 module.exports = () => client;
