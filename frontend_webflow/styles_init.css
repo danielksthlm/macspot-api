@@ -6,4 +6,16 @@
     pointer-events: none;
     visibility: hidden;
   }
+
+  .radio-label {
+    font-weight: 300 !important;
+    font-family: "Roboto Slab", sans-serif !important;
+    font-size: 14px !important;
+    color: var(--klr-grey);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    line-height: 1.4;
+  }
 </style>

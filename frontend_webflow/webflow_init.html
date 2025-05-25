@@ -27,19 +27,28 @@
         return await res.json();
       },
       createRadio(name, value, label, onChange) {
-        const div = document.createElement('div');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'radio-button-items';
+
         const labelEl = document.createElement('label');
+        labelEl.className = 'radio-label';
+
         const input = document.createElement('input');
         input.type = 'radio';
         input.name = name;
         input.value = value;
+        input.className = 'radio-input';
         input.addEventListener('change', onChange);
-        labelEl.appendChild(input);
+
         const span = document.createElement('span');
-        span.textContent = ` ${label}`;
+        span.textContent = label;
+        span.className = 'radio-text';
+
+        labelEl.appendChild(input);
         labelEl.appendChild(span);
-        div.appendChild(labelEl);
-        return div;
+        wrapper.appendChild(labelEl);
+
+        return wrapper;
       },
       resetContactState() {
         ['#clt_ready', '#clt_meetingtype', '#clt_meetinglength', '#clt_contact_id'].forEach(sel => {

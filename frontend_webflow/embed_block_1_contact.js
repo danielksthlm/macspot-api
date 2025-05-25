@@ -15,15 +15,28 @@
     console.log('📦 SETTINGS:', bookingSettings);
     MacSpotUtils.setVal('#clt_ready', 'false');
     document.querySelector('#booking_email')?.addEventListener('input', onEmailInput);
-    // Ensure checkReady runs when any metadata field is typed in
+    // (Removed: Ensure checkReady runs when any metadata field is typed in)
+    // Also update MacSpotUtils.setVal for each metadata field on input, and sync DOM value
     METADATA_KEYS.forEach(id => {
-      document.getElementById(id)?.addEventListener('input', checkReady);
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', () => {
+          MacSpotUtils.setVal(`#${id}`, el.value);
+          // 💡 Uppdatera också el.value för att säkerställa att DOM är synkad
+          el.setAttribute('value', el.value);
+          checkReady();
+        });
+      }
     });
     // Removed live validateContact() on metadata field input to prevent overwrites while typing.
     // METADATA_KEYS.concat('clt_contact_id').forEach(id => {
     //   document.getElementById(id)?.addEventListener('input', validateContact);
     // });
-    document.getElementById('contact-update-button')?.addEventListener('click', submitContact);
+    const contactButton = document.getElementById('contact-update-button');
+    if (contactButton) {
+      contactButton.addEventListener('click', submitContact);
+    }
+
   });
 
   function onEmailInput() {
@@ -72,27 +85,28 @@
     const payload = { email, meeting_type: type };
     const response = await MacSpotUtils.fetchJSON('/api/validate_contact', payload, 'POST');
     const { contact_id, missing_fields, status, metadata } = response;
+    console.log('📦 missing_fields:', missing_fields);
+    console.log('📦 metadata:', metadata);
     window.formState = {
       status,
       contact_id,
       email: metadata?.email || email,
       meeting_type: metadata?.meeting_type || type,
-      meeting_length: metadata?.meeting_length || MacSpotUtils.getVal('#clt_meetinglength')
+      meeting_length: metadata?.meeting_length || MacSpotUtils.getVal('#clt_meetinglength'),
+      metadata
     };
+    const baseRequired = bookingSettings?.required_fields?.base || [];
+    const extraRequired = bookingSettings?.required_fields?.[type?.toLowerCase()] || [];
+    const required = [...new Set([...baseRequired, ...extraRequired])];
     console.log('🧪 validateContact() contact_id:', contact_id);
     if (contact_id) {
       MacSpotUtils.setVal('#clt_contact_id', contact_id);
     }
-    if (metadata) {
-      if (metadata.email) MacSpotUtils.setVal('#clt_email', metadata.email);
-      if (metadata.meeting_type) MacSpotUtils.setVal('#clt_meetingtype', metadata.meeting_type);
-      if (metadata.meeting_length) MacSpotUtils.setVal('#clt_meetinglength', String(metadata.meeting_length));
-    }
-    const baseRequired = bookingSettings?.required_fields?.base || [];
-    const extraRequired = bookingSettings?.required_fields?.[type?.toLowerCase()] || [];
-    const required = [...new Set([...baseRequired, ...extraRequired])];
 
+    // Move toggleFields logic up first to show necessary fields
     toggleFields(status, missing_fields || [], required, metadata || {});
+
+    // no additional metadata autofill here — only toggleFields controls visibility and population
 
     checkReady();
     console.log('📡 meeting_type vid validateContact():', MacSpotUtils.getVal('#clt_meetingtype'));
@@ -120,16 +134,27 @@
       required.forEach(id => containerVisibleFields.add(id));
     } else if (status === 'incomplete') {
       missing_fields.forEach(id => containerVisibleFields.add(id));
-      required.forEach(id => containerVisibleFields.add(id));
     }
 
     METADATA_KEYS.forEach(key => {
       const el = document.getElementById(key);
       if (!el) return;
       const shouldShow = containerVisibleFields.has(key);
-      el.style.display = shouldShow ? 'block' : 'none';
-      if (shouldShow && metadata[key] !== undefined) {
-        MacSpotUtils.setVal(`#${key}`, metadata[key]);
+      if (!shouldShow) {
+        el.style.display = 'none';
+        MacSpotUtils.setVal(`#${key}`, ''); // Clear visible DOM field if not shown
+      } else {
+        el.style.display = 'block';
+        if (missing_fields?.includes(key)) {
+          const val = metadata?.[key];
+          if (typeof val === 'string' && val.trim()) {
+            MacSpotUtils.setVal(`#${key}`, val);
+          } else {
+            MacSpotUtils.setVal(`#${key}`, '');
+          }
+        } else {
+          MacSpotUtils.setVal(`#${key}`, ''); // Hide backend data from being shown
+        }
       }
     });
 
@@ -155,19 +180,30 @@
 
   async function submitContact(e) {
     e.preventDefault();
+    if (!window.formState) {
+      console.log('🛠 DEBUG submitContact start – current formState:', window.formState);
+      console.warn('🛑 submitContact avbruten – formState saknas');
+      return;
+    }
     const status = window.formState?.status || '';
     if (status !== 'new_customer' && status !== 'incomplete') {
       console.warn('🛑 submitContact called but status is neither new_customer nor incomplete:', status);
       return;
     }
-    // Only include visible and filled metadata fields
+    // Only include visible metadata fields, convert empty strings to null, fallback to formState.metadata if needed
     const visible = METADATA_KEYS.filter(k => {
       const el = document.getElementById(k);
       return el && (el.offsetParent !== null || el.offsetHeight > 0);
     });
     const metadata = Object.fromEntries(
-      visible.map(k => [k, MacSpotUtils.getVal(`#${k}`)]).filter(([, v]) => v && v.trim())
+      visible.map(k => {
+        const domVal = MacSpotUtils.getVal(`#${k}`);
+        const fallbackVal = window.formState?.metadata?.[k];
+        const chosenVal = (domVal && domVal.trim()) ? domVal : (fallbackVal && fallbackVal.trim() ? fallbackVal : null);
+        return [k, chosenVal];
+      })
     );
+    console.log('🧪 Submitting metadata:', metadata);
     const payload = {
       email: MacSpotUtils.getVal('#clt_email'),
       meeting_type: MacSpotUtils.getVal('#clt_meetingtype'),
@@ -181,6 +217,7 @@
       return;
     }
     MacSpotUtils.setVal('#clt_contact_id', contact_id);
+
     window.formState = {
       contact_id,
       email: MacSpotUtils.getVal('#clt_email'),
@@ -190,9 +227,11 @@
     };
 
     checkReady();
+    await validateContact();
 
     if (MacSpotUtils.getVal('#clt_ready') === 'true' && MacSpotUtils.getVal('#clt_contact_id')) {
       // After successful creation or update, initAvailableSlotFetch and hide form
+      console.log('✅ Triggering initAvailableSlotFetch after successful submitContact');
       window.initAvailableSlotFetch?.({
         email: MacSpotUtils.getVal('#clt_email'),
         meeting_type: MacSpotUtils.getVal('#clt_meetingtype'),
@@ -228,9 +267,11 @@
     console.log('🧪 Kontroll checkReady – required:', required);
     console.log('🧪 Kontroll checkReady – baseRequired:', baseRequired);
     console.log('🧪 Kontroll checkReady – extraRequired:', extraRequired);
+    console.log('🧪 DEBUG current values:', required.map(id => [id, MacSpotUtils.getVal(`#${id}`)]));
+    console.log('🧪 DEBUG checkReady with fallback to formState.metadata where necessary');
     const allRequiredFilled = required.every(id => {
       const el = document.getElementById(id);
-      const val = MacSpotUtils.getVal(`#${id}`);
+      const val = MacSpotUtils.getVal(`#${id}`) || (window.formState?.metadata?.[id] ?? '');
       console.log('🧪 checkReady field:', id, 'value:', val);
       return typeof val === 'string' && val.trim();
     });
@@ -256,6 +297,16 @@
       }
     }
     console.log('🧪 checkReady – status:', status, '| clt_ready:', isReady);
+    // 🧪 DEBUG: Logga elementvärden för alla required-fält
+    console.log('🧪 DEBUG element values:');
+    required.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) {
+        console.warn(`❗ Saknar DOM-element för id "${id}"`);
+      } else {
+        console.log(`🔍 ${id} =`, el.value);
+      }
+    });
   }
 
 
