@@ -68,15 +68,6 @@ module.exports = async function (context, req) {
     const created_at = new Date();
     const updated_at = created_at;
 
-    // Bygg meeting_link dynamiskt
-    let meeting_link = null;
-    if (meeting_type.toLowerCase() === 'teams') {
-      meeting_link = 'https://teams.microsoft.com/l/meetup-join/...'; // placeholder
-    } else if (meeting_type.toLowerCase() === 'zoom') {
-      meeting_link = 'https://zoom.us/j/1234567890'; // placeholder
-    } else if (meeting_type.toLowerCase() === 'facetime' && metadata.phone) {
-      meeting_link = `facetime:${metadata.phone}`;
-    }
 
     metadata.meeting_length = meeting_length;
 
@@ -95,14 +86,20 @@ module.exports = async function (context, req) {
         if (!eventResult) {
           context.log("⚠️ createEvent returnerade null");
         } else {
-          context.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(eventResult, null, 2));
-          debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
+          debugLog("📨 createEvent respons från Graph:", eventResult);
         }
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
           metadata.online_link = online_link;
           metadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
           metadata.location = eventResult.location || location || 'Online';
+          // Extrahera mötes-ID och lösenord från bodyPreview om möjligt
+          const body = eventResult.body?.content || '';
+          const idMatch = body.match(/Mötes-ID:\s*(\d[\d\s]*)/);
+          const pwMatch = body.match(/Lösenord:\s*([A-Za-z0-9]+)/);
+
+          if (idMatch) metadata.meeting_id = idMatch[1].trim();
+          if (pwMatch) metadata.passcode = pwMatch[1].trim();
         }
       } catch (err) {
         debugLog('⚠️ createEvent misslyckades: ' + err.message);
