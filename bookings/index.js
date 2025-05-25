@@ -86,7 +86,7 @@ module.exports = async function (context, req) {
         if (!eventResult) {
           context.log("⚠️ createEvent returnerade null");
         } else {
-          debugLog("📨 createEvent respons från Graph:", eventResult);
+          debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
         }
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
