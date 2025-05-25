@@ -82,12 +82,14 @@ module.exports = async function (context, req) {
 
     let online_link = null;
     if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
+      const subject = metadata.subject || settings.default_meeting_subject || 'Möte';
+      const location = metadata.location || 'Online';
       try {
         const eventResult = await createEvent({
           start: startTime.toISOString(),
           end: endTime.toISOString(),
-          subject: metadata.subject || settings.default_meeting_subject || 'Möte',
-          location: metadata.location || 'Online',
+          subject,
+          location,
           attendees: [email]
         });
         context.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(eventResult, null, 2));
@@ -95,8 +97,8 @@ module.exports = async function (context, req) {
         if (eventResult?.joinUrl || eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl || eventResult.joinUrl;
           metadata.online_link = online_link;
-          metadata.subject = eventResult.subject || undefined;
-          metadata.location = eventResult.location || undefined;
+          metadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
+          metadata.location = eventResult.location || location || 'Online';
         }
       } catch (err) {
         debugLog('⚠️ createEvent misslyckades: ' + err.message);

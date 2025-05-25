@@ -135,7 +135,9 @@ function createMsGraphClient() {
       console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
       return {
         eventId: created.id,
-        onlineMeetingUrl: created.onlineMeeting?.joinUrl || null
+        onlineMeetingUrl: created.onlineMeeting?.joinUrl || null,
+        subject: created.subject || null,
+        location: created.location?.displayName || null
       };
     } catch (err) {
       console.error("❌ createEvent error (Graph):", err.message || err);
