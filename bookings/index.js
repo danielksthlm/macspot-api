@@ -77,14 +77,11 @@ module.exports = async function (context, req) {
     if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
       try {
         const eventResult = await createEvent({
-          contact_id,
-          email,
-          meeting_type,
-          meeting_length: parsedLength,
-          start_time: startTime,
-          end_time: endTime,
-          settings,
-          metadata
+          start: startTime.toISOString(),
+          end: endTime.toISOString(),
+          subject: metadata.subject || settings.default_meeting_subject || 'Möte',
+          location: metadata.location || 'Online',
+          attendees: [email]
         });
         if (eventResult?.joinUrl) {
           online_link = eventResult.joinUrl;
