@@ -141,10 +141,15 @@ function createMsGraphClient() {
         eventId: created?.id || null,
         onlineMeetingUrl: created?.onlineMeeting?.joinUrl || null,
         subject: created?.subject || null,
-        location: created?.location?.displayName || null
+        location: created?.location?.displayName || null,
+        body: created?.body || null  // ✅ Lägg till detta
       };
     } catch (err) {
       console.error("❌ createEvent error (Graph):", err.message || err);
+      if (err.response?.text) {
+        const raw = await err.response.text();
+        console.error("📄 Graph response text:", raw);
+      }
       console.error("📄 Detaljerat Graph-felobjekt:", JSON.stringify(err, null, 2));
       return null;
     }
