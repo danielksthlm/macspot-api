@@ -5,10 +5,14 @@ const { createDebugLogger } = require('../shared/utils/debugLogger');
 const { createEvent } = require('../shared/calendar/msGraphClient');
 
 module.exports = async function (context, req) {
+  context.log('📥 bookings/index.js startar');
   const requiredFields = ['meeting_type', 'meeting_length', 'slot_iso'];
+  context.log('🔍 req.body:', req.body);
   const missing = requiredFields.filter(k => !req.body?.[k]);
+  context.log('🔍 Saknade fält:', missing);
 
   if (missing.length > 0) {
+    context.log('❌ Avbryter pga saknade fält');
     context.res = { status: 400, body: { error: `Missing fields: ${missing.join(', ')}` } };
     return;
   }
@@ -17,12 +21,14 @@ module.exports = async function (context, req) {
 
   const parsedLength = parseInt(meeting_length, 10);
   if (isNaN(parsedLength) || parsedLength <= 0) {
+    context.log('❌ Ogiltig möteslängd:', meeting_length);
     context.res = { status: 400, body: { error: "Invalid meeting_length" } };
     return;
   }
 
   const parsedStart = new Date(slot_iso);
   if (isNaN(parsedStart.getTime())) {
+    context.log('❌ Ogiltigt slot_iso:', slot_iso);
     context.res = { status: 400, body: { error: "Invalid slot_iso datetime" } };
     return;
   }
@@ -30,6 +36,7 @@ module.exports = async function (context, req) {
   const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
   for (const key of requiredEnv) {
     if (!process.env[key]) {
+      context.log('❌ Saknar env:', key);
       context.res = { status: 500, body: { error: `Missing environment variable: ${key}` } };
       return;
     }
