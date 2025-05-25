@@ -45,6 +45,8 @@ module.exports = async function (context, req) {
   const db = await pool.connect();
   const debugHelper = createDebugLogger(context);
   const debugLog = debugHelper.debugLog;
+  const token = await require('../shared/calendar/getMsToken')(context);
+  context.log("🔐 Token prefix (40):", token?.substring(0, 40));
   debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
   try {
     // Läs in booking_settings
