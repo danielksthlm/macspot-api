@@ -134,7 +134,11 @@ function createMsGraphClient() {
         console.log("📬 createEvent FULLT RESULTAT:", JSON.stringify(created, null, 2));
         console.log("✅ createEvent: Event skapades i MS Graph:", created.id);
         if (!created.onlineMeeting?.joinUrl) {
-          console.warn("⚠️ Ingen joinUrl genererad i createEvent.");
+          console.warn("⚠️ Ingen joinUrl genererad – event skapades men saknar Teams-länk.");
+          console.warn("📌 Kontrollera fältet isOnlineMeeting och onlineMeetingProvider i responsen:");
+          console.warn("🔍 isOnlineMeeting:", created.isOnlineMeeting);
+          console.warn("🔍 onlineMeetingProvider:", created.onlineMeetingProvider);
+          console.warn("🔍 bodyPreview:", created.bodyPreview);
         }
       }
       return {
