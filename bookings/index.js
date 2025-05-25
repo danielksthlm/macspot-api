@@ -54,7 +54,7 @@ module.exports = async function (context, req) {
     // Kontrollera om en bokning redan finns
     const existing = await db.query(
       'SELECT id FROM bookings WHERE contact_id = $1 AND start_time = $2',
-      [metadata.contact_id || null, parsedStart.toISOString()]
+      [contact_id || null, parsedStart.toISOString()]
     );
     if (existing.rowCount > 0) {
       context.res = {
