@@ -167,8 +167,6 @@ async function generateSlotChunks({
   debugHelper
 }) {
   const { debugLog, skipReasons } = debugHelper || {};
-  const slotGroupPicked = {};
-  const slotMap = {};
   const chosen = [];
 
   if (days.length === 0) {
@@ -241,6 +239,7 @@ async function generateSlotChunks({
 
   const slotCandidatesPerDay = await Promise.all(slotCandidatePromises);
 
+  const slotMap = {};
   days.forEach((day, index) => {
     const dayStr = day.toISOString().split("T")[0];
     const slotCandidates = slotCandidatesPerDay[index];
@@ -251,36 +250,31 @@ async function generateSlotChunks({
     }
   });
 
-  for (const [key, candidates] of Object.entries(slotMap)) {
-    if (candidates.length === 0) continue;
-
-    const alreadyPicked = slotGroupPicked[key];
-    if (alreadyPicked) {
-      debugLog?.(`🟡 Slotgrupp '${key}' redan vald tidigare – hoppar`);
-      continue;
+  const bestPerGroup = {};
+  for (const [key, slots] of Object.entries(slotMap)) {
+    if (slots.length === 0) continue;
+    const [datePart, part] = key.split('_');
+    if (!bestPerGroup[datePart]) bestPerGroup[datePart] = {};
+    if (!bestPerGroup[datePart][part]) {
+      bestPerGroup[datePart][part] = slots
+        .sort((a, b) => {
+          if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+          return new Date(a.slot_iso) - new Date(b.slot_iso);
+        })[0];
     }
+  }
 
-    const preferredHours = [10, 14];
-    const best = candidates.sort((a, b) => {
-      if ((b.score || 0) !== (a.score || 0)) {
-        return (b.score || 0) - (a.score || 0);
+  for (const day in bestPerGroup) {
+    for (const part in bestPerGroup[day]) {
+      const slot = bestPerGroup[day][part];
+      const weekKeyStr = day;
+      const usedMinutes = (weeklyMinutesByType[meeting_type]?.[weekKeyStr] || 0);
+      if (usedMinutes + slot.meeting_length <= settings.max_weekly_booking_minutes) {
+        chosen.push(slot);
+      } else {
+        debugLog?.(`⛔ Överskrider veckokvot (${usedMinutes + slot.meeting_length} > ${settings.max_weekly_booking_minutes}) – hoppar ${day}_${part}`);
       }
-      const aHour = new Date(a.slot_iso).getUTCHours();
-      const bHour = new Date(b.slot_iso).getUTCHours();
-      const aPriority = preferredHours.includes(aHour) ? 0 : 1;
-      const bPriority = preferredHours.includes(bHour) ? 0 : 1;
-      return aPriority - bPriority;
-    })[0] || candidates[0];
-
-    const weekKeyStr = key.split('_')[0];
-    const usedMinutes = (weeklyMinutesByType[meeting_type]?.[weekKeyStr] || 0);
-    if (usedMinutes + best.meeting_length > settings.max_weekly_booking_minutes) {
-      debugLog?.(`⛔ Överskrider veckokvot (${usedMinutes + best.meeting_length} > ${settings.max_weekly_booking_minutes}) – hoppar ${key}`);
-      continue;
     }
-
-    slotGroupPicked[key] = true;
-    chosen.push(best);
   }
 
   const durationMs = Date.now() - context.startTime;
