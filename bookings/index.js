@@ -5,7 +5,7 @@ const { createDebugLogger } = require('../shared/utils/debugLogger');
 const graphClient = require('../shared/calendar/msGraph')();
 const createZoomClient = require('../shared/calendar/zoomClient');
 const zoomClient = createZoomClient();
-const sendMail = require('../shared/notification/sendMail');
+const { sendMail } = require('../shared/notification/sendMail');
 
 module.exports = async function (context, req) {
   context.log('📥 bookings/index.js startar');
@@ -158,12 +158,45 @@ module.exports = async function (context, req) {
       metadata.online_link = online_link;
       metadata.subject = metadata.subject || settings.default_meeting_subject || 'FaceTime';
       metadata.location = metadata.location || 'FaceTime';
+
+      try {
+        const emailTemplate = settings.email_invite_template || {};
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'FaceTime-möte';
+        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n🔗 FaceTime-länk: ${online_link}`;
+
+        await sendMail({ to: email, subject: emailSubject, body: emailBody });
+        debugLog('✅ FaceTime-inbjudan skickad via e-post');
+      } catch (emailErr) {
+        debugLog('⚠️ Misslyckades skicka e-post för FaceTime:', emailErr.message);
+      }
     } else if (meeting_type.toLowerCase() === 'atclient') {
       metadata.location = metadata.location || metadata.address || settings.default_home_address || 'Hos kund';
       metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte hos kund';
+
+      try {
+        const emailTemplate = settings.email_invite_template || {};
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte hos kund';
+        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n📍 Adress: ${metadata.location}`;
+
+        await sendMail({ to: email, subject: emailSubject, body: emailBody });
+        debugLog('✅ atClient-inbjudan skickad via e-post');
+      } catch (emailErr) {
+        debugLog('⚠️ Misslyckades skicka e-post för atClient:', emailErr.message);
+      }
     } else if (meeting_type.toLowerCase() === 'atoffice') {
       metadata.location = metadata.location || settings.default_office_address || 'Kontoret';
       metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte på kontoret';
+
+      try {
+        const emailTemplate = settings.email_invite_template || {};
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte på kontoret';
+        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n📍 Plats: ${metadata.location}`;
+
+        await sendMail({ to: email, subject: emailSubject, body: emailBody });
+        debugLog('✅ atOffice-inbjudan skickad via e-post');
+      } catch (emailErr) {
+        debugLog('⚠️ Misslyckades skicka e-post för atOffice:', emailErr.message);
+      }
     }
 
     const fields = {
