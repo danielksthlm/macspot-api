@@ -239,6 +239,8 @@ async function generateSlotChunks({
     context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);
   }
 
+  context.bookingsByDay = bookingsByDay;
+
   const slotCandidatePromises = days.map(day => {
     const dayStr = day.toISOString().split("T")[0];
     return generateSlotCandidates({
