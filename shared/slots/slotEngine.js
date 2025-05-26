@@ -205,6 +205,10 @@ async function generateSlotChunks({
       msAddedCount++;
     }
     context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
+    context.log("📋 MS Graph – alla händelser:");
+    for (const ev of msEvents) {
+      context.log(`  • ${ev.subject || '(utan titel)'}: ${ev.start} → ${ev.end}`);
+    }
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
   }
@@ -227,6 +231,10 @@ async function generateSlotChunks({
       }
     }
     context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
+    context.log("📋 Apple Calendar – alla händelser:");
+    for (const ev of appleEvents) {
+      context.log(`  • ${ev.summary || '(utan titel)'}: ${ev.dtstart} → ${ev.dtend}`);
+    }
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);
   }
