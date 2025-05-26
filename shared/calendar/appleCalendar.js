@@ -76,8 +76,9 @@ function createAppleClient(context) {
       return [];
     }
 
-    const rangeStart = DateTime.fromISO(startDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
-    const rangeEnd = DateTime.fromISO(endDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
+    const formatToFloating = (dateObj) => DateTime.fromISO(dateObj).toFormat("yyyyMMdd'T'HHmmss");
+    const rangeStart = formatToFloating(startDate);
+    const rangeEnd = formatToFloating(endDate);
 
     const xmlBody = `
 <C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
