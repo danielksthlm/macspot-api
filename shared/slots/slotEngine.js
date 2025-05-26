@@ -194,14 +194,17 @@ async function generateSlotChunks({
   // Microsoft Graph
   try {
     const msEvents = await graphClient.listUpcomingEvents?.(days.length + 1) || [];
+    let msAddedCount = 0;
     for (const ev of msEvents) {
       const start = new Date(ev.start).getTime();
       const end = new Date(ev.end).getTime();
+      if (isNaN(start) || isNaN(end)) continue;
       const date = new Date(ev.start).toISOString().split("T")[0];
       if (!bookingsByDay[date]) bookingsByDay[date] = [];
       bookingsByDay[date].push({ start, end });
+      msAddedCount++;
     }
-    context.log(`📆 MS Graph: ${msEvents.length} händelser tillagda i bookingsByDay`);
+    context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
   }
@@ -209,14 +212,21 @@ async function generateSlotChunks({
   // Apple Calendar
   try {
     const appleEvents = await appleClient.fetchEventsByDateRange?.(startIso, endIso) || [];
+    let appleAddedCount = 0;
     for (const ev of appleEvents) {
-      const start = new Date(ev.dtstart).getTime();
-      const end = new Date(ev.dtend).getTime();
-      const date = new Date(ev.dtstart).toISOString().split("T")[0];
-      if (!bookingsByDay[date]) bookingsByDay[date] = [];
-      bookingsByDay[date].push({ start, end });
+      try {
+        const start = new Date(ev.dtstart).getTime();
+        const end = new Date(ev.dtend).getTime();
+        if (isNaN(start) || isNaN(end)) continue;
+        const date = new Date(ev.dtstart).toISOString().split("T")[0];
+        if (!bookingsByDay[date]) bookingsByDay[date] = [];
+        bookingsByDay[date].push({ start, end });
+        appleAddedCount++;
+      } catch (err) {
+        context.log(`⚠️ Apple event parsing error: ${err.message}`);
+      }
     }
-    context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser tillagda i bookingsByDay`);
+    context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);
   }
