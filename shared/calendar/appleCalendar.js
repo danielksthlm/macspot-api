@@ -102,8 +102,11 @@ function createAppleClient(context) {
       });
 
       const xml = await res.text();
+      context.log("🔎 Rå XML-svar från CalDAV:");
+      context.log(xml.slice(0, 2000)); // logga de första 2000 tecknen
       const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [xml2js.processors.stripPrefix] });
       const responses = parsed?.['multistatus']?.['response'] || parsed?.['D:multistatus']?.['D:response'];
+      context.log("📦 Parsed CalDAV-respons:", JSON.stringify(responses, null, 2));
       if (!responses) return [];
 
       const items = Array.isArray(responses) ? responses : [responses];
