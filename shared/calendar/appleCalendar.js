@@ -1,6 +1,7 @@
 console.log("🧪 appleCalendar.js laddades");
 const fetch = require("node-fetch");
 const xml2js = require("xml2js");
+const { DateTime } = require("luxon");
 
 function createAppleClient(context) {
   async function getEvent(calendarId, eventId) {
@@ -75,6 +76,9 @@ function createAppleClient(context) {
       return [];
     }
 
+    const rangeStart = DateTime.fromISO(startDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
+    const rangeEnd = DateTime.fromISO(endDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
+
     const xmlBody = `
 <C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:prop>
@@ -84,7 +88,7 @@ function createAppleClient(context) {
   <C:filter>
     <C:comp-filter name="VCALENDAR">
       <C:comp-filter name="VEVENT">
-        <C:time-range start="${startDate}" end="${endDate}"/>
+        <C:time-range start="${rangeStart}" end="${rangeEnd}"/>
       </C:comp-filter>
     </C:comp-filter>
   </C:filter>
