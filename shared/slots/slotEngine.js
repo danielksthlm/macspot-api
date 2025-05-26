@@ -189,6 +189,40 @@ async function generateSlotChunks({
 
   const eventCache = new Map();
 
+  // === LÄGG TILL EXTERNA BOKNINGAR (MS + Apple) I bookingsByDay ===
+  const startIso = days[0].toISOString();
+  const endIso = new Date(days[days.length - 1].getTime() + 86400000).toISOString(); // +1 dag
+
+  // Microsoft Graph
+  try {
+    const msEvents = await graphClient.listUpcomingEvents?.(days.length + 1) || [];
+    for (const ev of msEvents) {
+      const start = new Date(ev.start).getTime();
+      const end = new Date(ev.end).getTime();
+      const date = new Date(ev.start).toISOString().split("T")[0];
+      if (!bookingsByDay[date]) bookingsByDay[date] = [];
+      bookingsByDay[date].push({ start, end });
+    }
+    context.log(`📆 MS Graph: ${msEvents.length} händelser tillagda i bookingsByDay`);
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
+  }
+
+  // Apple Calendar
+  try {
+    const appleEvents = await appleClient.fetchEventsByDateRange?.(startIso, endIso) || [];
+    for (const ev of appleEvents) {
+      const start = new Date(ev.dtstart).getTime();
+      const end = new Date(ev.dtend).getTime();
+      const date = new Date(ev.dtstart).toISOString().split("T")[0];
+      if (!bookingsByDay[date]) bookingsByDay[date] = [];
+      bookingsByDay[date].push({ start, end });
+    }
+    context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser tillagda i bookingsByDay`);
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);
+  }
+
   const slotCandidatePromises = days.map(day => {
     const dayStr = day.toISOString().split("T")[0];
     return generateSlotCandidates({
