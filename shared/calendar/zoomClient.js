@@ -1,21 +1,37 @@
 const fetch = require('node-fetch');
-const jwt = require('jsonwebtoken');
 
 function createZoomClient() {
-  const apiKey = process.env.ZOOM_API_KEY;
-  const apiSecret = process.env.ZOOM_API_SECRET;
+  const clientId = process.env.ZOOM_CLIENT_ID;
+  const clientSecret = process.env.ZOOM_CLIENT_SECRET;
+  const accountId = process.env.ZOOM_ACCOUNT_ID;
   const userId = process.env.ZOOM_USER_ID || 'me';
 
-  if (!apiKey || !apiSecret) {
-    throw new Error("Missing Zoom API credentials in environment variables");
+  if (!clientId || !clientSecret || !accountId) {
+    throw new Error("Missing Zoom OAuth credentials in environment variables");
   }
 
+  async function getAccessToken() {
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const res = await fetch(`https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to get Zoom access token: ${text}`);
+    }
+
+    const data = await res.json();
+    return data.access_token;
+  }
 
   async function createMeeting({ topic, start, duration }) {
-    const token = jwt.sign(
-      { iss: apiKey, exp: Math.floor(Date.now() / 1000) + 60 },
-      apiSecret
-    );
+    const token = await getAccessToken();
+
     const res = await fetch(`https://api.zoom.us/v2/users/${userId}/meetings`, {
       method: 'POST',
       headers: {
@@ -24,7 +40,7 @@ function createZoomClient() {
       },
       body: JSON.stringify({
         topic,
-        type: 2, // Scheduled meeting
+        type: 2,
         start_time: start,
         duration,
         timezone: 'Europe/Stockholm'

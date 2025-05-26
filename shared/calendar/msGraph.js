@@ -142,7 +142,43 @@ function createMsGraphClient() {
     }
   }
 
-  return { getEvent, listUpcomingEvents, createEvent };
+  async function sendEmailInvite({ to, subject, body }) {
+    try {
+      const senderEmail = process.env.MS365_USER_EMAIL;
+      const authToken = await getMsToken({ log: console.log });
+      if (!authToken) throw new Error("❌ Kunde inte hämta Graph-token");
+
+      const client = Client.init({
+        authProvider: (done) => done(null, authToken)
+      });
+
+      const message = {
+        message: {
+          subject,
+          body: {
+            contentType: "HTML",
+            content: body
+          },
+          toRecipients: [
+            {
+              emailAddress: {
+                address: to
+              }
+            }
+          ]
+        },
+        saveToSentItems: "true"
+      };
+
+      await client.api(`/users/${senderEmail}/sendMail`).post(message);
+      return { status: "sent" };
+    } catch (err) {
+      console.error("❌ sendEmailInvite error:", err.message || err);
+      return null;
+    }
+  }
+
+  return { getEvent, listUpcomingEvents, createEvent, sendEmailInvite };
 }
 
 const client = createMsGraphClient();

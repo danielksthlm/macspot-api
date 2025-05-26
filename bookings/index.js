@@ -5,6 +5,7 @@ const { createDebugLogger } = require('../shared/utils/debugLogger');
 const graphClient = require('../shared/calendar/msGraph')();
 const createZoomClient = require('../shared/calendar/zoomClient');
 const zoomClient = createZoomClient();
+const sendMail = require('../shared/notification/sendMail');
 
 module.exports = async function (context, req) {
   context.log('📥 bookings/index.js startar');
@@ -124,16 +125,21 @@ module.exports = async function (context, req) {
         metadata.subject = result.topic;
         metadata.location = 'Online';
 
+        // Generate email subject and body using settings and injected online_link
         const emailTemplate = settings.email_invite_template || {};
-        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte';
-        const emailBody = emailTemplate.body
-          ?.replace('{{first_name}}', metadata.first_name || '')
-          .replace('{{company}}', metadata.company || '')
-          .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
-          || `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`;
+        const emailSubject =
+          (emailTemplate.subject
+            ? emailTemplate.subject.replace('{{company}}', metadata.company || 'din organisation')
+            : 'Möte');
+        const emailBody =
+          (emailTemplate.body
+            ? emailTemplate.body
+                .replace('{{first_name}}', metadata.first_name || '')
+                .replace('{{company}}', metadata.company || '')
+                .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
+            : `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`);
 
         // Skicka e-post via Graph (placeholder – implementera din mailfunktion)
-        const sendMail = require('../shared/notification/sendMail');
         try {
           await sendMail({
             to: email,
