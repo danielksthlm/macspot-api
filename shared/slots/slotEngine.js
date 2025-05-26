@@ -79,6 +79,13 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       continue;
     }
 
+    // Skip slots that are too soon to reach based on travel time and current time
+    const now = Date.now();
+    if (dateObj.getTime() - now < travelTimeMin * 60 * 1000) {
+      context.log(`⛔ Slot ${eventId} är för nära i tid – restid ${travelTimeMin} min, nu=${new Date(now).toISOString()} – hoppar`);
+      continue;
+    }
+
     // Build slot object
     const slot = {
       slot_iso: eventId,
