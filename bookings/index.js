@@ -123,6 +123,27 @@ module.exports = async function (context, req) {
         metadata.meeting_id = result.id;
         metadata.subject = result.topic;
         metadata.location = 'Online';
+
+        const emailTemplate = settings.email_invite_template || {};
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte';
+        const emailBody = emailTemplate.body
+          ?.replace('{{first_name}}', metadata.first_name || '')
+          .replace('{{company}}', metadata.company || '')
+          .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
+          || `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`;
+
+        // Skicka e-post via Graph (placeholder – implementera din mailfunktion)
+        const sendMail = require('../shared/notification/sendMail');
+        try {
+          await sendMail({
+            to: email,
+            subject: emailSubject,
+            body: emailBody,
+          });
+          debugLog('✅ Zoominbjudan skickad via e-post');
+        } catch (emailErr) {
+          debugLog('⚠️ Misslyckades skicka e-post för Zoom:', emailErr.message);
+        }
       } catch (err) {
         debugLog('⚠️ Zoom createMeeting failed:', err.message);
       }
