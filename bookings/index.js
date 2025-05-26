@@ -108,6 +108,8 @@ module.exports = async function (context, req) {
         if (body && !eventResult?.onlineMeetingUrl) {
           metadata.body_preview = body;
         }
+
+        fields.synced_to_calendar = true;
       } catch (err) {
         debugLog('⚠️ createEvent misslyckades: ' + err.message);
         debugLog("❌ Detaljerat fel från createEvent:", err);
@@ -147,27 +149,35 @@ module.exports = async function (context, req) {
             body: emailBody,
           });
           debugLog('✅ Zoominbjudan skickad via e-post');
+          debugLog(`🔗 Länk som skickades: ${online_link}`);
         } catch (emailErr) {
           debugLog('⚠️ Misslyckades skicka e-post för Zoom:', emailErr.message);
         }
+
+        fields.synced_to_calendar = true;
       } catch (err) {
         debugLog('⚠️ Zoom createMeeting failed:', err.message);
       }
-    } else if (meeting_type.toLowerCase() === 'facetime' && metadata.phone) {
-      online_link = `facetime:${metadata.phone}`;
-      metadata.online_link = online_link;
-      metadata.subject = metadata.subject || settings.default_meeting_subject || 'FaceTime';
-      metadata.location = metadata.location || 'FaceTime';
+    } else if (meeting_type.toLowerCase() === 'facetime') {
+      if (metadata.phone) {
+        online_link = `facetime:${metadata.phone}`;
+        metadata.online_link = online_link;
+        metadata.subject = metadata.subject || settings.default_meeting_subject || 'FaceTime';
+        metadata.location = metadata.location || 'FaceTime';
 
-      try {
-        const emailTemplate = settings.email_invite_template || {};
-        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'FaceTime-möte';
-        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n🔗 FaceTime-länk: ${online_link}`;
+        try {
+          const emailTemplate = settings.email_invite_template || {};
+          const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'FaceTime-möte';
+          const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n🔗 FaceTime-länk: ${online_link}`;
 
-        await sendMail({ to: email, subject: emailSubject, body: emailBody });
-        debugLog('✅ FaceTime-inbjudan skickad via e-post');
-      } catch (emailErr) {
-        debugLog('⚠️ Misslyckades skicka e-post för FaceTime:', emailErr.message);
+          await sendMail({ to: email, subject: emailSubject, body: emailBody });
+          debugLog('✅ FaceTime-inbjudan skickad via e-post');
+          debugLog(`🔗 Länk som skickades: ${online_link}`);
+        } catch (emailErr) {
+          debugLog('⚠️ Misslyckades skicka e-post för FaceTime:', emailErr.message);
+        }
+      } else {
+        debugLog('⚠️ Saknar telefonnummer för FaceTime – ingen länk skapad');
       }
     } else if (meeting_type.toLowerCase() === 'atclient') {
       metadata.location = metadata.location || metadata.address || settings.default_home_address || 'Hos kund';
@@ -180,6 +190,7 @@ module.exports = async function (context, req) {
 
         await sendMail({ to: email, subject: emailSubject, body: emailBody });
         debugLog('✅ atClient-inbjudan skickad via e-post');
+        debugLog(`🔗 Länk som skickades: ${online_link}`);
       } catch (emailErr) {
         debugLog('⚠️ Misslyckades skicka e-post för atClient:', emailErr.message);
       }
@@ -194,6 +205,7 @@ module.exports = async function (context, req) {
 
         await sendMail({ to: email, subject: emailSubject, body: emailBody });
         debugLog('✅ atOffice-inbjudan skickad via e-post');
+        debugLog(`🔗 Länk som skickades: ${online_link}`);
       } catch (emailErr) {
         debugLog('⚠️ Misslyckades skicka e-post för atOffice:', emailErr.message);
       }
@@ -241,7 +253,6 @@ module.exports = async function (context, req) {
       ]
     );
     // Simulera att kalendern synkades för denna demo
-    fields.synced_to_calendar = true;
     await db.query(
       'INSERT INTO event_log (event_type, booking_id) VALUES ($1, $2)',
       ['booking_created', id]
