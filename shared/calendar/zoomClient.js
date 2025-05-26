@@ -10,12 +10,12 @@ function createZoomClient() {
     throw new Error("Missing Zoom API credentials in environment variables");
   }
 
-  const token = jwt.sign(
-    { iss: apiKey, exp: Math.floor(Date.now() / 1000) + 60 },
-    apiSecret
-  );
 
   async function createMeeting({ topic, start, duration }) {
+    const token = jwt.sign(
+      { iss: apiKey, exp: Math.floor(Date.now() / 1000) + 60 },
+      apiSecret
+    );
     const res = await fetch(`https://api.zoom.us/v2/users/${userId}/meetings`, {
       method: 'POST',
       headers: {

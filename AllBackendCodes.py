@@ -28,6 +28,7 @@ filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/maps/appleMaps.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/maps/returnTravelVerifier.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/maps/resolveTravelTime.js",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/calendar/zoomClient.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/bookings/index.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/utils/debugLogger.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/slots/slotEngine.js",
