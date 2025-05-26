@@ -110,9 +110,18 @@ function createAppleClient(context) {
       if (!responses) return [];
 
       const items = Array.isArray(responses) ? responses : [responses];
+      // Filtrera på exakt rätt kalender-href
+      const targetPath = new URL(process.env.CALDAV_CALENDAR_URL.trim()).pathname;
+      context.log("🎯 Filtrerar på exakt href-prefix:", targetPath);
+      const filteredItems = items.filter(item => {
+        const href = item['href'] || item['D:href'] || '';
+        const match = href.trim().startsWith(targetPath);
+        if (!match) context.log("⛔ Hoppar annan kalender:", href.trim());
+        return match;
+      });
       const results = [];
 
-      for (const item of items) {
+      for (const item of filteredItems) {
         let calendarData = item?.['propstat']?.['prop']?.['calendar-data'] || item?.['D:propstat']?.['D:prop']?.['C:calendar-data'];
 
         if (calendarData && typeof calendarData === 'object' && '_' in calendarData) {

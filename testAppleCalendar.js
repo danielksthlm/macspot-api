@@ -26,10 +26,16 @@ async function getLatestAppleEvent(dateTime) {
     const calendars = account.calendars || [];
     console.log(`📅 Hittade ${calendars.length} kalendrar`);
 
+    // Extra logg: visa alla kalendrar med namn och URL
+    console.log("📋 Alla tillgängliga kalendrar:");
+    calendars.forEach((cal, i) => {
+      console.log(`  ${i + 1}. ${cal.displayName || '(namnlös)'} → ${cal.url}`);
+    });
+
     // 1. Filtrera fram den kalender som matchar fullUrl.
-    const target = calendars.find(cal => cal.url === fullUrl);
+    const target = calendars.find(cal => cal.url.trim() === fullUrl);
     if (!target) {
-      console.warn("⚠️ Ingen kalender matchade CALDAV_CALENDAR_URL");
+      console.warn(`⚠️ Ingen kalender matchade CALDAV_CALENDAR_URL: ${fullUrl}`);
       return null;
     }
 
@@ -82,7 +88,12 @@ async function getLatestAppleEvent(dateTime) {
         }
       }
 
-      if (eventTime && eventTime.toISOString().startsWith("2025-05-23")) {
+      // Visa alla event som inträffar någon gång mellan 1 jan 2025 och 31 dec 2025
+      if (
+        eventTime &&
+        eventTime >= new Date("2025-01-01") &&
+        eventTime <= new Date("2025-12-31")
+      ) {
         upcoming.push({
           summary,
           dtStartRaw,
