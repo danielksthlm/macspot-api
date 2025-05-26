@@ -125,8 +125,8 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const bufferMs = (settings.buffer_between_meetings || 0) * 60000;
     const hasConflict = existing.some(b => {
       return (
-        (b.end + bufferMs > slotStart && b.end <= slotStart) ||
-        (b.start - bufferMs < slotEnd && b.start >= slotEnd)
+        b.start < slotEnd + bufferMs &&
+        b.end > slotStart - bufferMs
       );
     });
     if (hasConflict) {

@@ -14,6 +14,8 @@ function createAppleClient(context) {
     context.log("🌐 caldavUrl:", caldavUrl);
     context.log("👤 username:", username);
 
+    context.log("🌐 Kontroll: CALDAV_CALENDAR_URL =", caldavUrl);
+    context.log("👤 Kontroll: CALDAV_USER =", username);
     if (!caldavUrl || !username || !password) {
       context.log("⚠️ Missing CalDAV credentials");
       return null;
