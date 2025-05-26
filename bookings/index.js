@@ -3,6 +3,8 @@ const pool = require('../shared/db/pgPool');
 const { v4: uuidv4 } = require('uuid');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
 const graphClient = require('../shared/calendar/msGraph')();
+const createZoomClient = require('../shared/calendar/zoomClient');
+const zoomClient = createZoomClient();
 
 module.exports = async function (context, req) {
   context.log('📥 bookings/index.js startar');
@@ -109,6 +111,32 @@ module.exports = async function (context, req) {
         debugLog('⚠️ createEvent misslyckades: ' + err.message);
         debugLog("❌ Detaljerat fel från createEvent:", err);
       }
+    } else if (meeting_type.toLowerCase() === 'zoom') {
+      try {
+        const result = await zoomClient.createMeeting({
+          topic: metadata.subject || settings.default_meeting_subject,
+          start: startTime.toISOString(),
+          duration: parsedLength
+        });
+        online_link = result.join_url;
+        metadata.online_link = online_link;
+        metadata.meeting_id = result.id;
+        metadata.subject = result.topic;
+        metadata.location = 'Online';
+      } catch (err) {
+        debugLog('⚠️ Zoom createMeeting failed:', err.message);
+      }
+    } else if (meeting_type.toLowerCase() === 'facetime' && metadata.phone) {
+      online_link = `facetime:${metadata.phone}`;
+      metadata.online_link = online_link;
+      metadata.subject = metadata.subject || settings.default_meeting_subject || 'FaceTime';
+      metadata.location = metadata.location || 'FaceTime';
+    } else if (meeting_type.toLowerCase() === 'atclient') {
+      metadata.location = metadata.location || metadata.address || settings.default_home_address || 'Hos kund';
+      metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte hos kund';
+    } else if (meeting_type.toLowerCase() === 'atoffice') {
+      metadata.location = metadata.location || settings.default_office_address || 'Kontoret';
+      metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte på kontoret';
     }
 
     const fields = {
