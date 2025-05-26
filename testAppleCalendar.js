@@ -23,22 +23,11 @@ async function getLatestAppleEvent(dateTime) {
       rootUrl: fullUrl
     });
 
-    const calendars = account.calendars || [];
-    console.log(`📅 Hittade ${calendars.length} kalendrar`);
-
-    // Extra logg: visa alla kalendrar med namn och URL
-    console.log("📋 Alla tillgängliga kalendrar:");
-    calendars.forEach((cal, i) => {
-      console.log(`  ${i + 1}. ${cal.displayName || '(namnlös)'} → ${cal.url}`);
-    });
-
-    // 1. Filtrera fram den kalender som matchar fullUrl.
-    const target = calendars.find(cal => cal.url.trim() === fullUrl);
+    const target = account.calendars.find(cal => cal.url.trim() === fullUrl);
     if (!target) {
       console.warn(`⚠️ Ingen kalender matchade CALDAV_CALENDAR_URL: ${fullUrl}`);
       return null;
     }
-
     console.log(`📓 Namn: ${target.displayName}`);
     console.log(`🧭 URL: ${target.url}\n`);
 
@@ -46,21 +35,21 @@ async function getLatestAppleEvent(dateTime) {
     await dav.syncCalendar(target, { xhr });
     console.log("🔄 Synkronisering av kalender klar.");
 
-    // Debug: Logga antal objekt och visa endast max 10 objekt
-    console.log(`🧮 Antal objekt i kalendern: ${target.objects?.length || 0}`);
-    const rawObjects = target.objects || [];
-    console.log(`🔍 Visar max 10 av totalt ${rawObjects.length} objekt\n`);
+    // console.log(`🧮 Antal objekt i kalendern: ${target.objects?.length || 0}`);
+    // const rawObjects = target.objects || [];
+    // console.log(`🔍 Visar max 10 av totalt ${rawObjects.length} objekt\n`);
 
-    console.log("📤 Skriver ut rådata för de första 10 objekten:");
-    rawObjects.slice(0, 10).forEach((obj, index) => {
-      console.log("──────────────────────────────");
-      console.log(typeof obj.data === 'string' ? obj.data : obj);
-    });
+    // console.log("📤 Skriver ut rådata för de första 10 objekten:");
+    // rawObjects.slice(0, 10).forEach((obj, index) => {
+    //   console.log("──────────────────────────────");
+    //   console.log(typeof obj.data === 'string' ? obj.data : obj);
+    // });
 
-    const now = new Date();
+    const now = new Date(); // Today's date
 
     const upcoming = [];
 
+    const rawObjects = target.objects || [];
     for (const obj of rawObjects) {
       if (typeof obj.data !== 'string' && typeof obj.calendarData !== 'string') continue;
       const dataStr = typeof obj.data === 'string' ? obj.data : (typeof obj.calendarData === 'string' ? obj.calendarData : '');
@@ -88,12 +77,8 @@ async function getLatestAppleEvent(dateTime) {
         }
       }
 
-      // Visa alla event som inträffar någon gång mellan 1 jan 2025 och 31 dec 2025
-      if (
-        eventTime &&
-        eventTime >= new Date("2025-01-01") &&
-        eventTime <= new Date("2025-12-31")
-      ) {
+      // Visa alla event som inträffar någon gång i framtiden
+      if (eventTime && eventTime >= now) {
         upcoming.push({
           summary,
           dtStartRaw,
@@ -104,6 +89,9 @@ async function getLatestAppleEvent(dateTime) {
       }
     }
 
+    console.log(`🗓️ Hittade ${upcoming.length} kommande händelser.`);
+
+    // Visa en begränsad lista med max 10 kommande händelser
     console.log("🗓️ Kommande händelser (max 10):");
     upcoming
       .sort((a, b) => a.eventTime - b.eventTime)

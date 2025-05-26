@@ -164,7 +164,12 @@ function createAppleClient(context) {
       });
 
       context.log(`✅ Hittade ${results.length} events totalt`);
-      return results;
+      const now = new Date();
+      const upcoming = results.filter(ev => {
+        const dt = ev.dtstart.replace(/^(\d{8})$/, '$1T000000');
+        return new Date(dt) > now;
+      });
+      return upcoming;
     } catch (err) {
       context.log("❌ Fel i fetchEventsByDateRange():", err.message);
       return [];
