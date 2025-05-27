@@ -81,7 +81,7 @@ function createAppleClient(context) {
   <c:filter>
     <c:comp-filter name="VCALENDAR">
       <c:comp-filter name="VEVENT">
-        <c:time-range start="${startDate.replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '').slice(0, 15)}" end="${endDate.replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '').slice(0, 15)}"/>
+        <c:time-range start="${DateTime.fromISO(startDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")}" end="${DateTime.fromISO(endDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")}"/>
       </c:comp-filter>
     </c:comp-filter>
   </c:filter>
