@@ -1,5 +1,5 @@
 const { app } = require('@azure/functions');
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const fetch = require('node-fetch');
 
 app.http('test_azurecloud', {
   methods: ['GET'],
