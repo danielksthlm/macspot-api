@@ -1,78 +1,14 @@
-const { app } = require('@azure/functions');
-const fetch = require('node-fetch');
+const fetch = require("node-fetch");
 
-if (typeof fetch !== 'function') {
-  console.error("❌ fetch är inte en funktion – node-fetch är kanske inte korrekt installerad.");
-  throw new Error("fetch is not a function");
-}
-
-app.http('test_azurecloud', {
-  methods: ['GET'],
-  authLevel: 'function',
-  handler: async (request, context) => {
-    try {
-      const calendarUrl = process.env.CALDAV_CALENDAR_URL;
-      const username = process.env.CALDAV_USER;
-      const password = process.env.CALDAV_PASSWORD;
-
-      if (!calendarUrl || !username || !password) {
-        context.log("❌ Miljövariabler saknas – kontrollera CALDAV_CALENDAR_URL, CALDAV_USER, CALDAV_PASSWORD");
-        return {
-          status: 500,
-          body: '❌ En eller flera CalDAV-miljövariabler saknas.'
-        };
-      }
-
-      context.log("🕒 Starttid:", new Date().toISOString());
-
-      try {
-        const ipRes = await fetch('https://ifconfig.me');
-        const ip = await ipRes.text();
-        context.log("🌍 Azure outbound IP:", ip);
-      } catch (ipErr) {
-        context.log("⚠️ Kunde inte hämta IP:", ipErr.message);
-      }
-
-      const basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
-
-      const reportXml = `
-<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">
-  <C:filter>
-    <C:comp-filter name="VCALENDAR">
-      <C:comp-filter name="VEVENT"/>
-    </C:comp-filter>
-  </C:filter>
-</C:calendar-query>`;
-
-      const res = await fetch(calendarUrl, {
-        method: 'REPORT',
-        headers: {
-          Authorization: basicAuth,
-          'Content-Type': 'application/xml',
-          Depth: '1'
-        },
-        body: reportXml
-      });
-
-      context.log("🕒 Sluttid:", new Date().toISOString());
-
-      const text = await res.text();
-
-      context.log("📡 Status:", res.status);
-      context.log("📄 Headers:", JSON.stringify([...res.headers]));
-      context.log("📄 Body:", text);
-
-      return {
-        status: res.status,
-        headers: { 'Content-Type': 'text/plain' },
-        body: `✅ Apple CalDAV test klar – status ${res.status}`
-      };
-    } catch (err) {
-      context.log("❌ Fel vid fetch:", err.stack || err.message);
-      return {
-        status: 500,
-        body: `❌ Fel vid fetch: ${err.message}`
-      };
-    }
+module.exports = async function (context, req) {
+  context.log("🧪 test_fetch_simple startar");
+  try {
+    const res = await fetch('https://ifconfig.me');
+    const text = await res.text();
+    context.log("✅ fetch fungerade – IP:", text);
+    context.res = { status: 200, body: `✅ IP: ${text}` };
+  } catch (err) {
+    context.log("❌ Fetch fel:", err.stack || err.message);
+    context.res = { status: 500, body: `❌ ${err.message}` };
   }
-});
+};
