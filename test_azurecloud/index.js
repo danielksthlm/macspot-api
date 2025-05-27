@@ -30,7 +30,7 @@ module.exports = async function (context, req) {
       method: 'REPORT',
       headers: {
         Authorization: basicAuth,
-        'Content-Type': 'application/xml',
+        'Content-Type': 'application/xml; charset=utf-8',
         Depth: '1',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
         'Prefer': 'return-minimal'
