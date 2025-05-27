@@ -123,8 +123,9 @@ function createAppleClient(context) {
           const calendarData = typeof p?.prop?.['calendar-data'] === 'string'
             ? p?.prop?.['calendar-data']
             : p?.prop?.['calendar-data']?._;
-          if (!calendarData || typeof calendarData !== "string") {
-            context.log("⚠️ calendarData saknas eller är inte en sträng – hoppar över", JSON.stringify(p?.prop, null, 2));
+
+          if (!calendarData || typeof calendarData !== 'string') {
+            context.log("⚠️ calendar-data kunde inte tolkas som sträng:", JSON.stringify(p?.prop?.['calendar-data'], null, 2));
             continue;
           }
           const dtstartMatch = calendarData.match(/DTSTART(?:;[^:]*)?:(.*)/);
