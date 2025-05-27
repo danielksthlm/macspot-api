@@ -147,4 +147,4 @@ if (process.env.NODE_ENV === 'test') {
   console.log("🧪 TEST appleClient:", typeof client.fetchEventsByDateRange === 'function' ? '✅ fetchEventsByDateRange finns' : '❌ fetchEventsByDateRange saknas');
 }
 
-module.exports = () => client;
+module.exports = (context) => createAppleClient(context);
