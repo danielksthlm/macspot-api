@@ -1,4 +1,5 @@
 const fetch = require("node-fetch");
+const xml2js = require("xml2js");
 
 module.exports = async function (context, req) {
   const username = process.env.CALDAV_USER;
@@ -46,6 +47,23 @@ module.exports = async function (context, req) {
     const caldavText = await caldavRes.text();
     context.log("📡 CALDAV REPORT status:", caldavRes.status);
     context.log("📄 CALDAV XML body:", caldavText);
+
+    const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: false });
+    const parsed = await parser.parseStringPromise(caldavText);
+    const responses = parsed['D:multistatus']?.['D:response'] || [];
+
+    if (Array.isArray(responses)) {
+      responses.forEach((res, i) => {
+        const data = res['D:propstat']?.[1]?.['D:prop']?.['caldav:calendar-data'] || '';
+        const match = data.match(/SUMMARY:(.+)/);
+        const start = data.match(/DTSTART.*:(.+)/);
+        const end = data.match(/DTEND.*:(.+)/);
+        context.log(`📅 Event ${i + 1}:`);
+        context.log(`  • Summary: ${match?.[1]}`);
+        context.log(`  • Start:   ${start?.[1]}`);
+        context.log(`  • End:     ${end?.[1]}`);
+      });
+    }
 
     context.res = {
       status: 200,
