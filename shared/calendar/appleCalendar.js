@@ -97,7 +97,7 @@ function createAppleClient(context) {
         body: reportXml
       });
       if (!res.ok) {
-        context.log("❌ CalDAV REPORT misslyckades:", res.status, res.statusText);
+        context.log("⚠️ REPORT misslyckades med status:", res.status, res.statusText);
         return [];
       }
       const xml = await res.text();
@@ -109,7 +109,7 @@ function createAppleClient(context) {
         explicitRoot: false
       });
       // Extract VEVENTs from calendar-data
-      const responses = parsed?.multistatus?.response || [];
+      const responses = [].concat(parsed?.multistatus?.response || []);
       let events = [];
       for (const resp of responses) {
         const calendarData = resp?.propstat?.[0]?.prop?.['calendar-data'];
