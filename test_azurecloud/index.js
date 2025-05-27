@@ -2,7 +2,7 @@
 const { app } = require('@azure/functions');
 const fetch = global.fetch;
 
-app.http('test_apple_raw', {
+app.http('test_azurecloud', {
   methods: ['GET'],
   authLevel: 'function',
   handler: async (request, context) => {
