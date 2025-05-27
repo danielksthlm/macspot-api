@@ -7,17 +7,29 @@ app.http('test_azurecloud', {
   authLevel: 'function',
   handler: async (request, context) => {
     try {
-      const url = 'https://caldav.icloud.com/';
+      const calendarUrl = process.env.CALDAV_CALENDAR_URL;
       const username = process.env.CALDAV_USER;
       const password = process.env.CALDAV_PASSWORD;
 
       const basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
-      const res = await fetch(url, {
-        method: 'OPTIONS',
+      const reportXml = `
+<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT"/>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>`;
+
+      const res = await fetch(calendarUrl, {
+        method: 'REPORT',
         headers: {
-          Authorization: basicAuth
-        }
+          Authorization: basicAuth,
+          'Content-Type': 'application/xml',
+          Depth: '1'
+        },
+        body: reportXml
       });
 
       const text = await res.text();
