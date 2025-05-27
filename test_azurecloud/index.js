@@ -1,24 +1,14 @@
-const fetch = require('node-fetch');
+const fetch = require("node-fetch");
 
-app.http('test_azurecloud', {
-  methods: ['GET'],
-  authLevel: 'function',
-  handler: async (request, context) => {
-    context.log("🧪 Minimal fetch startar");
-    try {
-      const res = await fetch('https://ifconfig.me/ip');
-      const ip = await res.text();
-      context.log("✅ IP:", ip);
-      return {
-        status: 200,
-        body: `✅ Din IP är: ${ip}`
-      };
-    } catch (err) {
-      context.log("❌ Fel vid minimal fetch:", err.message);
-      return {
-        status: 500,
-        body: `❌ Fetch-fel: ${err.message}`
-      };
-    }
+module.exports = async function (context, req) {
+  context.log("🧪 test_azurecloud klassisk start");
+  try {
+    const res = await fetch('https://ifconfig.me');
+    const text = await res.text();
+    context.log("✅ fetch fungerade – IP:", text);
+    context.res = { status: 200, body: `✅ IP: ${text}` };
+  } catch (err) {
+    context.log("❌ Fetch fel:", err.stack || err.message);
+    context.res = { status: 500, body: `❌ ${err.message}` };
   }
-});
+};
