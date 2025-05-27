@@ -63,9 +63,9 @@ function createAppleClient(context) {
       return [];
     }
 
-    const formatToFloating = (dateObj) => DateTime.fromISO(dateObj).toFormat("yyyyMMdd'T'HHmmss");
-    const rangeStart = formatToFloating(startDate);
-    const rangeEnd = formatToFloating(endDate);
+    const formatToUTC = (dateObj) => DateTime.fromISO(dateObj, { zone: "utc" }).toFormat("yyyyMMdd'T'HHmmss'Z'");
+    const rangeStart = formatToUTC(startDate);
+    const rangeEnd = formatToUTC(endDate);
 
     context.log("📆 Intervall (UTC):", { rangeStart, rangeEnd });
 
