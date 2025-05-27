@@ -101,6 +101,7 @@ function createAppleClient(context) {
       if (!responses) return [];
 
       const items = Array.isArray(responses) ? responses : [responses];
+      context.log(`🔍 Antal CalDAV-responses totalt: ${items.length}`);
       const targetPath = new URL(process.env.CALDAV_CALENDAR_URL.trim()).pathname;
       const filteredItems = items.filter(item => {
         const href = item['href'] || item['D:href'] || '';
@@ -114,10 +115,14 @@ function createAppleClient(context) {
 
         if (calendarData && typeof calendarData === 'object' && '_' in calendarData) {
           calendarData = calendarData._;
+          const href = item['href'] || item['D:href'];
+          context.log("📁 Analyserar href:", href);
+          context.log("📄 calendarData:", calendarData.slice(0, 500));
         }
 
         const href = item['href'] || item['D:href'];
         if (!calendarData || !calendarData.includes('VEVENT')) {
+          context.log("❔ Ingen VEVENT hittad i calendar-data, försöker fallback:", href);
           const fullUrl = `${caldavUrl.replace(/\/$/, '')}${href}`;
           const fallbackRes = await fetch(fullUrl, {
             method: "GET",
@@ -126,7 +131,11 @@ function createAppleClient(context) {
             }
           });
           calendarData = await fallbackRes.text();
-          if (!calendarData.includes("VEVENT")) continue;
+          context.log("📄 Fallback calendarData:", calendarData.slice(0, 500));
+          if (!calendarData.includes("VEVENT")) {
+            context.log("⛔ Inget VEVENT i fallback-data – hoppar denna:", href);
+            continue;
+          }
         }
 
         const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g));
@@ -153,6 +162,10 @@ function createAppleClient(context) {
         return new Date(dt) > now;
       });
       context.log(`✅ Hittade ${results.length} events totalt`);
+      context.log(`📊 upcoming.length: ${upcoming.length}`);
+      for (const u of upcoming) {
+        context.log("📆 Upcoming:", u);
+      }
       return upcoming;
     } catch (err) {
       context.log("❌ Fel i fetchEventsByDateRange():", err.message);
