@@ -8,6 +8,12 @@ require('../shared/config/verifySettings');
 
 module.exports = async function (context, req) {
   const appleClient = createAppleClient(context);
+  // 🧪 TEST: Logga fetchEventsByDateRange direkt vid start
+  const testAppleRange = await appleClient.fetchEventsByDateRange(new Date(), new Date(Date.now() + 7 * 86400000));
+  context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
+  for (const e of testAppleRange) {
+    context.log("🧾 Apple Event:", e);
+  }
   const graphClient = createMsGraphClient();
   context.log("🧪 Azure Function entrypoint nådd");
   context.log("🧪 graphClient.getEvent:", typeof graphClient.getEvent === "function");
