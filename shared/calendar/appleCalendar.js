@@ -80,9 +80,8 @@ function createAppleClient(context) {
   </d:prop>
   <c:filter>
     <c:comp-filter name="VCALENDAR">
-      <c:comp-filter name="VEVENT">
-        <c:time-range start="${DateTime.fromISO(startDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")}" end="${DateTime.fromISO(endDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")}"/>
-      </c:comp-filter>
+      <c:comp-filter name="VEVENT"/>
+      <!-- <c:time-range start="${DateTime.fromISO(startDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")}" end="${DateTime.fromISO(endDate).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")}"/> -->
     </c:comp-filter>
   </c:filter>
 </c:calendar-query>`;
