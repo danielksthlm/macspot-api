@@ -1,4 +1,3 @@
-
 const { app } = require('@azure/functions');
 const fetch = global.fetch;
 
@@ -10,6 +9,14 @@ app.http('test_azurecloud', {
       const calendarUrl = process.env.CALDAV_CALENDAR_URL;
       const username = process.env.CALDAV_USER;
       const password = process.env.CALDAV_PASSWORD;
+
+      if (!calendarUrl || !username || !password) {
+        context.log("❌ Miljövariabler saknas – kontrollera CALDAV_CALENDAR_URL, CALDAV_USER, CALDAV_PASSWORD");
+        return {
+          status: 500,
+          body: '❌ En eller flera CalDAV-miljövariabler saknas.'
+        };
+      }
 
       const basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
