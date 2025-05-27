@@ -64,18 +64,70 @@ function createAppleClient(context) {
 
   // Hämtar alla events i ett datumintervall via CalDAV REPORT
   async function fetchEventsByDateRange(startDate, endDate) {
-    const now = new Date();
-    const end = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 dagar
-    const events = await appleClient.fetchEventsByDateRange(now.toISOString(), end.toISOString());
-
-    context.res = {
-      status: 200,
-      body: {
-        status: "✅ Success via shared module",
-        count: events.length,
-        events
+    const caldavUrl = process.env.CALDAV_CALENDAR_URL;
+    const username = process.env.CALDAV_USER;
+    const password = process.env.CALDAV_PASSWORD;
+    if (!caldavUrl || !username || !password) {
+      context.log("⚠️ Missing CalDAV credentials");
+      return [];
+    }
+    // CalDAV REPORT XML
+    const reportXml = `<?xml version="1.0" encoding="utf-8" ?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <d:getetag/>
+    <c:calendar-data/>
+  </d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="VEVENT">
+        <c:time-range start="${startDate.replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '').slice(0, 15)}" end="${endDate.replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '').slice(0, 15)}"/>
+      </c:comp-filter>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>`;
+    try {
+      const res = await fetch(caldavUrl, {
+        method: "REPORT",
+        headers: {
+          "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
+          "Content-Type": "application/xml",
+          "Depth": "1"
+        },
+        body: reportXml
+      });
+      if (!res.ok) {
+        context.log("❌ CalDAV REPORT misslyckades:", res.status, res.statusText);
+        return [];
       }
-    };
+      const xml = await res.text();
+      // Parse XML
+      const parsed = await xml2js.parseStringPromise(xml);
+      // Extract VEVENTs from calendar-data
+      const responses = parsed['d:multistatus']?.['d:response'] || [];
+      let events = [];
+      for (const resp of responses) {
+        const calendarData = resp['d:propstat']?.[0]?.['d:prop']?.[0]?.['cal:calendar-data']?.[0];
+        if (!calendarData) continue;
+        // Extract SUMMARY, UID, DTSTART, DTEND, LOCATION from ICS data
+        const summary = (calendarData.match(/SUMMARY:(.*)/) || [])[1]?.trim();
+        const uid = (calendarData.match(/UID:(.*)/) || [])[1]?.trim();
+        const dtstart = (calendarData.match(/DTSTART(?:;[^:]*)?:(.*)/) || [])[1]?.trim();
+        const dtend = (calendarData.match(/DTEND(?:;[^:]*)?:(.*)/) || [])[1]?.trim();
+        const location = (calendarData.match(/LOCATION:(.*)/) || [])[1]?.trim();
+        events.push({
+          summary,
+          uid,
+          dtstart,
+          dtend,
+          location
+        });
+      }
+      return events;
+    } catch (err) {
+      context.log("❌ Fel i fetchEventsByDateRange:", err.message);
+      return [];
+    }
   }
 
   return { getEvent, fetchEventsByDateRange };
