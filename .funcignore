@@ -31,5 +31,5 @@ tests/
 !refreshTravelTimes/**
 !booking_settings/
 !booking_settings/**
-!test_frontend/
-!test_frontend/**
+!test_azurecloud/
+!test_azurecloud/**

@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get"],
-      "route": "test_frontend"
+      "route": "test_azurecloud"
     },
     {
       "type": "http",
