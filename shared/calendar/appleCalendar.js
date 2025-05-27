@@ -63,26 +63,24 @@ function createAppleClient(context) {
       return [];
     }
 
-    const formatToUTC = (dateObj) => DateTime.fromISO(dateObj, { zone: "utc" }).toFormat("yyyyMMdd'T'HHmmss'Z'");
-    const rangeStart = formatToUTC(startDate);
-    const rangeEnd = formatToUTC(endDate);
-
-    context.log("📆 Intervall (UTC):", { rangeStart, rangeEnd });
+    const rangeStart = DateTime.fromISO(startDate).toFormat("yyyyMMdd'T'HHmmss'Z'");
+    const rangeEnd = DateTime.fromISO(endDate).toFormat("yyyyMMdd'T'HHmmss'Z'");
 
     const xmlBody = `
-<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
-  <D:prop>
-    <D:getetag/>
-    <C:calendar-data content-type="text/calendar"/>
-  </D:prop>
-  <C:filter>
-    <C:comp-filter name="VCALENDAR">
-      <C:comp-filter name="VEVENT">
-        <C:time-range start="${rangeStart}" end="${rangeEnd}"/>
-      </C:comp-filter>
-    </C:comp-filter>
-  </C:filter>
-</C:calendar-query>`.trim();
+    <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
+                      xmlns:D="DAV:">
+      <D:prop>
+        <D:getetag/>
+        <C:calendar-data/>
+      </D:prop>
+      <C:filter>
+        <C:comp-filter name="VCALENDAR">
+          <C:comp-filter name="VEVENT">
+            <C:time-range start="${rangeStart}" end="${rangeEnd}"/>
+          </C:comp-filter>
+        </C:comp-filter>
+      </C:filter>
+    </C:calendar-query>`.trim();
 
     try {
       const res = await fetch(caldavUrl, {
