@@ -67,6 +67,8 @@ function createAppleClient(context) {
     const rangeStart = formatToFloating(startDate);
     const rangeEnd = formatToFloating(endDate);
 
+    context.log("📆 Intervall (UTC):", { rangeStart, rangeEnd });
+
     const xmlBody = `
 <C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:prop>
@@ -141,9 +143,11 @@ function createAppleClient(context) {
         const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g));
         for (const vevent of vevents) {
           const v = vevent[0];
+          context.log("🧪 VEVENT:", v.slice(0, 300));
           const summary = v.match(/SUMMARY:(.*)/)?.[1]?.trim() ?? "–";
           const dtstart = v.match(/DTSTART(?:;[^:]*)?:(\d{8}(T\d{6})?)/)?.[1]?.trim() ?? "–";
           const dtend = v.match(/DTEND(?:;[^:]*)?:(\d{8}(T\d{6})?)/)?.[1]?.trim() ?? "–";
+          context.log("🕒 Eventdatum:", { dtstart, dtend });
           const location = v.match(/LOCATION:(.*)/)?.[1]?.trim() ?? "–";
           const uid = v.match(/UID:(.*)/)?.[1]?.trim() ?? "–";
           results.push({ summary, dtstart, dtend, location, uid });
