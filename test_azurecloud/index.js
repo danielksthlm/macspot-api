@@ -14,9 +14,32 @@ module.exports = async function (context, req) {
     const timestamp = new Date().toISOString();
     context.log("🕒 Timestamp:", timestamp);
     context.log("✅ fetch fungerade – IP:", text);
-    const caldavRes = await fetch(calendarUrl, { method: 'HEAD' });
-    context.log("📡 CALDAV HEAD status:", caldavRes.status);
-    const caldavReachable = caldavRes.ok;
+    const password = process.env.CALDAV_PASSWORD;
+    const basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+
+    const reportXml = `
+<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT"/>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>`;
+
+    const caldavRes = await fetch(calendarUrl, {
+      method: 'REPORT',
+      headers: {
+        Authorization: basicAuth,
+        'Content-Type': 'application/xml',
+        Depth: '1'
+      },
+      body: reportXml
+    });
+
+    const caldavText = await caldavRes.text();
+    context.log("📡 CALDAV REPORT status:", caldavRes.status);
+    context.log("📄 CALDAV XML body:", caldavText);
+
     context.res = {
       status: 200,
       body: {
@@ -25,8 +48,8 @@ module.exports = async function (context, req) {
         timestamp,
         caldav_user: username,
         calendar_url: calendarUrl,
-        caldav_reachable: caldavReachable,
         caldav_status_code: caldavRes.status,
+        caldav_body_snippet: caldavText.substring(0, 1000)
       }
     };
   } catch (err) {
