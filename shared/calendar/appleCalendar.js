@@ -118,6 +118,8 @@ function createAppleClient(context) {
         const propstats = [].concat(resp?.propstat || []);
         for (const p of propstats) {
           context.log("📦 propstat:", JSON.stringify(p, null, 2));
+          context.log("🧪 typeof calendar-data:", typeof p?.prop?.['calendar-data']);
+          context.log("🧪 calendar-data raw:", JSON.stringify(p?.prop?.['calendar-data'], null, 2));
           const calendarData = typeof p?.prop?.['calendar-data'] === 'string'
             ? p?.prop?.['calendar-data']
             : p?.prop?.['calendar-data']?._;
