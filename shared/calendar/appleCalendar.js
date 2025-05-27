@@ -112,23 +112,26 @@ function createAppleClient(context) {
       let events = [];
       for (const resp of responses) {
         context.log("🔍 response-exempel:", JSON.stringify(resp, null, 2));
-        const calendarData = resp?.propstat?.[0]?.prop?.['calendar-data'];
-        if (!calendarData) continue;
-        // Extract SUMMARY, UID, DTSTART, DTEND, LOCATION from ICS data
-        const dtstartMatch = calendarData.match(/DTSTART(?:;[^:]*)?:(.*)/);
-        context.log("🧪 Hittad DTSTART-rad:", dtstartMatch?.[0]);
-        const summary = (calendarData.match(/SUMMARY:(.*)/) || [])[1]?.trim();
-        const uid = (calendarData.match(/UID:(.*)/) || [])[1]?.trim();
-        const dtstart = dtstartMatch ? dtstartMatch[1].trim() : undefined;
-        const dtend = (calendarData.match(/DTEND(?:;[^:]*)?:(.*)/) || [])[1]?.trim();
-        const location = (calendarData.match(/LOCATION:(.*)/) || [])[1]?.trim();
-        events.push({
-          summary,
-          uid,
-          dtstart,
-          dtend,
-          location
-        });
+        const propstats = [].concat(resp?.propstat || []);
+        for (const p of propstats) {
+          context.log("📦 propstat:", JSON.stringify(p, null, 2));
+          const calendarData = p?.prop?.['calendar-data'];
+          if (!calendarData) continue;
+          const dtstartMatch = calendarData.match(/DTSTART(?:;[^:]*)?:(.*)/);
+          context.log("🧪 Hittad DTSTART-rad:", dtstartMatch?.[0]);
+          const summary = (calendarData.match(/SUMMARY:(.*)/) || [])[1]?.trim();
+          const uid = (calendarData.match(/UID:(.*)/) || [])[1]?.trim();
+          const dtstart = dtstartMatch ? dtstartMatch[1].trim() : undefined;
+          const dtend = (calendarData.match(/DTEND(?:;[^:]*)?:(.*)/) || [])[1]?.trim();
+          const location = (calendarData.match(/LOCATION:(.*)/) || [])[1]?.trim();
+          events.push({
+            summary,
+            uid,
+            dtstart,
+            dtend,
+            location
+          });
+        }
       }
       return events;
     } catch (err) {
