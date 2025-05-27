@@ -1,10 +1,5 @@
 const { app } = require('@azure/functions');
-const fetch = require('node-fetch');
-
-if (typeof fetch !== 'function') {
-  console.error("❌ fetch är inte en funktion – node-fetch är kanske inte korrekt installerad.");
-  throw new Error("fetch is not a function");
-}
+const { fetch } = require('undici');
 
 app.http('test_azurecloud', {
   methods: ['GET'],
