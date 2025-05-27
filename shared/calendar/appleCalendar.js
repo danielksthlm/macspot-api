@@ -64,7 +64,6 @@ function createAppleClient(context) {
 
   // Hämtar alla events i ett datumintervall via CalDAV REPORT
   async function fetchEventsByDateRange(startDate, endDate) {
-    const appleClient = require('../shared/calendar/appleCalendar')();
     const now = new Date();
     const end = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 dagar
     const events = await appleClient.fetchEventsByDateRange(now.toISOString(), end.toISOString());
