@@ -16,7 +16,7 @@ module.exports = async function (context, req) {
     context.log("🕒 Timestamp:", timestamp);
     context.log("✅ fetch fungerade – IP:", text);
 
-    const appleClient = require('../shared/calendar/appleCalendar')();
+    const appleClient = require('../shared/calendar/appleCalendar')(context);
     const now = new Date();
     const end = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 dagar
     context.log("🧪 fetchEventsByDateRange anropas med:", {
