@@ -109,6 +109,7 @@ function createAppleClient(context) {
         tagNameProcessors: [xml2js.processors.stripPrefix],
         explicitRoot: false
       });
+      context.log("🧩 parsed objekt:", JSON.stringify(parsed, null, 2));
       // Extract VEVENTs from calendar-data
       const responses = [].concat(parsed?.multistatus?.response || []);
       let events = [];
