@@ -102,9 +102,14 @@ function createAppleClient(context) {
       }
       const xml = await res.text();
       // Parse XML
-      const parsed = await xml2js.parseStringPromise(xml);
+      const parsed = await xml2js.parseStringPromise(xml, {
+        explicitArray: false,
+        ignoreAttrs: false,
+        tagNameProcessors: [xml2js.processors.stripPrefix],
+        explicitRoot: false
+      });
       // Extract VEVENTs from calendar-data
-      const responses = parsed['d:multistatus']?.['d:response'] || [];
+      const responses = parsed?.multistatus?.response || [];
       let events = [];
       for (const resp of responses) {
         const calendarData = resp['d:propstat']?.[0]?.['d:prop']?.[0]?.['calendar-data']?.[0];
