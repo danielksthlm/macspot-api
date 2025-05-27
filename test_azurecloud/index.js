@@ -11,6 +11,7 @@ app.http('test_azurecloud', {
   authLevel: 'function',
   handler: async (request, context) => {
     try {
+      context.log("🚀 Handler startar");
       const calendarUrl = process.env.CALDAV_CALENDAR_URL;
       const username = process.env.CALDAV_USER;
       const password = process.env.CALDAV_PASSWORD;
@@ -25,7 +26,13 @@ app.http('test_azurecloud', {
 
       context.log("🕒 Starttid:", new Date().toISOString());
 
-      const basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+      let basicAuth;
+      try {
+        basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+      } catch (e) {
+        context.log("❌ Buffer-kodning misslyckades:", e.message);
+        return { status: 500, body: 'Buffer encoding error' };
+      }
 
       const reportXml = `
 <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">
