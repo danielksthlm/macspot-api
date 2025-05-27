@@ -31,7 +31,7 @@ module.exports = async function (context, req) {
       headers: {
         Authorization: basicAuth,
         'Content-Type': 'application/xml',
-        Depth: '0',
+        Depth: '1',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
         'Prefer': 'return-minimal'
       },
