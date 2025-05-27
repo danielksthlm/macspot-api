@@ -98,6 +98,7 @@ function createAppleClient(context) {
       const xml = await res.text();
       context.log("🔎 Rå XML-svar från CalDAV:");
       context.log(xml.slice(0, 2000));
+      context.log("🔍 XML innan parsing:", xml.slice(0, 2000));
       const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [xml2js.processors.stripPrefix] });
   context.log("📦 parsed XML till objekt:", JSON.stringify(parsed, null, 2));
       const responses = parsed?.['multistatus']?.['response'] || parsed?.['D:multistatus']?.['D:response'];
