@@ -112,7 +112,9 @@ function createAppleClient(context) {
       const targetPath = new URL(process.env.CALDAV_CALENDAR_URL.trim()).pathname;
       const filteredItems = items.filter(item => {
         const href = item['href'] || item['D:href'] || '';
-        return href.trim().startsWith(targetPath);
+        const match = href.trim().startsWith(targetPath);
+        context.log("🔗 href:", href.trim(), "→ matchar?", match);
+        return match;
       });
 
       const results = [];
