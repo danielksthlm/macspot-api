@@ -118,7 +118,9 @@ function createAppleClient(context) {
         const propstats = [].concat(resp?.propstat || []);
         for (const p of propstats) {
           context.log("📦 propstat:", JSON.stringify(p, null, 2));
-          const calendarData = p?.prop?.['calendar-data']?._;
+          const calendarData = typeof p?.prop?.['calendar-data'] === 'string'
+            ? p?.prop?.['calendar-data']
+            : p?.prop?.['calendar-data']?._;
           if (!calendarData) continue;
           const dtstartMatch = calendarData.match(/DTSTART(?:;[^:]*)?:(.*)/);
           context.log("🧪 Hittad DTSTART-rad:", dtstartMatch?.[0]);
