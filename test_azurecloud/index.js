@@ -14,6 +14,9 @@ module.exports = async function (context, req) {
     const timestamp = new Date().toISOString();
     context.log("🕒 Timestamp:", timestamp);
     context.log("✅ fetch fungerade – IP:", text);
+    const caldavRes = await fetch(calendarUrl, { method: 'HEAD' });
+    context.log("📡 CALDAV HEAD status:", caldavRes.status);
+    const caldavReachable = caldavRes.ok;
     context.res = {
       status: 200,
       body: {
@@ -22,6 +25,8 @@ module.exports = async function (context, req) {
         timestamp,
         caldav_user: username,
         calendar_url: calendarUrl,
+        caldav_reachable: caldavReachable,
+        caldav_status_code: caldavRes.status,
       }
     };
   } catch (err) {
