@@ -111,6 +111,7 @@ function createAppleClient(context) {
       const responses = [].concat(parsed?.multistatus?.response || []);
       let events = [];
       for (const resp of responses) {
+        context.log("🔍 response-exempel:", JSON.stringify(resp, null, 2));
         const calendarData = resp?.propstat?.[0]?.prop?.['calendar-data'];
         if (!calendarData) continue;
         // Extract SUMMARY, UID, DTSTART, DTEND, LOCATION from ICS data
