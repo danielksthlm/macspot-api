@@ -9,10 +9,21 @@ module.exports = async function (context, req) {
 
   context.log("🧪 test_azurecloud klassisk start");
   try {
-    const res = await fetch('https://ifconfig.me');
+    const res = await fetch('https://ifconfig.me/ip');
     const text = await res.text();
+    const timestamp = new Date().toISOString();
+    context.log("🕒 Timestamp:", timestamp);
     context.log("✅ fetch fungerade – IP:", text);
-    context.res = { status: 200, body: `✅ IP: ${text}` };
+    context.res = {
+      status: 200,
+      body: {
+        status: "✅ Success",
+        ip: text.trim(),
+        timestamp,
+        caldav_user: username,
+        calendar_url: calendarUrl,
+      }
+    };
   } catch (err) {
     context.log("❌ Fetch fel:", err.stack || err.message);
     context.res = { status: 500, body: `❌ ${err.message}` };
