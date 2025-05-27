@@ -20,6 +20,10 @@ module.exports = async function (context, req) {
     const now = new Date();
     const end = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 dagar
     const events = await appleClient.fetchEventsByDateRange(now.toISOString(), end.toISOString());
+    context.log("📊 Antal event:", events.length);
+    if (events.length > 0) {
+      context.log("📌 Exempel på event:", events[0]);
+    }
 
     context.res = {
       status: 200,
