@@ -110,9 +110,11 @@ function createAppleClient(context) {
         const calendarData = resp['d:propstat']?.[0]?.['d:prop']?.[0]?.['cal:calendar-data']?.[0];
         if (!calendarData) continue;
         // Extract SUMMARY, UID, DTSTART, DTEND, LOCATION from ICS data
+        const dtstartMatch = calendarData.match(/DTSTART(?:;[^:]*)?:(.*)/);
+        context.log("🧪 Hittad DTSTART-rad:", dtstartMatch?.[0]);
         const summary = (calendarData.match(/SUMMARY:(.*)/) || [])[1]?.trim();
         const uid = (calendarData.match(/UID:(.*)/) || [])[1]?.trim();
-        const dtstart = (calendarData.match(/DTSTART(?:;[^:]*)?:(.*)/) || [])[1]?.trim();
+        const dtstart = dtstartMatch ? dtstartMatch[1].trim() : undefined;
         const dtend = (calendarData.match(/DTEND(?:;[^:]*)?:(.*)/) || [])[1]?.trim();
         const location = (calendarData.match(/LOCATION:(.*)/) || [])[1]?.trim();
         events.push({
