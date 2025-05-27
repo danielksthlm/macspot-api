@@ -18,6 +18,16 @@ app.http('test_azurecloud', {
         };
       }
 
+      context.log("🕒 Starttid:", new Date().toISOString());
+
+      try {
+        const ipRes = await fetch('https://ifconfig.me');
+        const ip = await ipRes.text();
+        context.log("🌍 Azure outbound IP:", ip);
+      } catch (ipErr) {
+        context.log("⚠️ Kunde inte hämta IP:", ipErr.message);
+      }
+
       const basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
       const reportXml = `
@@ -39,6 +49,8 @@ app.http('test_azurecloud', {
         body: reportXml
       });
 
+      context.log("🕒 Sluttid:", new Date().toISOString());
+
       const text = await res.text();
 
       context.log("📡 Status:", res.status);
@@ -51,7 +63,7 @@ app.http('test_azurecloud', {
         body: `✅ Apple CalDAV test klar – status ${res.status}`
       };
     } catch (err) {
-      context.log("❌ Fel vid fetch:", err.message);
+      context.log("❌ Fel vid fetch:", err.stack || err.message);
       return {
         status: 500,
         body: `❌ Fel vid fetch: ${err.message}`
