@@ -95,11 +95,13 @@ function createAppleClient(context) {
         },
         body: reportXml
       });
+      context.log("📡 CALDAV REPORT-status:", res.status, res.statusText, "✅ res.ok:", res.ok);
       if (!res.ok) {
         context.log("⚠️ REPORT misslyckades med status:", res.status, res.statusText);
         return [];
       }
       const xml = await res.text();
+      context.log("🧾 XML preview (1000 tecken):", xml.slice(0, 1000));
       // Parse XML
       const parsed = await xml2js.parseStringPromise(xml, {
         explicitArray: false,
