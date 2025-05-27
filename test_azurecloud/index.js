@@ -18,7 +18,12 @@ module.exports = async function (context, req) {
     const basicAuth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
     const reportXml = `
-<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">
+<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
+                  xmlns:D="DAV:">
+  <D:prop>
+    <D:getetag/>
+    <C:calendar-data/>
+  </D:prop>
   <C:filter>
     <C:comp-filter name="VCALENDAR">
       <C:comp-filter name="VEVENT"/>
