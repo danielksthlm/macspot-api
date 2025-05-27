@@ -19,6 +19,10 @@ module.exports = async function (context, req) {
     const appleClient = require('../shared/calendar/appleCalendar')();
     const now = new Date();
     const end = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 dagar
+    context.log("🧪 fetchEventsByDateRange anropas med:", {
+      start: now.toISOString(),
+      end: end.toISOString()
+    });
     const events = await appleClient.fetchEventsByDateRange(now.toISOString(), end.toISOString());
     context.log("📊 Antal event:", events.length);
     if (events.length > 0) {
