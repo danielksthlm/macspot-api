@@ -52,29 +52,37 @@ module.exports = async function (context, req) {
     const parsed = await parser.parseStringPromise(caldavText);
     const responses = parsed['D:multistatus']?.['D:response'] || [];
 
-    if (Array.isArray(responses)) {
-      responses.forEach((res, i) => {
-        const data = res['D:propstat']?.[1]?.['D:prop']?.['caldav:calendar-data'] || '';
-        const match = data.match(/SUMMARY:(.+)/);
-        const start = data.match(/DTSTART.*:(.+)/);
-        const end = data.match(/DTEND.*:(.+)/);
-        context.log(`📅 Event ${i + 1}:`);
-        context.log(`  • Summary: ${match?.[1]}`);
-        context.log(`  • Start:   ${start?.[1]}`);
-        context.log(`  • End:     ${end?.[1]}`);
-      });
-    }
+    const events = [];
+
+    responses.forEach((res) => {
+      const data = res['D:propstat']?.[1]?.['D:prop']?.['caldav:calendar-data'] || '';
+      const match = data.match(/SUMMARY:(.+)/);
+      const start = data.match(/DTSTART.*:(.+)/);
+      const end = data.match(/DTEND.*:(.+)/);
+      const uid = data.match(/UID:(.+)/);
+      const location = data.match(/LOCATION:(.+)/);
+
+      const event = {
+        uid: uid?.[1]?.trim(),
+        summary: match?.[1]?.trim(),
+        start: start?.[1]?.trim(),
+        end: end?.[1]?.trim(),
+        location: location?.[1]?.trim(),
+        raw: data
+      };
+
+      const startDate = start?.[1] ? new Date(start[1]) : null;
+      if (startDate && startDate > new Date()) {
+        events.push(event);
+      }
+    });
 
     context.res = {
       status: 200,
       body: {
         status: "✅ Success",
-        ip: text.trim(),
-        timestamp,
-        caldav_user: username,
-        calendar_url: calendarUrl,
-        caldav_status_code: caldavRes.status,
-        caldav_body_snippet: caldavText.substring(0, 1000)
+        count: events.length,
+        events
       }
     };
   } catch (err) {
