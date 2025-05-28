@@ -222,7 +222,7 @@ async function generateSlotChunks({
 
   // Apple Calendar
   try {
-    const appleEvents = await appleClient.fetchEventsByDateRange?.(startIso, endIso) || [];
+    const appleEvents = await appleClient.fetchEventsByDateRange?.(new Date(startIso), new Date(endIso)) || [];
     let appleAddedCount = 0;
     for (const ev of appleEvents) {
       try {
