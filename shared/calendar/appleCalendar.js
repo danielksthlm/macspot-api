@@ -99,6 +99,10 @@ function createAppleClient(context) {
       context.log("📤 CalDAV fetch response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
 
       const xml = await res.text();
+      context.log("📤 Fick raw XML (1000 tecken):", xml.slice(0, 1000));
+      context.log("📤 Är texten tom?", xml.trim().length === 0);
+      context.log("📤 Innehåller VCALENDAR?", xml.includes("VCALENDAR"));
+      context.log("📤 Innehåller VEVENT?", xml.includes("VEVENT"));
       context.log("📤 Rå XML-längd:", xml.length);
       context.log("📄 CalDAV response text (första 1000 tecken):", xml.slice(0, 1000));
       context.log("📄 Full längd på svar:", xml.length);
