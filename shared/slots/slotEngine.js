@@ -147,7 +147,27 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     slots.push(slot);
   }
 
-  return slots;
+  // Separera förmiddag och eftermiddag
+  const fmSlots = slots.filter(slot => slot.slot_part === 'fm');
+  const emSlots = slots.filter(slot => slot.slot_part === 'em');
+
+  // Sorteringsfunktion: högst poäng först, därefter kortast restid, därefter tidigast tid
+  const sortSlots = (a, b) =>
+    b.score - a.score ||
+    a.travel_time_min - b.travel_time_min ||
+    new Date(a.slot_iso) - new Date(b.slot_iso);
+
+  // Sortera båda grupper
+  fmSlots.sort(sortSlots);
+  emSlots.sort(sortSlots);
+
+  // Välj bästa fm och em (om de finns)
+  const bestFm = fmSlots[0];
+  const bestEm = emSlots.find(em => !bestFm || em.slot_iso !== bestFm.slot_iso);
+
+  // Returnera endast de två bästa
+  const topSlots = [bestFm, bestEm].filter(Boolean);
+  return topSlots;
 }
 
 
