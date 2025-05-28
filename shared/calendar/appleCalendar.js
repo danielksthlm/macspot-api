@@ -95,6 +95,10 @@ function createAppleClient(context) {
       });
 
       const xml = await res.text();
+      context.log("📄 Rå CalDAV XML-svar LÄNGD:", xml.length);
+      context.log("📄 Rå CalDAV XML-svar – START:", xml.slice(0, 500));
+      context.log("📄 Rå CalDAV XML-svar – MITT:", xml.slice(500, 1000));
+      context.log("📄 Rå CalDAV XML-svar – SLUT:", xml.slice(-500));
       if (!xml || xml.length < 50) {
         context.log("⚠️ XML-svar verkar tomt eller för kort – XML:", xml);
       }
