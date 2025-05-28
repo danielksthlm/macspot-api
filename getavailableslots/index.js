@@ -15,6 +15,9 @@ module.exports = async function (context, req) {
   try {
     const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
     context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
+    for (const ev of testAppleRange) {
+      context.log("📆 Apple Event:", ev);
+    }
     for (const e of testAppleRange) {
       context.log("🧾 Apple Event UID:", e.uid, "Start:", e.start, "End:", e.end, "Summary:", e.summary);
     }
