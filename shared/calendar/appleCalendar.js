@@ -68,8 +68,9 @@ function createAppleClient(context) {
       return [];
     }
 
-    const startIso = DateTime.fromJSDate(startDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
-    const endIso = DateTime.fromJSDate(endDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
+    const parseDate = (d) => (d instanceof Date ? DateTime.fromJSDate(d) : DateTime.fromISO(d));
+    const startIso = parseDate(startDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
+    const endIso = parseDate(endDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
     context.log("📅 Använder time-range:", { startIso, endIso });
     context.log("📆 REPORT-request time range:", { startIso, endIso });
     const xmlBody = `
