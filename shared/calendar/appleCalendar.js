@@ -97,6 +97,8 @@ function createAppleClient(context) {
       context.log("📡 CalDAV HTTP-status:", res.status, "res.ok:", res.ok);
 
       const xml = await res.text();
+      context.log("📄 Rå XML:", xml.slice(0, 2000));
+      context.log("🔍 Innehåller <href>? →", xml.includes("&lt;href&gt;") || xml.includes("<href>"));
       context.log("📄 Fick XML-svar, längd:", xml.length);
 
       if (!xml || xml.length < 20) {
