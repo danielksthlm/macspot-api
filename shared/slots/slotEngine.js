@@ -222,7 +222,14 @@ async function generateSlotChunks({
 
   // Apple Calendar
   try {
-    const appleEvents = await appleClient.fetchEventsByDateRange?.(new Date(startIso), new Date(endIso)) || [];
+    const startDate = days[0] instanceof Date ? days[0] : new Date(days[0]);
+    const endDate = days[days.length - 1] instanceof Date
+      ? new Date(days[days.length - 1].getTime() + 86400000)
+      : new Date(new Date(days[days.length - 1]).getTime() + 86400000);
+    if (isNaN(startDate) || isNaN(endDate)) {
+      context.log("⛔ Ogiltiga datum skickas till Apple i slotEngine:", { startDate, endDate });
+    }
+    const appleEvents = await appleClient.fetchEventsByDateRange?.(startDate, endDate) || [];
     let appleAddedCount = 0;
     for (const ev of appleEvents) {
       try {

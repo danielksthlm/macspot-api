@@ -1,0 +1,4015 @@
+📂 KODTRÄD
+==========
+├── bookings
+│   ├── index.js
+├── getavailableslots
+│   ├── index.js
+├── meeting_types
+│   ├── index.js
+├── refreshCalendarOrigins
+│   ├── index.js
+├── refreshTravelTimes
+│   ├── index.js
+├── shared
+│   ├── calendar
+│   │   ├── appleCalendar.js
+│   │   ├── getMsToken.js
+│   │   ├── msGraph.js
+│   │   ├── resolveOrigin.js
+│   │   ├── zoomClient.js
+│   ├── config
+│   │   ├── settingsLoader.js
+│   │   ├── verifySettings.js
+│   ├── db
+│   │   ├── pgPool.js
+│   ├── maps
+│   │   ├── appleMaps.js
+│   │   ├── resolveTravelTime.js
+│   │   ├── returnTravelVerifier.js
+│   ├── notification
+│   │   ├── sendMail.js
+│   ├── slots
+│   │   ├── slotEngine.js
+│   ├── utils
+│   │   ├── debugLogger.js
+├── sync.py
+├── sync_all.py
+├── sync_from_cloud.py
+├── sync_static_tables.py
+├── sync_to_cloud.py
+├── validate_contact
+│   ├── index.js
+==========
+
+====================
+📄 Fil: meeting_types/index.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-22 19:37:45
+📏 Antal rader: 47
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 1 rader (2.1%)
+📥 Imports: 2 – ["const pool = require('../shared/db/pgPool');", "const { getSettings } = require('../shared/config/settingsLoader');"]
+🔍 Längsta funktion: 7 rader
+🧠 Komplexitetspoäng: 3
+🧪 TODO/FIXME: 0
+====================
+START: index.js
+const pool = require('../shared/db/pgPool');
+const { getSettings } = require('../shared/config/settingsLoader');
+
+module.exports = async function (context, req) {
+  const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
+  for (const key of requiredEnv) {
+    if (!process.env[key]) {
+      context.log.error(`Missing environment variable: ${key}`);
+      context.res = {
+        status: 500,
+        body: { error: `Missing environment variable: ${key}` }
+      };
+      return;
+    }
+  }
+
+  try {
+    const settings = await getSettings(context);
+
+    const rawTypes = settings['meeting_types'];
+    const meetingTypes = Array.isArray(rawTypes) ? rawTypes.map(t => t.toLowerCase()) : [];
+    const lengths = {
+      zoom: settings['default_meeting_length_digital'],
+      facetime: settings['default_meeting_length_digital'],
+      teams: settings['default_meeting_length_digital'],
+      atclient: settings['default_meeting_length_atclient'],
+      atoffice: settings['default_meeting_length_atoffice']
+    };
+
+    context.res = {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        types: meetingTypes,
+        lengths
+      })
+    };
+  } catch (error) {
+    context.log.error('Database query failed:', error);
+    context.res = {
+      status: 500,
+      body: { error: error.message }
+    };
+  } finally {
+    // pool.end() tas bort – vi återanvänder en delad pool mellan anrop
+  }
+};
+END: index.js
+
+====================
+📄 Fil: validate_contact/index.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-24 18:36:04
+📏 Antal rader: 182
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 5 rader (2.7%)
+📥 Imports: 3 – ["const { getSettings } = require('../shared/config/settingsLoader');", "const pool = require('../shared/db/pgPool');", "const { v4: uuidv4 } = require('uuid');"]
+🔍 Längsta funktion: 1 rader
+🧠 Komplexitetspoäng: 28
+🧪 TODO/FIXME: 0
+====================
+START: index.js
+const { getSettings } = require('../shared/config/settingsLoader');
+const pool = require('../shared/db/pgPool');
+const { v4: uuidv4 } = require('uuid');
+
+module.exports = async function (context, req) {
+  try {
+    const email = req.body?.email || req.query?.email;
+    const meeting_type = req.body?.meeting_type || req.query?.meeting_type;
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('🛠 DEBUG MODE ENABLED');
+    }
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('📥 validate_contact triggered with:', { email, meeting_type });
+    }
+
+    if (!email || !meeting_type) {
+      context.res = { status: 400, body: { error: "email and meeting_type are required" } };
+      return;
+    }
+
+    const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
+    for (const key of requiredEnv) {
+      if (!process.env[key]) throw new Error(`Missing environment variable: ${key}`);
+    }
+
+    const contactRes = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
+    const contact = contactRes.rows[0];
+
+    if ((req.body?.write_if_valid || req.query?.write_if_valid) && contact) {
+      // Update existing contact if needed, merging metadata
+      let metadataFromClient = req.body?.metadata;
+      if (typeof metadataFromClient === 'string') {
+        try {
+          metadataFromClient = JSON.parse(metadataFromClient);
+        } catch {
+          metadataFromClient = {};
+        }
+      }
+      if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
+        // Fetch existing metadata
+        const existing = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
+        const old = existing.rows[0]?.metadata || {};
+        const merged = { ...old, ...metadataFromClient };
+        await pool.query(
+          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
+          [merged, email]
+        );
+        context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
+      }
+    }
+
+    if ((req.body?.write_if_valid || req.query?.write_if_valid) && !contact) {
+      let metadataFromClient = req.body?.metadata;
+      if (typeof metadataFromClient === 'string') {
+        try {
+          metadataFromClient = JSON.parse(metadataFromClient);
+        } catch {
+          metadataFromClient = {};
+        }
+      }
+      if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
+        const newId = uuidv4();
+        await pool.query(
+          `INSERT INTO contact (id, email, booking_email, metadata, created_at) VALUES ($1, $2, $2, $3, NOW())`,
+          [newId, email, metadataFromClient]
+        );
+        context.log.info('✅ Ny kontakt skapad via validate_contact');
+
+        if (process.env.DEBUG === 'true') {
+          context.log.info('📤 Svarar med status: created');
+        }
+
+        context.res = {
+          status: 200,
+          body: {
+            status: "created",
+            contact_id: newId
+          }
+        };
+        return;
+      }
+    }
+
+    let metadata = {};
+    if (contact) {
+      const refreshed = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
+      metadata = refreshed.rows[0]?.metadata || {};
+    }
+
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = {};
+      }
+    }
+
+    if (typeof metadata !== 'object' || metadata === null) metadata = {};
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('🧾 Metadata:', metadata);
+    }
+
+    const METADATA_KEYS = ['first_name', 'last_name', 'phone', 'company', 'address', 'postal_code', 'city', 'country'];
+    const fullMetadata = Object.fromEntries(
+      METADATA_KEYS.map(key => [key, metadata[key] ?? ''])
+    );
+    metadata = fullMetadata;
+
+    const settings = await getSettings(context);
+    const digitalTypes = Array.isArray(settings.meeting_digital) ? settings.meeting_digital : [];
+    const isDigital = digitalTypes.map(t => t.toLowerCase()).includes(meeting_type.toLowerCase()) || meeting_type === 'atoffice';
+
+    // Dynamically get required fields from booking_settings
+    const allRequired = settings.required_fields || {};
+    const requiredFields = Array.isArray(allRequired[meeting_type]) ? allRequired[meeting_type] : [];
+    // Beräkna alltid missingFields från metadata som just lästs från databasen
+    const missingFields = requiredFields.filter(
+      field => !metadata[field] || typeof metadata[field] !== 'string' || metadata[field].trim() === ''
+    );
+
+    if (process.env.DEBUG === 'true') {
+      context.log.info('📌 Saknade fält:', missingFields);
+    }
+
+    if (!contact) {
+      if (process.env.DEBUG === 'true') {
+        context.log.info('📤 Svarar med status: new_customer');
+      }
+      context.res = {
+        status: 200,
+        body: {
+          status: "new_customer",
+          missing_fields: missingFields
+        }
+      };
+    } else if (missingFields.length > 0) {
+      if (process.env.DEBUG === 'true') {
+        context.log.info('📤 Svarar med status: incomplete');
+      }
+      context.res = {
+        status: 200,
+        body: {
+          status: "incomplete",
+          contact_id: contact.id,
+          booking_email: contact.booking_email,
+          missing_fields: missingFields,
+          metadata
+        }
+      };
+    } else {
+      if (process.env.DEBUG === 'true') {
+        context.log.info('📤 Svarar med status: existing_customer');
+      }
+      context.res = {
+        status: 200,
+        body: {
+          status: "existing_customer",
+          contact_id: contact.id,
+          booking_email: contact.booking_email,
+          metadata
+        }
+      };
+    }
+
+  } catch (error) {
+    if (process.env.DEBUG === 'true') {
+      context.log.error('❌ Error during validate_contact:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
+    context.res = {
+      status: 500,
+      body: { error: error.message, stack: error.stack }
+    };
+  } finally {
+    // Poolen är delad och återanvänds – vi stänger den inte här
+  }
+};
+END: index.js
+
+====================
+📄 Fil: getavailableslots/index.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-28 14:09:54
+📏 Antal rader: 248
+🧩 Antal funktioner: 2
+💬 Kommentarstäckning: 5 rader (2.0%)
+📥 Imports: 9 – ['const db = require("../shared/db/pgPool");', "const createMsGraphClient = require('../shared/calendar/msGraph');", "const createAppleClient = require('../shared/calendar/appleCalendar');", "const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');", "const { createDebugLogger } = require('../shared/utils/debugLogger');", "require('../shared/config/verifySettings');", "const { getSettings } = require('../shared/config/settingsLoader');", "const verifyBookingSettings = require('../shared/config/verifySettings');", "generateSlotChunks = require('../shared/slots/slotEngine').generateSlotChunks;"]
+🔍 Längsta funktion: 19 rader
+🧠 Komplexitetspoäng: 24
+🧪 TODO/FIXME: 0
+====================
+START: index.js
+const db = require("../shared/db/pgPool");
+const createMsGraphClient = require('../shared/calendar/msGraph');
+const createAppleClient = require('../shared/calendar/appleCalendar');
+const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
+const { createDebugLogger } = require('../shared/utils/debugLogger');
+console.log("✅ getavailableslots/index.js laddad");
+require('../shared/config/verifySettings');
+
+module.exports = async function (context, req) {
+  const appleClient = createAppleClient(context);
+  // 🧪 TEST: Logga fetchEventsByDateRange direkt vid start med explicit tidsintervall och robust felhantering
+  const testStart = new Date();
+  const testEnd = new Date(Date.now() + 7 * 86400000);
+  if (!(testStart instanceof Date) || isNaN(testStart)) {
+    context.log("⛔ TEST Apple – Ogiltigt testStart:", testStart);
+  }
+  if (!(testEnd instanceof Date) || isNaN(testEnd)) {
+    context.log("⛔ TEST Apple – Ogiltigt testEnd:", testEnd);
+  }
+  context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
+  try {
+    const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
+    // [BEVIS] Loggning för att visa om Apple CalDAV faktiskt svarar
+    if (!testAppleRange || testAppleRange.length === 0) {
+      context.log("⛔ [BEVIS] Apple CalDAV returnerade inga events – möjligt problem med API eller filter.");
+    } else {
+      context.log(`✅ [BEVIS] Apple CalDAV returnerade ${testAppleRange.length} event(s).`);
+      const preview = testAppleRange.slice(0, 3);
+      for (const ev of preview) {
+        context.log("📆 [BEVIS] Apple Event:", ev);
+      }
+    }
+    context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
+    for (const ev of testAppleRange) {
+      context.log("📆 Apple Event:", ev);
+    }
+    for (const e of testAppleRange) {
+      context.log("🧾 Apple Event UID:", e.uid, "Start:", e.start, "End:", e.end, "Summary:", e.summary);
+    }
+  } catch (err) {
+    context.log("❌ Apple fetchEventsByDateRange FEL:", err.message);
+  }
+  const graphClient = createMsGraphClient();
+  context.log("🧪 Azure Function entrypoint nådd");
+  context.log("🧪 graphClient.getEvent:", typeof graphClient.getEvent === "function");
+  context.log("🧪 appleClient.getEvent:", typeof appleClient.getEvent === "function");
+
+  try {
+    const client = await db.connect();
+
+    if (!req || !req.body) {
+      context.log("❌ Ingen request body mottagen");
+      context.res = { status: 400, body: { error: "Missing request body" } };
+      return;
+    }
+
+    const { email, meeting_type, meeting_length, contact_id } = req.body;
+    context.log("✅ Request body innehåller:", { email, meeting_type });
+    context.log("✅ Steg 1: Anropar DB med contact_id:", contact_id);
+
+    // Declare allBookings, days, and contact at the top-level scope of the outer try block
+    let allBookings = [];
+    let days = [];
+    let contact;
+    let bookingsByDay = {};
+
+    try {
+      const contactRes = await client.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
+      contact = contactRes.rows[0];
+      if (contact) {
+        context.log("✅ Kontakt hittad:", contact.id);
+      } else {
+        context.log("⚠️ Ingen kontakt hittad för contact_id:", contact_id);
+      }
+    } catch (err) {
+      context.log("🔥 DB-fel:", err.message);
+      context.res = { status: 500, body: { error: "DB error", detail: err.message } };
+      client.release();
+      return;
+    }
+
+    context.log("✅ Steg 2: Laddar booking_settings...");
+
+    const { getSettings } = require('../shared/config/settingsLoader');
+    const verifyBookingSettings = require('../shared/config/verifySettings');
+
+    let settings;
+    try {
+      settings = await getSettings(context);
+      context.log("✅ Steg 2a: Inställningar laddade – nycklar:", Object.keys(settings).join(', '));
+      verifyBookingSettings(settings, context);
+      context.log("✅ Steg 2b: Inställningar verifierade");
+
+      context.log("✅ Steg 3: Genererar days[] och laddar bokningar");
+
+      const maxDays = settings.max_days_in_advance || 14;
+      const today = new Date();
+      days = Array.from({ length: maxDays }, (_, i) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        return date;
+      });
+
+      // 🔍 Validera days[]
+      days = days.filter((d, idx) => {
+        const isValid = d instanceof Date && !isNaN(d);
+        if (!isValid) {
+          context.log(`⛔ Ogiltigt datum i days[${idx}]:`, d);
+        }
+        return isValid;
+      });
+
+      if (days.length === 0) {
+        context.log("⛔ Alla datum i days[] var ogiltiga – avbryter exekvering.");
+        context.res = { status: 500, body: { error: "Inga giltiga datum kunde genereras" } };
+        client.release();
+        return;
+      }
+
+      const startDateStr = days[0].toISOString().split('T')[0];
+      const endDateStr = days[days.length - 1].toISOString().split('T')[0];
+
+      const startDate = days[0];
+      const endDate = days[days.length - 1];
+      if (!(startDate instanceof Date) || isNaN(startDate)) {
+        context.log("⛔ Ogiltigt startDate skickat till fetchEventsByDateRange:", startDate);
+      }
+      if (!(endDate instanceof Date) || isNaN(endDate)) {
+        context.log("⛔ Ogiltigt endDate skickat till fetchEventsByDateRange:", endDate);
+      }
+
+      const allBookingsRes = await client.query(
+        'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
+        [startDateStr, endDateStr]
+      );
+      context.log("🔢 Antal bokningar hämtade:", allBookingsRes.rows.length);
+
+      allBookings = allBookingsRes.rows.map(b => ({
+        start: new Date(b.start_time).getTime(),
+        end: new Date(b.end_time).getTime(),
+        date: new Date(b.start_time).toISOString().split('T')[0],
+        meeting_type: b.meeting_type
+      }));
+
+      for (const booking of allBookings) {
+        if (!bookingsByDay[booking.date]) bookingsByDay[booking.date] = [];
+        bookingsByDay[booking.date].push({ start: booking.start, end: booking.end });
+      }
+
+      context.log("✅ Steg 3: Dagar genererade och bokningar summerade");
+
+    } catch (err) {
+      context.log("🔥 Fel vid laddning/verifiering av settings:", err.message);
+      context.res = { status: 500, body: { error: "Settings error", detail: err.message } };
+      client.release();
+      return;
+    }
+
+    let generateSlotChunks;
+    try {
+      generateSlotChunks = require('../shared/slots/slotEngine').generateSlotChunks;
+      context.log("✅ generateSlotChunks import ok");
+    } catch (importErr) {
+      context.log("❌ Misslyckades importera generateSlotChunks:", importErr.message);
+      context.res = { status: 500, body: { error: "Import error", detail: importErr.message } };
+      client.release();
+      return;
+    }
+
+    const weeklyMinutesByType = {};
+    const weekKey = (date) => {
+      const start = new Date(date);
+      start.setUTCHours(0, 0, 0, 0);
+      start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+      return start.toISOString().split('T')[0];
+    };
+    for (const b of allBookings) {
+      const type = b.meeting_type || 'unknown';
+      const week = weekKey(b.start);
+      weeklyMinutesByType[type] = weeklyMinutesByType[type] || {};
+      weeklyMinutesByType[type][week] = (weeklyMinutesByType[type][week] || 0) + (b.end - b.start) / 60000;
+    }
+
+    const debugHelper = createDebugLogger(context);
+
+    const appleMapsToken = await getAppleMapsAccessToken(context);
+    if (appleMapsToken) {
+      context.log("✅ Apple Maps token hämtad – längd:", appleMapsToken.length);
+    } else {
+      context.log("⚠️ Apple Maps token saknas – fallback kommer att användas");
+    }
+
+    // Riktigt anrop till generateSlotChunks
+    const slotGroupPicked = {};
+    const startSlotGen = Date.now();
+    const chosenSlotsResult = await generateSlotChunks({
+      days,
+      context,
+      contact,
+      contact_id,
+      meeting_type,
+      meeting_length,
+      bookingsByDay,
+      weeklyMinutesByType,
+      settings,
+      graphClient,
+      appleClient,
+      travelCache: new Map(),
+      accessToken: appleMapsToken,
+      timezone: settings.timezone || 'Europe/Stockholm',
+      debugHelper,
+      client: client,
+      slotGroupPicked,
+      logSlotContext: true
+    });
+    const durationMs = Date.now() - startSlotGen;
+    context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
+    context.log("✅ generateSlotChunks kördes utan fel");
+    context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
+
+    if (chosenSlotsResult?.chosenSlots?.length) {
+      for (const slot of chosenSlotsResult.chosenSlots) {
+        const slotHour = new Date(slot.slot_iso).getUTCHours();
+        context.log(`📆 Slot: ${slot.slot_iso}, Part: ${slot.slot_part}, Origin: ${slot.origin}, Source: ${slot.source}`);
+      }
+    }
+
+    context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
+    context.res = {
+      status: 200,
+      body: {
+        message: "✅ getavailableslots är kontaktbar och fungerar i full version",
+        received: { email, meeting_type, meeting_length },
+        slots: (chosenSlotsResult?.chosenSlots || []).map(slot => ({
+          ...slot,
+          score: slot.score ?? null
+        }))
+      }
+    };
+    client.release();
+    context.log("✅ Databasanslutning släppt");
+  } catch (err) {
+    context.log("🔥 FEL i minimal testfunktion:", err.message);
+    context.res = { status: 500, body: { error: err.message } };
+  }
+  context.log("🎯 Slut på exekvering av getavailableslots");
+  context.log("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+};
+END: index.js
+
+====================
+📄 Fil: refreshCalendarOrigins/index.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-22 19:34:31
+📏 Antal rader: 36
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 4 – ["const { DateTime } = require('luxon');", "const pool = require('../shared/db/pgPool');", "const { resolveOriginAddress } = require('../shared/calendar/resolveOrigin');", "const { getSettings } = require('../shared/config/settingsLoader');"]
+🔍 Längsta funktion: 4 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: index.js
+
+
+const { DateTime } = require('luxon');
+const pool = require('../shared/db/pgPool');
+const { resolveOriginAddress } = require('../shared/calendar/resolveOrigin');
+
+const { getSettings } = require('../shared/config/settingsLoader');
+
+module.exports = async function (context, myTimer) {
+  const today = new Date();
+  const settings = await getSettings(context);
+  const maxDays = settings.max_days_in_advance || 14;
+  const days = Array.from({ length: maxDays }, (_, i) => {
+    const date = new Date();
+    date.setDate(today.getDate() + i);
+    return date;
+  });
+
+  context.log(`🔁 Kör refreshCalendarOrigins för ${days.length} dagar`);
+
+  for (const date of days) {
+    const slotTime = DateTime.fromJSDate(date).set({ hour: 10, minute: 0 }).toJSDate();
+    const travelStart = new Date(slotTime.getTime() - (settings.fallback_travel_time_minutes || 20) * 60000);
+
+    await resolveOriginAddress({
+      eventId: slotTime.toISOString(),
+      calendarId: 'system-refresh',
+      pool,
+      context,
+      fallbackOrigin: settings.default_home_address,
+      settings
+    });
+  }
+
+  context.log('✅ refreshCalendarOrigins färdig');
+};
+END: index.js
+
+====================
+📄 Fil: refreshTravelTimes/index.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-22 19:35:16
+📏 Antal rader: 112
+🧩 Antal funktioner: 4
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 6 – ["const { DateTime } = require('luxon');", "const fetch = require('node-fetch');", "const pool = require('../shared/db/pgPool');", "const { getSettings } = require('../shared/config/settingsLoader');", "const jwt = require('jsonwebtoken');", "const fs = require('fs');"]
+🔍 Längsta funktion: 10 rader
+🧠 Komplexitetspoäng: 8
+🧪 TODO/FIXME: 0
+====================
+START: index.js
+const { DateTime } = require('luxon');
+const fetch = require('node-fetch');
+const pool = require('../shared/db/pgPool');
+const { getSettings } = require('../shared/config/settingsLoader');
+
+module.exports = async function (context, myTimer) {
+  const settings = await getSettings(context);
+  const fallbackTravelTime = settings.fallback_travel_time_minutes || 20;
+  const today = new Date();
+  const timezone = settings.timezone || 'Europe/Stockholm';
+
+  const maxDays = settings.max_days_in_advance || 14;
+  const days = Array.from({ length: maxDays }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    return d;
+  });
+
+  const destinations = [settings.default_office_address];
+  const origins = [settings.default_home_address];
+
+  for (const day of days) {
+    for (const hour of [10, 14]) {
+      const slotTime = DateTime.fromJSDate(day).set({ hour, minute: 0 }).toJSDate();
+
+      for (const from of origins) {
+        for (const to of destinations) {
+          const hourKey = slotTime.getUTCHours();
+          const key = `${from}|${to}|${hourKey}`;
+
+          const res = await pool.query(
+            `SELECT 1 FROM travel_time_cache
+             WHERE from_address = $1 AND to_address = $2 AND hour = $3 LIMIT 1`,
+            [from, to, hourKey]
+          );
+
+          if (res.rows.length > 0) {
+            context.log(`⚡ Redan i cache: ${key}`);
+            continue;
+          }
+
+          context.log(`⏳ Beräknar restid: ${key}`);
+          try {
+            const token = await getAppleMapsAccessToken(context);
+            if (!token) throw new Error('Apple Maps-token saknas');
+
+            const url = new URL('https://maps-api.apple.com/v1/directions');
+            url.searchParams.append('origin', from);
+            url.searchParams.append('destination', to);
+            url.searchParams.append('transportType', 'automobile');
+            url.searchParams.append('departureTime', slotTime.toISOString());
+
+            const response = await fetch(url.toString(), {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await response.json();
+
+            const minutes = Math.round((data.routes?.[0]?.durationSeconds || fallbackTravelTime * 60) / 60);
+            await pool.query(
+              `INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (from_address, to_address, hour)
+               DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes`,
+              [from, to, hourKey, minutes]
+            );
+            context.log(`✅ Sparad restid: ${minutes} min (${key})`);
+          } catch (err) {
+            context.log(`⚠️ Misslyckades hämta/spara restid för ${key}: ${err.message}`);
+          }
+        }
+      }
+    }
+  }
+
+  context.log('✅ refreshTravelTimes färdig');
+};
+
+async function getAppleMapsAccessToken(context) {
+  try {
+    const jwt = require('jsonwebtoken');
+    const fs = require('fs');
+
+    const teamId = process.env.APPLE_MAPS_TEAM_ID;
+    const keyId = process.env.APPLE_MAPS_KEY_ID;
+    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n') ||
+                       fs.readFileSync(process.env.APPLE_MAPS_KEY_PATH, 'utf8');
+
+    const token = jwt.sign({}, privateKey, {
+      algorithm: 'ES256',
+      issuer: teamId,
+      keyid: keyId,
+      expiresIn: '1h',
+      header: {
+        alg: 'ES256',
+        kid: keyId,
+        typ: 'JWT'
+      }
+    });
+
+    const res = await fetch('https://maps-api.apple.com/v1/token', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+    return data.accessToken;
+  } catch (err) {
+    context.log('⚠️ Misslyckades hämta Apple Maps token:', err.message);
+    return null;
+  }
+}
+END: index.js
+
+====================
+📄 Fil: shared/calendar/appleCalendar.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-28 12:45:38
+📏 Antal rader: 273
+🧩 Antal funktioner: 6
+💬 Kommentarstäckning: 1 rader (0.4%)
+📥 Imports: 3 – ['const fetch = require("node-fetch");', 'const xml2js = require("xml2js");', 'const { DateTime } = require("luxon");']
+🔍 Längsta funktion: 8 rader
+🧠 Komplexitetspoäng: 19
+🧪 TODO/FIXME: 0
+====================
+START: appleCalendar.js
+console.log("🧪 appleCalendar.js laddades");
+const fetch = require("node-fetch");
+const xml2js = require("xml2js");
+const { DateTime } = require("luxon");
+
+function createAppleClient(context) {
+  async function getEvent(calendarId, eventId) {
+    context.log("🍏 appleClient.getEvent() anropad med:", { calendarId, eventId });
+    const caldavUrl = process.env.CALDAV_CALENDAR_URL;
+    const username = process.env.CALDAV_USER;
+    const password = process.env.CALDAV_PASSWORD;
+
+    if (!caldavUrl || !username || !password) {
+      context.log("⚠️ Missing CalDAV credentials");
+      return null;
+    }
+
+    try {
+      const eventUrl = `${caldavUrl.replace(/\/$/, '')}/${eventId}.ics`;
+      const icsRes = await fetch(eventUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
+        }
+      });
+
+      if (!icsRes.ok) {
+        context.log(`⚠️ Misslyckades hämta ICS-fil: ${eventUrl}`);
+        return null;
+      }
+
+      const icsText = await icsRes.text();
+      context.log("🧾 Förhandsvisning av ICS-innehåll (första 500 tecken):", icsText.slice(0, 500));
+      const locationMatch = icsText.match(/LOCATION:(.*)/);
+      const endTimeMatch = icsText.match(/DTEND(?:;[^:]*)?:(.*)/);
+
+      const location = locationMatch ? locationMatch[1].trim() : null;
+      const endTime = endTimeMatch ? endTimeMatch[1].trim() : null;
+
+      if (location && endTime) {
+        context.log("✅ Hittade event med location och endTime:", { location, endTime });
+        return { location, endTime };
+      }
+
+      context.log("⚠️ Inget event med både location och endTime hittades.");
+      return null;
+
+    } catch (err) {
+      context.log("⚠️ Error i getEvent():", err.message);
+      return null;
+    }
+  }
+
+  async function fetchEventsByDateRange(startDate, endDate) {
+    const caldavUrl = process.env.CALDAV_CALENDAR_URL;
+    const username = process.env.CALDAV_USER;
+    const password = process.env.CALDAV_PASSWORD;
+
+    context.log("🧪 fetchEventsByDateRange() kallas med:", { startDate, endDate });
+    context.log("🧪 CALDAV_REQUEST DEBUG – Headers:");
+    context.log("🧪 Authorization:", Buffer.from(`${username}:${password}`).toString("base64"));
+    context.log("🧪 Depth: 1");
+    context.log("🧪 Content-Type: application/xml");
+    context.log("🧪 URL:", caldavUrl);
+
+    if (!caldavUrl || !username || !password) {
+      context.log("⚠️ Missing CalDAV credentials");
+      return [];
+    }
+
+    const startIso = DateTime.fromJSDate(startDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
+    const endIso = DateTime.fromJSDate(endDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
+    context.log("📅 Använder time-range:", { startIso, endIso });
+    context.log("📆 REPORT-request time range:", { startIso, endIso });
+    const xmlBody = `
+    <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
+                      xmlns:D="DAV:">
+      <D:prop>
+        <D:getetag/>
+        <C:calendar-data/>
+      </D:prop>
+      <C:filter>
+        <C:comp-filter name="VCALENDAR">
+          <C:comp-filter name="VEVENT">
+            <C:time-range start="${startIso}" end="${endIso}"/>
+          </C:comp-filter>
+        </C:comp-filter>
+      </C:filter>
+    </C:calendar-query>`;
+
+    try {
+      context.log("📡 Initierar CalDAV REPORT-request…");
+      const res = await fetch(caldavUrl, {
+        method: "REPORT",
+        headers: {
+          "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
+          "Depth": "1",
+          "Content-Type": "application/xml"
+        },
+        body: xmlBody
+      });
+      console.log("📡 [BEVIS] CalDAV REPORT-anrop skickat, status:", res.status);
+      context.log("📡 CalDAV-anrop utfört, statuskod:", res.status);
+      context.log("📡 CalDAV response OK?", res.ok);
+      context.log("📤 CalDAV fetch response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
+
+      const xml = await res.text();
+      console.log("📡 [BEVIS] Fick svar från Apple CalDAV – raw XML första 300 tecken:", xml.slice(0, 300));
+      context.log("📤 Fick raw XML (1000 tecken):", xml.slice(0, 1000));
+      context.log("🧾 FULL XML-RÅDATA:", xml.slice(0, 10000));
+      context.log("📤 Är texten tom?", xml.trim().length === 0);
+      context.log("📤 Innehåller VCALENDAR?", xml.includes("VCALENDAR"));
+      context.log("📤 Innehåller VEVENT?", xml.includes("VEVENT"));
+      context.log("📤 Rå XML-längd:", xml.length);
+      context.log("📄 CalDAV response text (första 1000 tecken):", xml.slice(0, 1000));
+      context.log("📄 Full längd på svar:", xml.length);
+      context.log("📄 Rå XML:", xml.slice(0, 2000));
+      context.log("🔍 Innehåller <href>? →", xml.includes("&lt;href&gt;") || xml.includes("<href>"));
+      context.log("📄 Fick XML-svar, längd:", xml.length);
+
+      if (!xml || xml.length < 20) {
+        console.log("⛔ [BEVIS] Tomt eller ogiltigt XML-svar från Apple.");
+        context.log("⚠️ XML-svar verkar tomt – avbryter parsing.");
+        return [];
+      }
+
+      context.log("🧾 FULL XML-RÅDATA:", xml.slice(0, 10000));
+      console.log("🧪 [BEVIS] Startar parsing av Apple CalDAV-XML...");
+      context.log("🔍 Försöker parsa XML...");
+      const parsed = await xml2js.parseStringPromise(xml, {
+        explicitArray: false,
+        tagNameProcessors: [xml2js.processors.stripPrefix],
+        mergeAttrs: true
+      });
+      console.log("✅ [BEVIS] Parsing lyckades – parsed keys:", Object.keys(parsed));
+      context.log("🧪 DEBUG – Nycklar på toppnivå i parsed:", Object.keys(parsed));
+      context.log("🧪 DEBUG – Är parsed.multistatus.response en array?", Array.isArray(parsed?.multistatus?.response));
+      context.log("🧪 DEBUG – Antal responses:", parsed?.multistatus?.response?.length);
+      context.log("🧾 xml2js parsed objekt (första 5000 tecken):", JSON.stringify(parsed).slice(0, 5000));
+      context.log("🧾 parsed objekt (10 000 tecken):", JSON.stringify(parsed).slice(0, 10000));
+      context.log("✅ xml2js parsing lyckades:", JSON.stringify(parsed, null, 2));
+      context.log("✅ xml2js.parseStringPromise lyckades – parsed objekt:");
+      context.log(JSON.stringify(parsed, null, 2));
+      context.log("🧩 parsed multistatus keys:", Object.keys(parsed));
+      context.log("🧩 parsed.multistatus.response (rå):", JSON.stringify(parsed?.['multistatus']?.['response'], null, 2));
+      context.log("🧩 parsed.D:multistatus.D:response (rå):", JSON.stringify(parsed?.['D:multistatus']?.['D:response'], null, 2));
+      if (!parsed?.['multistatus']?.['response'] && !parsed?.['D:multistatus']?.['D:response']) {
+        context.log("⛔ parsed innehåller inte förväntade response-nycklar:", JSON.stringify(parsed, null, 2));
+      }
+      context.log("📦 parsed XML till objekt:", JSON.stringify(parsed, null, 2));
+      const responses = parsed?.['multistatus']?.['response'] || parsed?.['D:multistatus']?.['D:response'];
+      context.log("📤 Antal responses efter parsing:", responses ? responses.length || 1 : 0);
+  if (!responses) {
+    context.log("⛔ Inga responses hittades i CalDAV-XML – parsed var:", JSON.stringify(parsed, null, 2));
+    return [];
+  }
+
+      const items = Array.isArray(responses) ? responses : [responses];
+      const targetPath = new URL(process.env.CALDAV_CALENDAR_URL.trim()).pathname;
+      context.log("📎 Alla href som jämförs:", items.map(i => i.href || i['D:href']));
+      context.log("🎯 CALDAV path som jämförs mot:", targetPath);
+      context.log(`🔍 Antal CalDAV-responses totalt: ${items.length}`);
+      const filteredItems = items; // TEMP: inaktiverat filter för test
+      context.log("📎 Alla href som jämförs:", items.map(i => i.href || i['D:href']));
+      context.log("🎯 CALDAV path som jämförs mot:", targetPath);
+      for (const item of items) {
+        const href = item['href'] || item['D:href'] || '';
+        const match = href.trim().startsWith(targetPath.replace(/\/$/, ''));
+        context.log("🔗 href:", href.trim(), "→ matchar targetPath?", match);
+      }
+
+      const results = [];
+
+      for (const item of filteredItems) {
+        context.log("📥 Rå item-data innan calendar-data-extraktion:", JSON.stringify(item, null, 2));
+        let calendarData = item?.['propstat']?.['prop']?.['calendar-data'] || item?.['D:propstat']?.['D:prop']?.['C:calendar-data'];
+
+        if (!calendarData) {
+          context.log("⚠️ Ingen calendar-data hittad i item:", JSON.stringify(item, null, 2));
+        }
+
+        if (calendarData && typeof calendarData === 'object' && '_' in calendarData) {
+          calendarData = calendarData._;
+          const href = item['href'] || item['D:href'];
+          context.log("📁 Analyserar href:", href);
+          context.log("📄 calendarData:", calendarData.slice(0, 500));
+        }
+        context.log("📄 preview calendarData (500 tecken):", typeof calendarData === "string" ? calendarData.slice(0, 500) : "(ej sträng)");
+
+        const href = item['href'] || item['D:href'];
+        if (!calendarData || !calendarData.includes('VEVENT')) {
+          context.log("❔ Ingen VEVENT hittad i calendar-data, försöker fallback:", href);
+          context.log("📥 calendarData saknar VEVENT, startar fallback om möjligt.");
+          const fullUrl = `${caldavUrl.replace(/\/$/, '')}${href}`;
+          const fallbackRes = await fetch(fullUrl, {
+            method: "GET",
+            headers: {
+              "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
+            }
+          });
+          calendarData = await fallbackRes.text();
+          context.log("📄 Fallback calendarData (500 tecken):", calendarData.slice(0, 500));
+          context.log("📁 Fallback-URL:", fullUrl);
+          context.log("📁 Fallback-response status:", fallbackRes.status);
+          if (!calendarData.includes("VEVENT")) {
+            context.log("⛔ Inget VEVENT i fallback-data – hoppar denna:", href);
+            continue;
+          }
+        }
+
+        context.log("📄 full calendarData för matchAll():", calendarData.slice(0, 2000));
+        context.log("📄 full calendarData (preview 500 tecken):", calendarData.slice(0, 500));
+        const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\S\s]*?END:VEVENT/g));
+        context.log("🔍 Antal VEVENT hittade i calendarData:", vevents.length);
+        if (vevents.length === 0) {
+          const uid = calendarData.match(/UID:(.*)/)?.[1]?.trim();
+          context.log("⚠️ Ingen VEVENT hittades i denna calendarData – UID?:", uid);
+        }
+        for (const vevent of vevents) {
+          const v = vevent[0];
+          context.log("🧪 VEVENT:", v.slice(0, 300));
+          const summary = v.match(/SUMMARY:(.*)/)?.[1]?.trim() ?? "–";
+          const dtstart = v.match(/DTSTART(?:;[^:]*)?:(\d{8}(T\d{6})?)/)?.[1]?.trim() ?? "–";
+          const dtend = v.match(/DTEND(?:;[^:]*)?:(\d{8}(T\d{6})?)/)?.[1]?.trim() ?? "–";
+          context.log("🕒 Eventdatum:", { dtstart, dtend });
+          const location = v.match(/LOCATION:(.*)/)?.[1]?.trim() ?? "–";
+          const uid = v.match(/UID:(.*)/)?.[1]?.trim() ?? "–";
+          results.push({ summary, dtstart, dtend, location, uid });
+        }
+      }
+
+      results.sort((a, b) => {
+        const aTime = new Date(a.dtstart.replace(/^(\d{8})$/, '$1T000000')).getTime();
+        const bTime = new Date(b.dtstart.replace(/^(\d{8})$/, '$1T000000')).getTime();
+        return aTime - bTime;
+      });
+
+      // 🧪 DEBUG-logg före filter
+      context.log("🧪 DEBUG – Apple-events före filter:", JSON.stringify(results, null, 2));
+      for (const ev of results) {
+        const dt = ev.dtstart.replace(/^(\d{8})$/, '$1T000000');
+        context.log("⏱️ Kontroll: dtstart =", dt, ">", new Date().toISOString(), "→", new Date(dt) > new Date());
+      }
+
+      const now = DateTime.local().setZone("Europe/Stockholm");
+      const upcoming = results.filter(ev => {
+        const dtRaw = ev.dtstart.replace(/^(\d{8})$/, '$1T000000');
+        const dt = DateTime.fromFormat(dtRaw, "yyyyLLdd'T'HHmmss", { zone: "UTC" }).setZone("Europe/Stockholm");
+        const isFuture = dt > now;
+        context.log("🕓 Filter upcoming –", { dtRaw, dt: dt.toISO(), now: now.toISO(), isFuture });
+        return isFuture;
+      });
+      context.log(`✅ Hittade ${results.length} events totalt`);
+      context.log(`📊 upcoming.length: ${upcoming.length}`);
+      for (const u of upcoming) {
+        context.log("📆 Upcoming:", u);
+      }
+      context.log("📦 Slutresultat – upcoming events:", JSON.stringify(upcoming, null, 2));
+      context.log("📊 Antal upcoming events:", upcoming.length);
+      context.log("📤 Returnerar upcoming-events till getavailableslots – första 3:", upcoming.slice(0, 3));
+      context.log("✅ fetchEventsByDateRange avslutas – returnerar:", JSON.stringify(upcoming, null, 2));
+      console.log("📤 [BEVIS] Antal events returnerade från Apple:", upcoming.length);
+      return upcoming;
+    } catch (err) {
+      context.log("❌ Fel i fetchEventsByDateRange try/catch:", err.stack || err.message);
+      return [];
+    }
+  }
+
+  return { getEvent, fetchEventsByDateRange };
+}
+
+module.exports = (context) => createAppleClient(context || { log: console.log });
+END: appleCalendar.js
+
+====================
+📄 Fil: shared/calendar/getMsToken.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-22 10:10:03
+📏 Antal rader: 57
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ["require('dotenv').config(); // Ladda miljövariabler från .env", "const fetch = require('node-fetch');"]
+🔍 Längsta funktion: 4 rader
+🧠 Komplexitetspoäng: 5
+🧪 TODO/FIXME: 0
+====================
+START: getMsToken.js
+require('dotenv').config(); // Ladda miljövariabler från .env
+const fetch = require('node-fetch');
+
+console.log("🧪 getMsToken.js laddades");
+
+module.exports = async function getMsToken(context = { log: console.log }) {
+  context.log("🧪 getMsToken() anropades – initierar tokenhämtning");
+  context.log("🔍 MS365_CLIENT_ID:", process.env.MS365_CLIENT_ID?.slice(0, 8));
+  context.log("🔍 MS365_CLIENT_SECRET:", process.env.MS365_CLIENT_SECRET ? "[satt]" : "[saknas]");
+  context.log("🔍 MS365_TENANT_ID:", process.env.MS365_TENANT_ID?.slice(0, 8));
+  if (!process.env.MS365_CLIENT_ID || !process.env.MS365_CLIENT_SECRET || !process.env.MS365_TENANT_ID) {
+    context.log("❌ En eller flera miljövariabler för MS Graph saknas.");
+    return null;
+  }
+  try {
+    const tokenEndpoint = `https://login.microsoftonline.com/${process.env.MS365_TENANT_ID}/oauth2/v2.0/token`;
+    const params = new URLSearchParams();
+    params.append('client_id', process.env.MS365_CLIENT_ID);
+    params.append('client_secret', process.env.MS365_CLIENT_SECRET);
+    params.append('scope', 'https://graph.microsoft.com/.default');
+    params.append('grant_type', 'client_credentials');
+
+    context.log("📡 Försöker hämta token från:", tokenEndpoint);
+
+    const res = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+
+    context.log(`📬 Response status: ${res.status}`);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      context.log(`⚠️ Tokenhämtning misslyckades: ${res.status} ${res.statusText}\nSvar: ${errorText}`);
+      context.log("🪵 Fullständigt svar från Graph:", errorText);
+      return null;
+    }
+
+    const data = await res.json();
+    return data.access_token;
+  } catch (err) {
+    context.log(`⚠️ Tokenhämtning fel: ${err.message}`);
+    return null;
+  }
+};
+
+if (require.main === module) {
+  (async () => {
+    const token = await module.exports();
+    if (token) {
+      console.log("✅ Token hämtad:", token.slice(0, 20) + "...");
+    } else {
+      console.log("❌ Kunde inte hämta token.");
+    }
+  })();
+}
+END: getMsToken.js
+
+====================
+📄 Fil: shared/calendar/msGraph.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-26 11:14:30
+📏 Antal rader: 185
+🧩 Antal funktioner: 6
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 5 – ['const { Client } = require("@microsoft/microsoft-graph-client");', 'require("isomorphic-fetch");', 'const fetch = require("node-fetch");', 'const { loadSettings } = require("../config/settingsLoader");', 'const getMsToken = require("./getMsToken");']
+🔍 Längsta funktion: 6 rader
+🧠 Komplexitetspoäng: 15
+🧪 TODO/FIXME: 0
+====================
+START: msGraph.js
+const { Client } = require("@microsoft/microsoft-graph-client");
+require("isomorphic-fetch");
+const fetch = require("node-fetch");
+const { loadSettings } = require("../config/settingsLoader");
+const getMsToken = require("./getMsToken");
+
+function createMsGraphClient() {
+
+  async function getEvent(calendarId, eventId) {
+    try {
+      if (!calendarId || !eventId) {
+        return null;
+      }
+
+      const authToken = await getMsToken({ log: console.log });
+      if (!authToken) {
+        throw new Error("🛑 Tokenhämtning misslyckades – accessToken saknas. Funktion avbryts.");
+      }
+      const client = Client.init({
+        authProvider: (done) => done(null, authToken)
+      });
+
+      try {
+        const result = await client
+          .api(`/users/${calendarId}/events/${encodeURIComponent(eventId)}`)
+          .select("subject,location,start,end")
+          .get();
+
+        const location = result.location?.displayName || null;
+        const endTime = result.end?.dateTime || null;
+
+        return { location, endTime };
+      } catch (err) {
+        if (err.statusCode === 404) {
+          return { location: null, endTime: null, deleted: true };
+        }
+        console.error("⚠️ getEvent error (Graph):", err.message);
+        return null;
+      }
+    } catch (err) {
+      console.error("⚠️ getEvent error (Graph):", err.message);
+      return null;
+    }
+  }
+
+  async function listUpcomingEvents(daysAhead) {
+    try {
+      if (!daysAhead) {
+        const settings = await loadSettings(null);
+        daysAhead = settings.max_days_in_advance || 90;
+      }
+      const calendarId = process.env.MS365_USER_EMAIL;
+      if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
+
+      const authToken = await getMsToken({ log: console.log });
+      if (!authToken) {
+        throw new Error("🛑 Tokenhämtning misslyckades – accessToken saknas. Funktion avbryts.");
+      }
+      const client = Client.init({
+        authProvider: (done) => done(null, authToken)
+      });
+
+      const now = new Date();
+      const startDate = now.toISOString();
+      const endDate = new Date(now.getTime() + daysAhead * 86400000).toISOString();
+
+      const response = await client
+        .api(`/users/${calendarId}/calendarView?startDateTime=${startDate}&endDateTime=${endDate}`)
+        .top(100)
+        .select("subject,start,end,id")
+        .orderby("start/dateTime ASC")
+        .get();
+
+      const upcoming = response.value.filter(ev => new Date(ev.start.dateTime) > new Date());
+      return upcoming.map(ev => ({
+        subject: ev.subject,
+        start: ev.start.dateTime,
+        end: ev.end?.dateTime || null,
+        id: ev.id
+      }));
+    } catch (err) {
+      console.error("⚠️ listUpcomingEvents error (Graph):", err.message);
+      return [];
+    }
+  }
+
+  async function createEvent({ start, end, subject, location, attendees }) {
+    try {
+      const calendarId = process.env.MS365_USER_EMAIL;
+      if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
+
+      const authToken = await getMsToken({ log: console.log });
+      if (!authToken) throw new Error("🛑 Tokenhämtning misslyckades");
+
+      const client = Client.init({
+        authProvider: (done) => done(null, authToken)
+      });
+
+      const event = {
+        subject: subject || "Möte",
+        body: {
+          contentType: "HTML",
+          content: `Detta är en inbjudan till möte: ${subject || "Möte"}`
+        },
+        start: {
+          dateTime: start,
+          timeZone: "Europe/Stockholm"
+        },
+        end: {
+          dateTime: end,
+          timeZone: "Europe/Stockholm"
+        },
+        location: {
+          displayName: location || "Online"
+        },
+        attendees: (attendees || []).map(email => ({
+          emailAddress: { address: email },
+          type: "required"
+        })),
+        allowNewTimeProposals: true,
+        isOnlineMeeting: true,
+        onlineMeetingProvider: "teamsForBusiness"
+      };
+
+      const created = await client.api(`/users/${calendarId}/events`).post(event);
+
+      return {
+        eventId: created?.id || null,
+        onlineMeetingUrl: created?.onlineMeeting?.joinUrl || null,
+        subject: created?.subject || null,
+        location: created?.location?.displayName || null,
+        body: created?.body || null
+      };
+    } catch (err) {
+      console.error("❌ createEvent error (Graph):", err.message || err);
+      if (err.response?.text) {
+        const raw = await err.response.text();
+        console.error("📄 Graph response text:", raw);
+      }
+      console.error("📄 Detaljerat Graph-felobjekt:", JSON.stringify(err, null, 2));
+      return null;
+    }
+  }
+
+  async function sendEmailInvite({ to, subject, body }) {
+    try {
+      const senderEmail = process.env.MS365_USER_EMAIL;
+      const authToken = await getMsToken({ log: console.log });
+      if (!authToken) throw new Error("❌ Kunde inte hämta Graph-token");
+
+      const client = Client.init({
+        authProvider: (done) => done(null, authToken)
+      });
+
+      const message = {
+        message: {
+          subject,
+          body: {
+            contentType: "HTML",
+            content: body
+          },
+          toRecipients: [
+            {
+              emailAddress: {
+                address: to
+              }
+            }
+          ]
+        },
+        saveToSentItems: "true"
+      };
+
+      await client.api(`/users/${senderEmail}/sendMail`).post(message);
+      return { status: "sent" };
+    } catch (err) {
+      console.error("❌ sendEmailInvite error:", err.message || err);
+      return null;
+    }
+  }
+
+  return { getEvent, listUpcomingEvents, createEvent, sendEmailInvite };
+}
+
+const client = createMsGraphClient();
+module.exports = () => client;
+END: msGraph.js
+
+====================
+📄 Fil: shared/calendar/resolveOrigin.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-22 14:30:40
+📏 Antal rader: 235
+🧩 Antal funktioner: 2
+💬 Kommentarstäckning: 21 rader (8.9%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 2 rader
+🧠 Komplexitetspoäng: 37
+🧪 TODO/FIXME: 0
+====================
+START: resolveOrigin.js
+/**
+ * resolveOriginAddress
+ * --------------------
+ * Hämtar origin-adress för ett kalender-event från:
+ * 1. Memory-cache
+ * 2. PostgreSQL-cache (om SKIP_DB inte är satt)
+ * 3. MS Graph
+ * 4. Apple Calendar
+ * Fallback används vid miss.
+ *
+ * Miljövariabler:
+ * - SKIP_DB=true  → hoppar över all databaslogik (läs/skriv)
+ */
+console.log("🧪 resolveOrigin.js laddades");
+const memoryCache = {};
+
+function cleanAddress(address) {
+  return address.replace(/\n/g, ', ').replace(/\\,/g, ',').replace(/\+/g, ' ').trim();
+}
+
+async function resolveOriginAddress({ eventId, calendarId, pool, context, graphClient, appleClient, fallbackOrigin, settings, eventCache }) {
+  const cacheKey = `${calendarId}:${eventId}`;
+  const debugLog = (msg) => {
+    if (process.env.DEBUG === 'true' && context?.log) context.log(msg);
+  };
+  debugLog(`🔍 resolveOriginAddress → calendarId: ${calendarId}, eventId: ${eventId}`);
+  const eventDateOnly = eventId.split('T')[0];
+
+  const useCacheEvents = eventCache?.has(eventDateOnly);
+  const cachedEvents = useCacheEvents ? eventCache.get(eventDateOnly) : null;
+
+  if (memoryCache[cacheKey]) {
+    // Provide originEndTime as well
+    let originEndTime = null;
+    if (memoryCache[cacheKey].originSource === 'fallback') {
+      originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+    } else {
+      originEndTime = memoryCache[cacheKey].originEndTime || null;
+    }
+    debugLog(`✅ Hittade origin från cache: ${memoryCache[cacheKey].origin}`);
+    return {
+      origin: cleanAddress(memoryCache[cacheKey].origin),
+      originSource: memoryCache[cacheKey].originSource,
+      originEndTime
+    };
+  }
+
+
+  // Try database cache first
+  let dbRes;
+  if (!process.env.SKIP_DB) {
+    try {
+      dbRes = await pool.query(
+        'SELECT address, source, end_time FROM calendar_origin_cache WHERE event_date = $1',
+        [eventDateOnly]
+      );
+      debugLog(`📂 DB-kontroll: Hittade ${dbRes?.rows?.length || 0} rader för ${eventDateOnly}`);
+    } catch (err) {
+      context.log(`⚠️ DB error in resolveOriginAddress: ${err.message}`);
+    }
+  }
+  if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+    // Special case: if source is fallback, return immediately
+    if (dbRes.rows[0].source === 'fallback') {
+      const originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+      memoryCache[cacheKey] = {
+        origin: dbRes.rows[0].address,
+        originSource: dbRes.rows[0].source,
+        originEndTime
+      };
+      debugLog(`🛑 DB-träff var fallback – hoppar övriga försök`);
+      return {
+        origin: cleanAddress(dbRes.rows[0].address),
+        originSource: dbRes.rows[0].source,
+        originEndTime
+      };
+    }
+    let originEndTime = null;
+    if (dbRes.rows[0].source === 'fallback') {
+      originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+    } else {
+      originEndTime = dbRes.rows[0].end_time || null;
+    }
+    memoryCache[cacheKey] = {
+      origin: dbRes.rows[0].address,
+      originSource: dbRes.rows[0].source,
+      originEndTime: originEndTime
+    };
+    debugLog(`✅ Hittade origin från DB: ${dbRes.rows[0].address}`);
+    return {
+      origin: cleanAddress(dbRes.rows[0].address),
+      originSource: dbRes.rows[0].source,
+      originEndTime
+    };
+  }
+  debugLog(`🕳️ Inget cacheträff i DB för ${eventDateOnly}`);
+
+  let latestOrigin;
+  let originEndTime = null;
+  let originSource = 'unknown';
+
+  if (!latestOrigin && memoryCache[`${calendarId}:${eventDateOnly}`]) {
+    const { origin, originSource, originEndTime } = memoryCache[`${calendarId}:${eventDateOnly}`];
+    debugLog(`🔁 Återanvänder memoryCache för dag: ${eventDateOnly}`);
+    return { origin: cleanAddress(origin), originSource, originEndTime };
+  }
+  if (graphClient && typeof graphClient.getEvent === 'function') {
+    if (!latestOrigin && !memoryCache[`${calendarId}:${eventDateOnly}`]) {
+      try {
+        const graphCalendarId = settings.ms_sender_email;
+        const appleCalendarId = process.env.CALDAV_USER;
+        const msEvent = await graphClient.getEvent(graphCalendarId, eventId);
+        if (msEvent && msEvent.location) {
+          latestOrigin = msEvent.location;
+          originSource = 'Microsoft 365';
+          debugLog(`✅ Hittade origin från MS Graph: ${latestOrigin}`);
+        }
+      } catch (err) {
+        context.log(`⚠️ MS Graph error in resolveOriginAddress: ${err.message}`);
+      }
+    }
+  } else if (graphClient) {
+    context.log(`⚠️ graphClient saknar getEvent-metod eller är null`);
+  }
+
+  // Try fetching from Apple calendar if not found
+  if (!latestOrigin && appleClient && typeof appleClient.fetchEventsByDateRange === 'function') {
+    try {
+      const startRange = `${eventDateOnly}T00:00:00Z`;
+      const endRange = `${eventDateOnly}T23:59:59Z`;
+      const appleCalendarId = process.env.CALDAV_USER;
+      const events = cachedEvents || await appleClient.fetchEventsByDateRange(startRange, endRange, appleCalendarId);
+      if (!cachedEvents && eventCache) eventCache.set(eventDateOnly, events);
+      let mostRecent = null;
+      const eventStartTime = new Date(eventId);
+      for (const e of events) {
+        const dtend = new Date(e.dtend || '');
+        if (dtend && dtend <= eventStartTime) {
+          if (!mostRecent || dtend > new Date(mostRecent.dtend || 0)) {
+            mostRecent = e;
+          }
+        }
+      }
+
+      // Om ingen med location hittades, ta det senaste med dtend
+      if (!mostRecent) {
+        for (const e of events) {
+          const dtend = new Date(e.dtend || '');
+          if (dtend && dtend <= eventStartTime) {
+            if (!mostRecent || dtend > new Date(mostRecent.dtend || 0)) {
+              mostRecent = e;
+            }
+          }
+        }
+      }
+
+      if (mostRecent) {
+        latestOrigin = mostRecent.location || fallbackOrigin || '';
+        originSource = mostRecent.location ? 'Apple Calendar' : 'fallback';
+        debugLog(`✅ Hittade origin från Apple (eller fallback): ${latestOrigin}`);
+
+        if (mostRecent.dtend && typeof mostRecent.dtend === 'string') {
+          const dt = mostRecent.dtend.replace(/[^0-9T]/g, '');
+          const parsed = new Date(dt.length === 8 ? `${dt}T00:00:00Z` : dt);
+          originEndTime = !isNaN(parsed.getTime())
+            ? parsed
+            : new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+        } else {
+          originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+        }
+      }
+    } catch (err) {
+      context.log(`⚠️ Apple error in resolveOriginAddress: ${err.message}`);
+    }
+  } else if (!latestOrigin && appleClient) {
+    context.log(`⚠️ appleClient saknar fetchEventsByDateRange-metod eller är null`);
+  }
+
+  // Fallback if not found
+  if (!latestOrigin) {
+    if (originEndTime) {
+      debugLog(`⚠️ LOCATION saknas men endTime finns – använder fallback som origin`);
+      latestOrigin = fallbackOrigin || '';
+      originSource = 'fallback';
+    } else {
+      debugLog(`🚨 Ingen träff i varken cache, DB, Graph eller Apple – använder fallback`);
+      latestOrigin = fallbackOrigin || '';
+      originSource = 'fallback';
+    }
+    debugLog(`⚠️ Fallback används som origin: ${latestOrigin}`);
+  }
+
+  memoryCache[`${calendarId}:${eventDateOnly}`] = {
+    origin: latestOrigin,
+    originSource,
+    originEndTime
+  };
+
+  // Write to DB cache unless fallback
+  originEndTime = originEndTime || null;
+  if (originSource === 'fallback') {
+    originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+  }
+  // Ensure originEndTime fallback value before DB insert (unless fallback)
+  if (!originEndTime && originSource !== 'fallback') {
+    originEndTime = new Date(`${eventDateOnly}T${settings.travel_time_window_start || '06:00'}:00`);
+  }
+  if (!process.env.SKIP_DB && originSource !== 'fallback') {
+    try {
+      await pool.query(
+        `INSERT INTO calendar_origin_cache (event_date, source, address, end_time)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT DO NOTHING`,
+        [eventDateOnly, originSource, latestOrigin, originEndTime]
+      );
+    } catch (err) {
+      context.log(`⚠️ DB write error in resolveOriginAddress: ${err.message}`);
+    }
+  }
+
+  memoryCache[cacheKey] = {
+    origin: latestOrigin,
+    originSource,
+    originEndTime
+  };
+  debugLog(`🧠 resolveOriginAddress resultat: ${latestOrigin} (källa: ${originSource})`);
+  context.log(`📤 resolveOriginAddress return: ${latestOrigin} (källa: ${originSource}, endTime: ${originEndTime?.toISOString?.() || 'null'})`);
+  return { origin: cleanAddress(latestOrigin), originSource, originEndTime };
+}
+
+module.exports = { resolveOriginAddress };
+
+if (process.env.NODE_ENV === 'test') {
+  module.exports._test = { memoryCache };
+}
+END: resolveOrigin.js
+
+====================
+📄 Fil: shared/config/settingsLoader.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-23 17:58:16
+📏 Antal rader: 67
+🧩 Antal funktioner: 2
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 1 – ['const pool = require("../db/pgPool");']
+🔍 Längsta funktion: 8 rader
+🧠 Komplexitetspoäng: 11
+🧪 TODO/FIXME: 0
+====================
+START: settingsLoader.js
+const pool = require("../db/pgPool");
+console.log("🧪 settingsLoader.js laddades");
+async function getSettings(context) {
+  try {
+    const settings = {};
+    const isDebug = process.env.DEBUG === 'true';
+    const debugLog = (msg) => {
+      if (isDebug && context && context.log) {
+        context.log(msg);
+      }
+    };
+    debugLog('⚙️ Börjar läsa booking_settings...');
+    const settingsRes = await pool.query('SELECT key, value, value_type FROM booking_settings');
+    debugLog(`📦 ${settingsRes.rows.length} inställningar hämtade`);
+    for (const row of settingsRes.rows) {
+      debugLog(`🔑 ${row.key} = ${row.value} (${row.value_type})`);
+      if (
+        row.value_type === 'json' ||
+        row.value_type === 'array' ||
+        (typeof row.value_type === 'string' && /\[\]$/.test(row.value_type))
+      ) {
+        try {
+          settings[row.key] = JSON.parse(typeof row.value === 'string' ? row.value : JSON.stringify(row.value));
+        } catch (_) {}
+      } else if (row.value_type === 'int') {
+        settings[row.key] = parseInt(row.value);
+      } else if (row.value_type === 'bool') {
+        settings[row.key] = row.value === 'true' || row.value === true;
+      } else if (row.value_type === 'string') {
+        settings[row.key] = String(row.value).replace(/^"(.*)"$/, '$1');
+      } else {
+        settings[row.key] = row.value;
+      }
+    }
+    debugLog('✅ Alla inställningar tolkade och klara');
+    settings.field_labels = {
+      first_name: 'Förnamn',
+      last_name: 'Efternamn',
+      phone: 'Telefonnummer',
+      company: 'Företag',
+      address: 'Gatuadress',
+      postal_code: 'Postnummer',
+      city: 'Stad',
+      country: 'Land'
+    };
+    return settings;
+  } catch (err) {
+    if (context && context.log) {
+      context.log(`⚠️ Fel vid laddning av booking_settings: ${err.message}`);
+    } else {
+      console.warn(`⚠️ Fel vid laddning av booking_settings: ${err.message}`);
+    }
+    throw err;
+  }
+}
+
+function getCloudSecretsOnly() {
+  const secrets = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith('MS365_')) {
+      secrets[key] = value;
+    }
+  }
+  return secrets;
+}
+
+module.exports = { getSettings, getCloudSecretsOnly };
+END: settingsLoader.js
+
+====================
+📄 Fil: shared/config/verifySettings.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-20 12:15:11
+📏 Antal rader: 52
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 24 rader
+🧠 Komplexitetspoäng: 8
+🧪 TODO/FIXME: 0
+====================
+START: verifySettings.js
+console.log("🧪 verifySettings.js laddades");
+function verifyBookingSettings(settings, context) {
+  const expected = {
+    default_office_address: 'string',
+    default_home_address: 'string',
+    fallback_travel_time_minutes: 'number',
+    buffer_between_meetings: 'number',
+    default_meeting_length_atoffice: 'array',
+    default_meeting_length_atclient: 'array',
+    default_meeting_length_digital: 'array',
+    meeting_types: 'array',
+    block_weekends: 'boolean',
+    open_time: 'string',
+    close_time: 'string',
+    lunch_start: 'string',
+    lunch_end: 'string',
+    travel_time_window_start: 'string',
+    travel_time_window_end: 'string',
+    require_approval: 'boolean',
+    max_days_in_advance: 'number',
+    max_weekly_booking_minutes: 'number',
+    cache_ttl_minutes: 'number',
+    allowed_atclient_meeting_days: 'array',
+    timezone: 'string'
+  };
+
+  const issues = [];
+  for (const [key, type] of Object.entries(expected)) {
+    const val = settings[key];
+    if (val === undefined || val === null || (key === 'timezone' && String(val).trim() === '')) {
+      issues.push(`❌ Saknar inställning: ${key}`);
+    } else if (key === 'allowed_atclient_meeting_days') {
+      if (!Array.isArray(val) || !val.every(v => typeof v === 'string')) {
+        issues.push(`⚠️ Typfel för ${key}: ska vara array av strängar`);
+      }
+    } else if (key === 'require_approval') {
+      if (typeof val !== 'boolean') {
+        issues.push(`⚠️ Typfel för ${key}: ska vara boolean`);
+      }
+    } else if (type === 'array' ? !Array.isArray(val) : typeof val !== type) {
+      issues.push(`⚠️ Typfel för ${key}: har ${typeof val}, förväntade ${type}`);
+    }
+  }
+
+  if (issues.length > 0) {
+    const message = '🛑 Problem med booking_settings:\n' + issues.join('\n');
+    context.log.warn(message);
+    throw new Error(message);
+  }
+}
+
+module.exports = verifyBookingSettings;
+END: verifySettings.js
+
+====================
+📄 Fil: shared/db/pgPool.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-21 16:03:39
+📏 Antal rader: 20
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ["const { Pool } = require('pg');", "require('dotenv').config();"]
+🔍 Längsta funktion: 7 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: pgPool.js
+const { Pool } = require('pg');
+require('dotenv').config();
+
+const useSSL = process.env.PG_USE_SSL === 'true';
+const sslConfig = useSSL ? { rejectUnauthorized: false } : false;
+
+console.log("🧪 shared/db/pgPool.js laddades");
+console.log("🔍 PG_USE_SSL:", process.env.PG_USE_SSL);
+console.log("🔍 ssl config:", sslConfig);
+
+const pool = new Pool({
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: parseInt(process.env.PGPORT || '5432', 10),
+  ssl: sslConfig
+});
+
+module.exports = pool;
+END: pgPool.js
+
+====================
+📄 Fil: shared/maps/appleMaps.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-20 12:15:38
+📏 Antal rader: 121
+🧩 Antal funktioner: 5
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ["const jwt = require('jsonwebtoken');", "const fetch = require('node-fetch');"]
+🔍 Längsta funktion: 10 rader
+🧠 Komplexitetspoäng: 9
+🧪 TODO/FIXME: 0
+====================
+START: appleMaps.js
+console.log("🧪 appleMaps.js laddades");
+const jwt = require('jsonwebtoken');
+const fetch = require('node-fetch');
+
+async function getAppleMapsAccessToken(context) {
+  try {
+    const teamId = process.env.APPLE_MAPS_TEAM_ID;
+    const keyId = process.env.APPLE_MAPS_KEY_ID;
+    const privateKey = process.env.APPLE_MAPS_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+    if (!privateKey) {
+      throw new Error('Apple Maps private key saknas – kontrollera APPLE_MAPS_PRIVATE_KEY');
+    }
+
+    const token = jwt.sign({}, privateKey, {
+      algorithm: 'ES256',
+      issuer: teamId,
+      keyid: keyId,
+      expiresIn: '1h',
+      header: {
+        alg: 'ES256',
+        kid: keyId,
+        typ: 'JWT'
+      }
+    });
+
+    const res = await fetch('https://maps-api.apple.com/v1/token', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+    return data.accessToken;
+  } catch (err) {
+    context?.log?.('⚠️ Misslyckades hämta Apple Maps token:', err.message);
+    if (err.code === 'EAI_AGAIN') {
+      context?.log?.('🌐 DNS-fel (EAI_AGAIN) – kunde inte nå servern:', err.message);
+    }
+    return null;
+  }
+}
+
+
+async function getTravelTimeInMinutes(origin, destination, departureTime, accessToken, context) {
+  try {
+    const url = `https://maps-api.apple.com/v1/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&departureTime=${encodeURIComponent(departureTime)}&transportType=automobile&includeTravelTimeBreakdown=true`;
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      context?.log?.(`❌ Apple Maps-directions misslyckades (${res.status}): ${text}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const travelTimeSeconds = data.routes?.[0]?.expectedTravelTime;
+    return travelTimeSeconds ? Math.ceil(travelTimeSeconds / 60) : null;
+  } catch (err) {
+    context?.log?.(`❌ Fel vid directions-anrop: ${err.message}`);
+    return null;
+  }
+}
+
+async function getTravelTime(origin, destination, departureTime, context) {
+  try {
+    const token = await getAppleMapsAccessToken(context);
+    if (!token) {
+      context?.log?.('⚠️ Kunde inte hämta Apple Maps-token');
+      return null;
+    }
+    return await getTravelTimeInMinutes(origin, destination, departureTime, token, context);
+  } catch (err) {
+    context?.log?.(`❌ Fel i getTravelTime: ${err.message}`);
+    return null;
+  }
+}
+
+async function safeGetTravelTime(origin, destination, departureTime, accessToken, context) {
+  try {
+    const url = new URL('https://maps-api.apple.com/v1/directions');
+    url.searchParams.append('origin', origin);
+    url.searchParams.append('destination', destination);
+    url.searchParams.append('transportType', 'automobile');
+    url.searchParams.append('departureTime', departureTime);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // max 8s
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+    if (!res.ok) {
+      const text = await res.text();
+      context?.log?.(`❌ Apple Maps misslyckades (${res.status}): ${text}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const seconds = data.routes?.[0]?.durationSeconds || data.routes?.[0]?.expectedTravelTime;
+    return seconds ? Math.round(seconds / 60) : null;
+  } catch (err) {
+    context?.log?.(`⚠️ safeGetTravelTime error: ${err.message}`);
+    return null;
+  }
+}
+
+module.exports = {
+  getAppleMapsAccessToken,
+  getTravelTimeInMinutes,
+  getTravelTime,
+  safeGetTravelTime
+};
+END: appleMaps.js
+
+====================
+📄 Fil: shared/maps/returnTravelVerifier.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-20 12:16:01
+📏 Antal rader: 66
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 1 rader (1.5%)
+📥 Imports: 1 – ["const { URL } = require('url');"]
+🔍 Längsta funktion: 2 rader
+🧠 Komplexitetspoäng: 4
+🧪 TODO/FIXME: 0
+====================
+START: returnTravelVerifier.js
+console.log("🧪 returnTravelVerifier.js laddades");
+const { URL } = require('url');
+
+async function verifyReturnTravelFeasibility({
+  previousBooking,
+  contact,
+  slotTime,
+  settings,
+  accessToken,
+  db,
+  context,
+  travelCache
+}) {
+  const from = previousBooking.address || settings.default_office_address;
+  const to = `${contact.metadata.address} ${contact.metadata.postal_code} ${contact.metadata.city}`;
+  const prevEnd = new Date(previousBooking.end);
+
+  if (from === to) {
+    context.log(`💾 Returrestid är 0 min (${from} → ${to}) – ingen cache behövs`);
+    return { isFeasible: true };
+  }
+
+  try {
+    const url = new URL('https://maps-api.apple.com/v1/directions');
+    url.searchParams.append('origin', from);
+    url.searchParams.append('destination', to);
+    url.searchParams.append('transportType', 'automobile');
+    url.searchParams.append('departureTime', prevEnd.toISOString());
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    const data = await res.json();
+    const returnMinutes = Math.round((data.routes?.[0]?.durationSeconds || 0) / 60);
+    const arrivalTime = new Date(prevEnd.getTime() + returnMinutes * 60000);
+
+    // Cache return time in memory and DB
+    const hour = prevEnd.getUTCHours();
+    const returnCacheKey = `${from}|${to}|${hour}`;
+    travelCache.set(returnCacheKey, returnMinutes);
+    if (from && to) {
+      await db.query(`
+        INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (from_address, to_address, hour)
+        DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes
+      `, [from, to, hour, returnMinutes]);
+      context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
+    } else {
+      context.log(`⚠️ Hoppar caching av retur – saknar from_address (${from}) eller to_address (${to})`);
+    }
+
+    if (arrivalTime > slotTime) {
+      context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
+      return { isFeasible: false, reason: 'retur hinner inte fram', arrivalTime };
+    }
+
+    return { isFeasible: true };
+  } catch (err) {
+    context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
+    return { isFeasible: true }; // fail open
+  }
+}
+
+module.exports = { verifyReturnTravelFeasibility };
+END: returnTravelVerifier.js
+
+====================
+📄 Fil: shared/maps/resolveTravelTime.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-20 20:22:50
+📏 Antal rader: 72
+🧩 Antal funktioner: 1
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 2 rader
+🧠 Komplexitetspoäng: 8
+🧪 TODO/FIXME: 0
+====================
+START: resolveTravelTime.js
+console.log("🧪 travelTimeResolver.js laddades");
+async function resolveTravelTime({ origin, destination, hour, db, accessToken, context }) {
+  let travelTimeMin = 20;
+  const cacheKey = `${origin}|${destination}|${hour}`;
+  let cacheHit = false;
+  let isFallback = false;
+
+  if (!origin || !destination) {
+    context.log(`⚠️ Kan inte beräkna restid – origin eller destination saknas`);
+    return { travelTimeMin, cacheHit: false, isFallback };
+  }
+
+  if (!db || typeof db.query !== 'function') {
+    context.log(`❌ db saknas eller saknar query-metod i resolveTravelTime`);
+    return { travelTimeMin, cacheHit: false, isFallback: true };
+  }
+
+  try {
+    const cacheRes = await db.query(
+      `SELECT travel_minutes, is_fallback FROM travel_time_cache WHERE from_address = $1 AND to_address = $2 AND hour = $3 LIMIT 1`,
+      [origin, destination, hour]
+    );
+    if (cacheRes.rows.length > 0) {
+      travelTimeMin = cacheRes.rows[0].travel_minutes;
+      isFallback = cacheRes.rows[0].is_fallback === true;
+      cacheHit = true;
+      context.log(`⚡ Cache hit (db): ${origin} → ${destination} @ ${hour}:00 = ${travelTimeMin} min`);
+    }
+  } catch (err) {
+    context.log(`⚠️ Kunde inte läsa från travel_time_cache: ${err.message}`);
+  }
+
+  if (!accessToken) {
+    context.log(`⚠️ accessToken saknas – använder fallback`);
+    return { travelTimeMin, cacheHit: false, isFallback: true };
+  }
+
+  if (!cacheHit && accessToken) {
+    try {
+      const url = new URL('https://maps-api.apple.com/v1/directions');
+      url.searchParams.append('origin', origin);
+      url.searchParams.append('destination', destination);
+      url.searchParams.append('transportType', 'automobile');
+      url.searchParams.append('departureTime', new Date().toISOString());
+
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const data = await res.json();
+      const travelSeconds = data.routes?.[0]?.durationSeconds;
+      if (travelSeconds) {
+        travelTimeMin = Math.round(travelSeconds / 60);
+        await db.query(
+          `INSERT INTO travel_time_cache (from_address, to_address, hour, travel_minutes, is_fallback)
+           VALUES ($1, $2, $3, $4, false)
+           ON CONFLICT (from_address, to_address, hour)
+           DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes, is_fallback = false`,
+          [origin, destination, hour, travelTimeMin]
+        );
+        context.log(`💾 Sparade Apple Maps-restid i cache: ${origin} → ${destination} @ ${hour}:00 = ${travelTimeMin} min`);
+      } else {
+        context.log(`⚠️ Apple Maps-data saknas – använder fallback`);
+      }
+    } catch (err) {
+      context.log(`⚠️ Fel vid Apple Maps-anrop: ${err.message}`);
+    }
+  }
+
+  return { travelTimeMin, cacheHit, isFallback };
+}
+
+module.exports = { resolveTravelTime };
+END: resolveTravelTime.js
+
+====================
+📄 Fil: shared/calendar/zoomClient.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-26 11:07:48
+📏 Antal rader: 63
+🧩 Antal funktioner: 3
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 1 – ["const fetch = require('node-fetch');"]
+🔍 Längsta funktion: 13 rader
+🧠 Komplexitetspoäng: 3
+🧪 TODO/FIXME: 0
+====================
+START: zoomClient.js
+const fetch = require('node-fetch');
+
+function createZoomClient() {
+  const clientId = process.env.ZOOM_CLIENT_ID;
+  const clientSecret = process.env.ZOOM_CLIENT_SECRET;
+  const accountId = process.env.ZOOM_ACCOUNT_ID;
+  const userId = process.env.ZOOM_USER_ID || 'me';
+
+  if (!clientId || !clientSecret || !accountId) {
+    throw new Error("Missing Zoom OAuth credentials in environment variables");
+  }
+
+  async function getAccessToken() {
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const res = await fetch(`https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to get Zoom access token: ${text}`);
+    }
+
+    const data = await res.json();
+    return data.access_token;
+  }
+
+  async function createMeeting({ topic, start, duration }) {
+    const token = await getAccessToken();
+
+    const res = await fetch(`https://api.zoom.us/v2/users/${userId}/meetings`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        topic,
+        type: 2,
+        start_time: start,
+        duration,
+        timezone: 'Europe/Stockholm'
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Zoom error: ${err}`);
+    }
+
+    const result = await res.json();
+    console.log(`📅 Zoom-möte skapat: ${result.join_url}`);
+    return result;
+  }
+
+  return { createMeeting };
+}
+
+module.exports = createZoomClient;
+END: zoomClient.js
+
+====================
+📄 Fil: shared/notification/sendMail.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-26 13:01:34
+📏 Antal rader: 60
+🧩 Antal funktioner: 2
+💬 Kommentarstäckning: 2 rader (3.3%)
+📥 Imports: 1 – ["const fetch = require('node-fetch');"]
+🔍 Längsta funktion: 17 rader
+🧠 Komplexitetspoäng: 3
+🧪 TODO/FIXME: 0
+====================
+START: sendMail.js
+
+
+const fetch = require('node-fetch');
+
+async function sendMail({ to, subject, body }) {
+  const tenantId = process.env.MS365_TENANT_ID;
+  const clientId = process.env.MS365_CLIENT_ID;
+  const clientSecret = process.env.MS365_CLIENT_SECRET;
+  const sender = process.env.MS365_USER_EMAIL;
+
+  if (!tenantId || !clientId || !clientSecret || !sender) {
+    throw new Error("❌ Saknar miljövariabler för Microsoft Graph");
+  }
+
+  // Hämta token
+  const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      scope: 'https://graph.microsoft.com/.default',
+      client_secret: clientSecret,
+      grant_type: 'client_credentials'
+    })
+  });
+
+  if (!tokenRes.ok) {
+    const error = await tokenRes.text();
+    throw new Error(`❌ Misslyckades hämta token: ${error}`);
+  }
+
+  const { access_token } = await tokenRes.json();
+
+  // Skicka mejlet
+  const mailRes = await fetch(`https://graph.microsoft.com/v1.0/users/${sender}/sendMail`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: {
+          contentType: 'Text',
+          content: body
+        },
+        toRecipients: [{ emailAddress: { address: to } }]
+      },
+      saveToSentItems: false
+    })
+  });
+
+  if (!mailRes.ok) {
+    const error = await mailRes.text();
+    throw new Error(`❌ Misslyckades skicka mail: ${error}`);
+  }
+}
+
+module.exports = { sendMail };
+END: sendMail.js
+
+====================
+📄 Fil: bookings/index.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-26 13:46:22
+📏 Antal rader: 284
+🧩 Antal funktioner: 3
+💬 Kommentarstäckning: 7 rader (2.5%)
+📥 Imports: 7 – ["const { getSettings } = require('../shared/config/settingsLoader');", "const pool = require('../shared/db/pgPool');", "const { v4: uuidv4 } = require('uuid');", "const { createDebugLogger } = require('../shared/utils/debugLogger');", "const graphClient = require('../shared/calendar/msGraph')();", "const createZoomClient = require('../shared/calendar/zoomClient');", "const { sendMail } = require('../shared/notification/sendMail');"]
+🔍 Längsta funktion: 6 rader
+🧠 Komplexitetspoäng: 25
+🧪 TODO/FIXME: 0
+====================
+START: index.js
+const { getSettings } = require('../shared/config/settingsLoader');
+const pool = require('../shared/db/pgPool');
+const { v4: uuidv4 } = require('uuid');
+const { createDebugLogger } = require('../shared/utils/debugLogger');
+const graphClient = require('../shared/calendar/msGraph')();
+const createZoomClient = require('../shared/calendar/zoomClient');
+const zoomClient = createZoomClient();
+const { sendMail } = require('../shared/notification/sendMail');
+
+module.exports = async function (context, req) {
+  context.log('📥 bookings/index.js startar');
+  const requiredFields = ['meeting_type', 'meeting_length', 'slot_iso'];
+  context.log('🔍 req.body:', req.body);
+  const missing = requiredFields.filter(k => !req.body?.[k]);
+  context.log('🔍 Saknade fält:', missing);
+
+  if (missing.length > 0) {
+    context.log('❌ Avbryter pga saknade fält');
+    context.res = { status: 400, body: { error: `Missing fields: ${missing.join(', ')}` } };
+    return;
+  }
+
+  const { email, meeting_type, meeting_length, slot_iso, contact_id, metadata = {} } = req.body;
+
+  const parsedLength = parseInt(meeting_length, 10);
+  if (isNaN(parsedLength) || parsedLength <= 0) {
+    context.log('❌ Ogiltig möteslängd:', meeting_length);
+    context.res = { status: 400, body: { error: "Invalid meeting_length" } };
+    return;
+  }
+
+  const parsedStart = new Date(slot_iso);
+  if (isNaN(parsedStart.getTime())) {
+    context.log('❌ Ogiltigt slot_iso:', slot_iso);
+    context.res = { status: 400, body: { error: "Invalid slot_iso datetime" } };
+    return;
+  }
+
+  const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
+  for (const key of requiredEnv) {
+    if (!process.env[key]) {
+      context.log('❌ Saknar env:', key);
+      context.res = { status: 500, body: { error: `Missing environment variable: ${key}` } };
+      return;
+    }
+  }
+
+  const db = await pool.connect();
+  const debugHelper = createDebugLogger(context);
+  const debugLog = debugHelper.debugLog;
+  debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
+  try {
+    // Läs in booking_settings
+    const settings = await getSettings(context);
+
+    const id = uuidv4();
+    // Kontrollera om en bokning redan finns
+    const existing = await db.query(
+      'SELECT id FROM bookings WHERE contact_id = $1 AND start_time = $2',
+      [contact_id || null, parsedStart.toISOString()]
+    );
+    if (existing.rowCount > 0) {
+      context.res = {
+        status: 409,
+        body: { error: 'Booking already exists for this time.' }
+      };
+      return;
+    }
+    const startTime = parsedStart;
+    const endTime = new Date(startTime.getTime() + parsedLength * 60000);
+    const created_at = new Date();
+    const updated_at = created_at;
+
+
+    metadata.meeting_length = meeting_length;
+
+    let online_link = null;
+    if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
+      const subject = metadata.subject || settings.default_meeting_subject || 'Möte';
+      const location = metadata.location || 'Online';
+      try {
+        const eventResult = await graphClient.createEvent({
+          start: startTime.toISOString(),
+          end: endTime.toISOString(),
+          subject,
+          location,
+          attendees: [email]
+        });
+        if (!eventResult) {
+          context.log("⚠️ createEvent returnerade null");
+        } else {
+          debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
+        }
+        if (eventResult?.onlineMeetingUrl) {
+          online_link = eventResult.onlineMeetingUrl;
+          metadata.online_link = online_link;
+          metadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
+          metadata.location = eventResult.location || location || 'Online';
+        }
+
+        // Extrahera mötesinfo från bodyPreview oavsett joinUrl
+        const body = eventResult?.body?.content || '';
+        const idMatch = body.match(/Mötes-ID:\s*(\d[\d\s]*)/);
+        const pwMatch = body.match(/Lösenord:\s*([A-Za-z0-9]+)/);
+
+        if (idMatch) metadata.meeting_id = idMatch[1].trim();
+        if (pwMatch) metadata.passcode = pwMatch[1].trim();
+        if (body && !eventResult?.onlineMeetingUrl) {
+          metadata.body_preview = body;
+        }
+
+        fields.synced_to_calendar = true;
+      } catch (err) {
+        debugLog('⚠️ createEvent misslyckades: ' + err.message);
+        debugLog("❌ Detaljerat fel från createEvent:", err);
+      }
+    } else if (meeting_type.toLowerCase() === 'zoom') {
+      try {
+        const result = await zoomClient.createMeeting({
+          topic: metadata.subject || settings.default_meeting_subject,
+          start: startTime.toISOString(),
+          duration: parsedLength
+        });
+        online_link = result.join_url;
+        metadata.online_link = online_link;
+        metadata.meeting_id = result.id;
+        metadata.subject = result.topic;
+        metadata.location = 'Online';
+
+        // Generate email subject and body using settings and injected online_link
+        const emailTemplate = settings.email_invite_template || {};
+        const emailSubject =
+          (emailTemplate.subject
+            ? emailTemplate.subject.replace('{{company}}', metadata.company || 'din organisation')
+            : 'Möte');
+        const emailBody =
+          (emailTemplate.body
+            ? emailTemplate.body
+                .replace('{{first_name}}', metadata.first_name || '')
+                .replace('{{company}}', metadata.company || '')
+                .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
+            : `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`);
+
+        // Skicka e-post via Graph (placeholder – implementera din mailfunktion)
+        try {
+          await sendMail({
+            to: email,
+            subject: emailSubject,
+            body: emailBody,
+          });
+          debugLog('✅ Zoominbjudan skickad via e-post');
+          debugLog(`🔗 Länk som skickades: ${online_link}`);
+        } catch (emailErr) {
+          debugLog('⚠️ Misslyckades skicka e-post för Zoom:', emailErr.message);
+        }
+
+        fields.synced_to_calendar = true;
+      } catch (err) {
+        debugLog('⚠️ Zoom createMeeting failed:', err.message);
+      }
+    } else if (meeting_type.toLowerCase() === 'facetime') {
+      if (metadata.phone) {
+        online_link = `facetime:${metadata.phone}`;
+        metadata.online_link = online_link;
+        metadata.subject = metadata.subject || settings.default_meeting_subject || 'FaceTime';
+        metadata.location = metadata.location || 'FaceTime';
+
+        try {
+          const emailTemplate = settings.email_invite_template || {};
+          const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'FaceTime-möte';
+          const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n🔗 FaceTime-länk: ${online_link}`;
+
+          await sendMail({ to: email, subject: emailSubject, body: emailBody });
+          debugLog('✅ FaceTime-inbjudan skickad via e-post');
+          debugLog(`🔗 Länk som skickades: ${online_link}`);
+        } catch (emailErr) {
+          debugLog('⚠️ Misslyckades skicka e-post för FaceTime:', emailErr.message);
+        }
+      } else {
+        debugLog('⚠️ Saknar telefonnummer för FaceTime – ingen länk skapad');
+      }
+    } else if (meeting_type.toLowerCase() === 'atclient') {
+      metadata.location = metadata.location || metadata.address || settings.default_home_address || 'Hos kund';
+      metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte hos kund';
+
+      try {
+        const emailTemplate = settings.email_invite_template || {};
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte hos kund';
+        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n📍 Adress: ${metadata.location}`;
+
+        await sendMail({ to: email, subject: emailSubject, body: emailBody });
+        debugLog('✅ atClient-inbjudan skickad via e-post');
+        debugLog(`🔗 Länk som skickades: ${online_link}`);
+      } catch (emailErr) {
+        debugLog('⚠️ Misslyckades skicka e-post för atClient:', emailErr.message);
+      }
+    } else if (meeting_type.toLowerCase() === 'atoffice') {
+      metadata.location = metadata.location || settings.default_office_address || 'Kontoret';
+      metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte på kontoret';
+
+      try {
+        const emailTemplate = settings.email_invite_template || {};
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte på kontoret';
+        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n📍 Plats: ${metadata.location}`;
+
+        await sendMail({ to: email, subject: emailSubject, body: emailBody });
+        debugLog('✅ atOffice-inbjudan skickad via e-post');
+        debugLog(`🔗 Länk som skickades: ${online_link}`);
+      } catch (emailErr) {
+        debugLog('⚠️ Misslyckades skicka e-post för atOffice:', emailErr.message);
+      }
+    }
+
+    const fields = {
+      id,
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      meeting_type,
+      metadata: metadata,
+      created_at,
+      updated_at,
+      contact_id: contact_id || null,
+      booking_email: email || null
+    };
+
+    const query = `
+      INSERT INTO bookings (
+        id, start_time, end_time, meeting_type,
+        metadata, created_at, updated_at,
+        contact_id, booking_email
+      ) VALUES (
+        $1, $2, $3, $4,
+        $5, $6, $7,
+        $8, $9
+      )
+    `;
+
+    const values = Object.values(fields);
+    await db.query(query, values);
+    // Logga pending change för denna bokning
+    await db.query(
+      `INSERT INTO pending_changes (id, table_name, record_id, change_type, direction, processed, created_at, booking_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        uuidv4(),
+        'bookings',
+        id,
+        'INSERT',
+        'cloud_to_local',
+        false,
+        new Date(),
+        id
+      ]
+    );
+    // Simulera att kalendern synkades för denna demo
+    await db.query(
+      'INSERT INTO event_log (event_type, booking_id) VALUES ($1, $2)',
+      ['booking_created', id]
+    );
+    debugLog(`✅ Bokning skapad: ${id}, typ: ${meeting_type}, längd: ${meeting_length}`);
+
+    context.res = {
+      status: 200,
+      body: {
+        status: 'booked',
+        booking_id: id,
+        calendar_invite_sent: !!online_link
+      }
+    };
+  } catch (err) {
+    context.log.error("❌ Booking error:", err.message);
+    context.log.error("❌ Fullt felobjekt:", err);
+    context.res = {
+      status: 500,
+      body: {
+        error: err.message,
+        stack: err.stack,
+        full: JSON.stringify(err, Object.getOwnPropertyNames(err))
+      }
+    };
+  } finally {
+    db.release();
+  }
+};
+END: index.js
+
+====================
+📄 Fil: shared/utils/debugLogger.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-20 12:16:50
+📏 Antal rader: 23
+🧩 Antal funktioner: 2
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 8 rader
+🧠 Komplexitetspoäng: 2
+🧪 TODO/FIXME: 0
+====================
+START: debugLogger.js
+console.log("🧪 debugLogger.js laddades");
+
+function createDebugLogger(context) {
+  const isDebug = process.env.DEBUG === 'true';
+  const skipReasons = {};
+
+  const debugLog = (msg) => {
+    if (msg.startsWith('⛔') || msg.startsWith('🍽️') || msg.startsWith('📛')) {
+      const reason = msg.split(' – ')[0];
+      skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+    }
+    if (isDebug && context?.log) {
+      context.log(msg);
+    }
+  };
+
+  return {
+    debugLog,
+    getSkipSummary: () => skipReasons
+  };
+}
+
+module.exports = { createDebugLogger };
+END: debugLogger.js
+
+====================
+📄 Fil: shared/slots/slotEngine.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-28 15:49:16
+📏 Antal rader: 322
+🧩 Antal funktioner: 4
+💬 Kommentarstäckning: 8 rader (2.5%)
+📥 Imports: 6 – ["const pool = require('../db/pgPool');", 'const { DateTime } = require("luxon");', 'const { resolveOriginAddress } = require("../calendar/resolveOrigin");', 'const { resolveTravelTime } = require("../maps/resolveTravelTime");', 'const msGraph = require("../calendar/msGraph");', 'const appleCalendar = require("../calendar/appleCalendar");']
+🔍 Längsta funktion: 14 rader
+🧠 Komplexitetspoäng: 39
+🧪 TODO/FIXME: 0
+====================
+START: slotEngine.js
+console.log("🧪 slotEngine.js laddades");
+
+const pool = require('../db/pgPool');
+
+const { DateTime } = require("luxon");
+const { resolveOriginAddress } = require("../calendar/resolveOrigin");
+const { resolveTravelTime } = require("../maps/resolveTravelTime");
+const msGraph = require("../calendar/msGraph");
+const appleCalendar = require("../calendar/appleCalendar");
+
+async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
+  const timezone = settings.timezone || "Europe/Stockholm";
+  const hoursToTry = [8, 12]; // UTC → 10:00 och 14:00 svensk tid
+  const slots = [];
+
+  for (const hour of hoursToTry) {
+    const eventId = `${day}T${hour.toString().padStart(2, "0")}:00:00.000Z`;
+    const dateObj = new Date(eventId);
+    const weekday = dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
+    const slot_part = hour < 12 ? "fm" : "em";
+    const slotHourStr = `${hour.toString().padStart(2, '0')}:00`;
+    if (slotHourStr >= settings.lunch_start && slotHourStr < settings.lunch_end) {
+      context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
+      continue;
+    }
+    const isWeekend = ["saturday", "sunday"].includes(weekday);
+    if (settings.block_weekends && isWeekend) {
+      context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
+      continue;
+    }
+    if (meeting_type === 'atclient' && Array.isArray(settings.allowed_atclient_meeting_days)) {
+      if (!settings.allowed_atclient_meeting_days.includes(weekday)) {
+        context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
+        continue;
+      }
+    }
+
+    context.log(`📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder`);
+    const originInfo = await resolveOriginAddress({
+      eventId,
+      calendarId: 'system',
+      pool,
+      context,
+      graphClient,
+      appleClient,
+      fallbackOrigin: settings.default_home_address,
+      settings,
+      eventCache
+    });
+
+    if (!originInfo?.origin) {
+      context.log(`⚠️ Kunde inte fastställa origin för ${eventId}`);
+      continue;
+    }
+
+    const destination = settings.default_office_address;
+    const { travelTimeMin } = await resolveTravelTime({
+      origin: originInfo.origin,
+      destination,
+      hour,
+      db: pool,
+      accessToken: context.accessToken || null,
+      context
+    });
+
+    if (!travelTimeMin || typeof travelTimeMin !== "number") {
+      context.log.warn(`⚠️ Ogiltig restid, hoppar slot: ${eventId}`);
+      continue;
+    }
+
+    const endTime = new Date(dateObj.getTime() + meeting_length * 60000);
+    const dayStart = new Date(dateObj);
+    const dayEnd = new Date(dateObj);
+    dayStart.setHours(parseInt(settings.open_time.split(':')[0], 10), parseInt(settings.open_time.split(':')[1], 10));
+    dayEnd.setHours(parseInt(settings.close_time.split(':')[0], 10), parseInt(settings.close_time.split(':')[1], 10));
+
+    if (endTime > dayEnd) {
+      context.log(`⛔ Slot ${eventId} går utanför öppettid (${settings.close_time}) – hoppar`);
+      continue;
+    }
+
+    // Skip slots that are too soon to reach based on travel time and current time
+    const now = Date.now();
+    if (dateObj.getTime() - now < travelTimeMin * 60 * 1000) {
+      context.log(`⛔ Slot ${eventId} är för nära i tid – restid ${travelTimeMin} min, nu=${new Date(now).toISOString()} – hoppar`);
+      continue;
+    }
+
+    // Build slot object
+    const slot = {
+      slot_iso: eventId,
+      slot_local: DateTime.fromJSDate(dateObj).setZone(timezone).toISO(),
+      travel_time_min: travelTimeMin,
+      origin: originInfo.origin,
+      originEndTime: originInfo.originEndTime,
+      source: originInfo.originSource,
+      require_approval: settings.require_approval,
+      meeting_length,
+      weekday,
+      slot_part
+    };
+
+    // --- Score calculation logic ---
+    // Använd context.bookingsByDay som källa till befintliga bokningar per dag
+    const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
+    const slotDateIso = dateObj.toISOString().split("T")[0];
+    const slotStart = dateObj.getTime();
+    const slotEnd = slotStart + meeting_length * 60000;
+
+    const existing = bookingsByDay[slotDateIso] || [];
+    let gapBefore = null;
+    let gapAfter = null;
+
+    for (const b of existing) {
+      const bStart = b.start;
+      const bEnd = b.end;
+
+      if (bEnd <= slotStart) {
+        gapBefore = slotStart - bEnd;
+      } else if (bStart >= slotEnd && gapAfter === null) {
+        gapAfter = bStart - slotEnd;
+      }
+    }
+
+    const bufferMs = (settings.buffer_between_meetings || 0) * 60000;
+    const hasConflict = existing.some(b => {
+      return (
+        b.start < slotEnd + bufferMs &&
+        b.end > slotStart - bufferMs
+      );
+    });
+    if (hasConflict) {
+      context.log(`⛔ Slot ${eventId} krockar med möte inom buffer – hoppar`);
+      continue;
+    }
+
+    // Standardpoäng är 10. Dra av poäng för stor lucka före eller efter.
+    let fragmentationPenalty = 0;
+    if ((gapBefore && gapBefore > 45 * 60000) || (gapAfter && gapAfter > 45 * 60000)) {
+      fragmentationPenalty = 1;
+    }
+
+    slot.score = 10 - fragmentationPenalty;
+
+    slots.push(slot);
+  }
+
+  return slots;
+}
+
+
+async function generateSlotChunks({
+  days,
+  context,
+  contact,
+  contact_id,
+  meeting_type,
+  meeting_length,
+  bookingsByDay,
+  weeklyMinutesByType,
+  settings,
+  graphClient,
+  appleClient,
+  travelCache,
+  accessToken,
+  timezone,
+  debugHelper
+}) {
+  const { debugLog, skipReasons } = debugHelper || {};
+  const chosen = [];
+
+  if (days.length === 0) {
+    const fallbackDate = new Date().toISOString().split('T')[0];
+    const { rows } = await pool.query(
+      'SELECT slots FROM slot_cache WHERE slot_day = $1 LIMIT 1',
+      [fallbackDate]
+    );
+    if (rows.length > 0) {
+      context.log(`🟡 Använder slot_cache som fallback (${fallbackDate})`);
+      return {
+        chosenSlots: rows[0].slots || [],
+        slotMapResult: {},
+        slotLogSummary: { 'fallback_used': 1 }
+      };
+    }
+  }
+
+  let startIso, endIso;
+  try {
+    startIso = days[0] instanceof Date ? days[0].toISOString() : new Date(days[0]).toISOString();
+    endIso = new Date((days[days.length - 1] instanceof Date ? days[days.length - 1] : new Date(days[days.length - 1])).getTime() + 86400000).toISOString();
+  } catch (err) {
+    context.log("⛔ Fel vid toISOString på days[] – ersätter med dagens datum");
+    const today = new Date();
+    startIso = today.toISOString();
+    endIso = new Date(today.getTime() + 7 * 86400000).toISOString(); // +7 dagar fallback
+  }
+
+  // === LÄGG TILL EXTERNA BOKNINGAR (MS + Apple) I bookingsByDay ===
+
+  // Microsoft Graph
+  try {
+    const msEvents = await graphClient.listUpcomingEvents?.(days.length + 1) || [];
+    let msAddedCount = 0;
+    for (const ev of msEvents) {
+      const start = new Date(ev.start).getTime();
+      const end = new Date(ev.end).getTime();
+      if (isNaN(start) || isNaN(end)) continue;
+      const date = new Date(ev.start).toISOString().split("T")[0];
+      if (!bookingsByDay[date]) bookingsByDay[date] = [];
+      bookingsByDay[date].push({ start, end });
+      msAddedCount++;
+    }
+    context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
+    context.log("📋 MS Graph – alla händelser:");
+    for (const ev of msEvents) {
+      context.log(`  • ${ev.subject || '(utan titel)'}: ${ev.start} → ${ev.end}`);
+    }
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
+  }
+
+  // Apple Calendar
+  try {
+    const appleEvents = await appleClient.fetchEventsByDateRange?.(new Date(startIso), new Date(endIso)) || [];
+    let appleAddedCount = 0;
+    for (const ev of appleEvents) {
+      try {
+        const start = new Date(ev.dtstart).getTime();
+        const end = new Date(ev.dtend).getTime();
+        if (isNaN(start) || isNaN(end)) continue;
+        const date = new Date(ev.dtstart).toISOString().split("T")[0];
+        if (!bookingsByDay[date]) bookingsByDay[date] = [];
+        bookingsByDay[date].push({ start, end });
+        appleAddedCount++;
+      } catch (err) {
+        context.log(`⚠️ Apple event parsing error: ${err.message}`);
+      }
+    }
+    context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
+    context.log("📋 Apple Calendar – alla händelser:");
+    for (const ev of appleEvents) {
+      context.log(`  • ${ev.summary || '(utan titel)'}: ${ev.dtstart} → ${ev.dtend}`);
+    }
+    if (!Array.isArray(appleEvents)) {
+      context.log("⛔ appleEvents är inte en array – faktiskt värde:", JSON.stringify(appleEvents, null, 2));
+    }
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);
+  }
+
+  context.bookingsByDay = bookingsByDay;
+
+  const slotCandidatePromises = days.map(day => {
+    const dayStr = day.toISOString().split("T")[0];
+    return generateSlotCandidates({
+      day: dayStr,
+      settings,
+      contact,
+      pool: context.client || pool,
+      context,
+      graphClient,
+      appleClient,
+      meeting_length,
+      meeting_type,
+      eventCache: context.eventCache instanceof Map ? context.eventCache : new Map()
+    });
+  });
+
+  const slotCandidatesPerDay = await Promise.all(slotCandidatePromises);
+
+  const slotMap = {};
+  days.forEach((day, index) => {
+    const dayStr = day.toISOString().split("T")[0];
+    const slotCandidates = slotCandidatesPerDay[index];
+    for (const slot of slotCandidates) {
+      const key = `${dayStr}_${slot.slot_part}`;
+      if (!slotMap[key]) slotMap[key] = [];
+      slotMap[key].push(slot);
+    }
+  });
+
+  const bestPerGroup = {};
+  for (const [key, slots] of Object.entries(slotMap)) {
+    if (slots.length === 0) continue;
+    const [datePart, part] = key.split('_');
+    if (!bestPerGroup[datePart]) bestPerGroup[datePart] = {};
+    if (!bestPerGroup[datePart][part]) {
+      bestPerGroup[datePart][part] = slots
+        .sort((a, b) => {
+          if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+          return new Date(a.slot_iso) - new Date(b.slot_iso);
+        })[0];
+    }
+  }
+
+  for (const day in bestPerGroup) {
+    for (const part in bestPerGroup[day]) {
+      const slot = bestPerGroup[day][part];
+      const weekKeyStr = day;
+      const usedMinutes = (weeklyMinutesByType[meeting_type]?.[weekKeyStr] || 0);
+      if (usedMinutes + slot.meeting_length <= settings.max_weekly_booking_minutes) {
+        chosen.push(slot);
+      } else {
+        debugLog?.(`⛔ Överskrider veckokvot (${usedMinutes + slot.meeting_length} > ${settings.max_weekly_booking_minutes}) – hoppar ${day}_${part}`);
+      }
+    }
+  }
+
+  const durationMs = Date.now() - context.startTime;
+  context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
+  return {
+    chosenSlots: chosen.sort((a, b) => new Date(a.slot_iso) - new Date(b.slot_iso)),
+    slotMapResult: slotMap,
+    slotLogSummary: skipReasons
+  };
+}
+
+module.exports = {
+  generateSlotCandidates,
+  generateSlotChunks
+};
+END: slotEngine.js
+
+====================
+📄 Fil: sync_from_cloud.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-15 18:23:27
+📏 Antal rader: 141
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 28
+🧪 TODO/FIXME: 0
+====================
+START: sync_from_cloud.py
+import psycopg2
+import json
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+def apply_change(cur, table, operation, payload):
+    if operation == "INSERT":
+        cols = ", ".join(payload.keys())
+        placeholders = ", ".join(["%s"] * len(payload))
+        sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING"
+        cur.execute(sql, [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()])
+    elif operation == "UPDATE":
+        if table == "contact" and "metadata" in payload:
+            local_meta = payload["metadata"]
+            if isinstance(local_meta, str):
+                local_meta = json.loads(local_meta)
+            cur.execute("SELECT metadata FROM contact WHERE id = %s", (payload["id"],))
+            row = cur.fetchone()
+            if row:
+                remote_meta = row[0]
+                if isinstance(remote_meta, str):
+                    remote_meta = json.loads(remote_meta)
+                if remote_meta == local_meta:
+                    print(f"♻️ Ingen skillnad i metadata för {payload['id']}, hoppar UPDATE och markerar som klar.")
+                    return
+        sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
+        values = [json.dumps(payload[col]) if isinstance(payload[col], dict) else payload[col] for col in payload if col != "id"]
+        values.append(payload["id"])
+        sql = f"UPDATE {table} SET {sets} WHERE id = %s"
+        cur.execute(sql, values)
+        cur.execute("SELECT metadata, updated_at FROM contact WHERE id = %s", [payload["id"]])
+        updated_row = cur.fetchone()
+        if updated_row:
+            try:
+                metadata = updated_row[0]
+                if isinstance(metadata, str):
+                    metadata = json.loads(metadata)
+                address = metadata.get("address", "(ingen adress)")
+            except Exception:
+                address = "(kunde inte tolkas)"
+            print(f"🧾 Efter UPDATE: {payload['id']} → {address} @ {updated_row[1]}")
+        else:
+            print(f"⚠️ UPDATE-verifiering misslyckades: Inget resultat för {payload['id']}")
+    elif operation == "DELETE":
+        sql = f"DELETE FROM {table} WHERE id = %s"
+        cur.execute(sql, [payload["id"]])
+
+def sync():
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+    remote_cur = remote_conn.cursor()
+
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    local_cur = local_conn.cursor()
+
+    remote_cur.execute("""
+        SELECT id, table_name, record_id, operation, payload
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+            FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+              AND table_name IN ('contact', 'bookings')
+        ) sub
+        WHERE rn = 1
+        ORDER BY created_at ASC, id
+    """)
+    rows = remote_cur.fetchall()
+
+    remote_cur.execute("""
+        DELETE FROM pending_changes
+        WHERE id NOT IN (
+            SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                FROM pending_changes
+                WHERE direction = 'out' AND processed = false
+            ) sub
+            WHERE rn = 1
+        ) AND direction = 'out' AND processed = false AND operation = 'UPDATE';
+    """)
+
+    seen_record_ids = set()
+    for row in rows:
+        try:
+            payload_preview = row[4] if isinstance(row[4], dict) else json.loads(row[4])
+            rid = payload_preview.get("id")
+            email = payload_preview.get("booking_email", "okänd e-post")
+            seen_record_ids.add(rid)
+        except Exception as e:
+            pass
+    count = 0
+    for row in rows:
+        change_id, table, record_id, operation, payload_json = row
+        try:
+            payload = payload_json if isinstance(payload_json, dict) else json.loads(payload_json)
+            if not isinstance(payload.get("id"), str) or "your-generated-id" in payload.get("id"):
+                continue
+            apply_change(local_cur, table, operation, payload)
+            if table == "bookings" and operation == "INSERT":
+                local_cur.execute(
+                    """
+                    UPDATE pending_changes
+                    SET booking_id = %s
+                    WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
+                    """,
+                    (record_id, record_id)
+                )
+                local_conn.commit()
+            if table == "contact":
+                email = payload.get("booking_email", "(okänd e-post)")
+                meta = payload.get("metadata")
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except Exception:
+                        meta = {}
+                elif not isinstance(meta, dict):
+                    meta = {}
+                address = meta.get("address", "(okänd adress)")
+                print(f"📥 Importerad kontakt: {email} → {address}")
+            if table == "bookings" and operation == "INSERT":
+                pass  # Notis borttagen
+            local_cur.execute("""
+                INSERT INTO event_log (id, source, event_type, payload, received_at)
+                VALUES (gen_random_uuid(), %s, %s, %s, now())
+            """, ('sync', f"{operation.lower()}_{table}", json.dumps(payload)))
+            remote_cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", [change_id])
+            remote_conn.commit()
+            count += 1
+        except Exception as e:
+            print(f"❌ Fel vid synk för {table} (id={change_id}): {e}")
+            continue
+
+    local_conn.commit()
+    local_cur.close()
+    remote_cur.close()
+    local_conn.close()
+    remote_conn.close()
+
+if __name__ == "__main__":
+    sync()
+END: sync_from_cloud.py
+
+====================
+📄 Fil: sync_to_cloud.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-15 18:23:01
+📏 Antal rader: 211
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 3 – ['import psycopg2', 'import json', 'import traceback']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 41
+🧪 TODO/FIXME: 0
+====================
+START: sync_to_cloud.py
+import psycopg2
+import json
+from datetime import datetime, timezone
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+def fetch_pending_changes(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, table_name, record_id, operation, payload
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                FROM pending_changes
+                WHERE direction = 'out' AND processed = false
+                  AND table_name IN ('contact', 'bookings')
+            ) sub
+            WHERE rn = 1
+            ORDER BY created_at ASC, id
+        """)
+        rows = cur.fetchall()
+
+        # Rensa äldre UPDATE-poster med samma record_id
+        cur.execute("""
+            DELETE FROM pending_changes
+            WHERE id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                    FROM pending_changes
+                    WHERE direction = 'out' AND processed = false
+                ) sub
+                WHERE rn = 1
+            ) AND direction = 'out' AND processed = false AND operation = 'UPDATE';
+        """)
+        return rows
+
+def mark_as_processed(conn, change_id):
+    with conn.cursor() as cur:
+        cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
+        conn.commit()
+
+#
+# 📝 SYNC-BETEENDE: Hantering av metadata
+#
+# Viktigt att förstå skillnaden:
+#
+# 1. Ändring av värde:
+#    - Exempel: "postal_code": "111 11" → "115 32"
+#    - Hanteras som en vanlig UPDATE (om updated_at är nyare)
+#
+# 2. Ändring av nyckel (etikett):
+#    - Exempel: "postal_number" → "postal_code"
+#    - Molnet kommer *inte* ta bort "postal_number" utan force_resync
+#    - Lägg till `"force_resync": true` i metadata för att tvinga full överskrivning
+#
+# Detta minskar risken att data i molnet raderas av misstag.
+
+def apply_change(conn, change, local_conn):
+    table_name, record_id, operation, payload = change[1], change[2], change[3], change[4]
+    with conn.cursor() as cur:
+        data = json.loads(payload) if isinstance(payload, str) else payload
+
+        # Skip contact records with metadata.origin != 'klrab.se'
+        if table_name == 'contact' and 'metadata' in data:
+            meta = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
+            if meta.get('origin') != 'klrab.se':
+                print(f"⚠️ Skickas ej: origin != klrab.se – {data.get('booking_email')}")
+                mark_as_processed(local_conn, change[0])
+                return
+
+        # Ensure all values are serializable to SQL
+        for k, v in data.items():
+            if isinstance(v, dict):
+                data[k] = json.dumps(v)
+
+        if 'updated_at' in data:
+            if isinstance(data['updated_at'], str):
+                # Parse and convert to UTC if it's a string
+                try:
+                    dt = datetime.fromisoformat(data['updated_at'])
+                    data['updated_at'] = dt.astimezone(timezone.utc).isoformat()
+                except Exception as e:
+                    print(f"⚠️ Kunde inte tolka updated_at: {data['updated_at']} ({e})")
+            elif isinstance(data['updated_at'], datetime):
+                data['updated_at'] = data['updated_at'].astimezone(timezone.utc).isoformat()
+
+        if operation == 'INSERT':
+            columns = ', '.join(data.keys())
+            placeholders = ', '.join(['%s'] * len(data))
+            values = list(data.values())
+            cur.execute(
+                f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) "
+                f"ON CONFLICT (id) DO UPDATE SET "
+                f"{', '.join([f'{k} = EXCLUDED.{k}' for k in data.keys() if k != 'id'])}",
+                values
+            )
+            if table_name == 'bookings':
+                with local_conn.cursor() as local_cur:
+                    local_cur.execute(
+                        """
+                        UPDATE pending_changes
+                        SET booking_id = %s
+                        WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
+                        """,
+                        (record_id, record_id)
+                    )
+                    local_conn.commit()
+        if 'metadata' in data and table_name == 'contact':
+            # Merge metadata with existing remote value and ensure JSON string
+            cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))
+            row = cur.fetchone()
+            if row and row[0]:
+                if isinstance(row[0], dict):
+                    existing_metadata = row[0]
+                else:
+                    existing_metadata = json.loads(row[0])
+            else:
+                existing_metadata = {}
+
+            incoming_metadata = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
+            if existing_metadata == incoming_metadata:
+                mark_as_processed(local_conn, change[0])
+                return
+            existing_metadata.update(incoming_metadata)
+            changed_keys = [k for k in incoming_metadata if existing_metadata.get(k) != incoming_metadata[k]]
+            if not changed_keys:
+                mark_as_processed(local_conn, change[0])
+                return
+            data['metadata'] = json.dumps(existing_metadata)
+
+        if operation == 'UPDATE':
+            # Förbättrad hantering av tidsjämförelse för updated_at
+            if 'updated_at' in data:
+                try:
+                    # Säkerställ att local_ts är datetime i UTC
+                    local_ts = data['updated_at']
+                    if isinstance(local_ts, str):
+                        local_ts = datetime.fromisoformat(local_ts)
+                    if local_ts.tzinfo is None:
+                        local_ts = local_ts.replace(tzinfo=timezone.utc)
+                    else:
+                        local_ts = local_ts.astimezone(timezone.utc)
+
+                    cur.execute(f"SELECT updated_at FROM {table_name} WHERE id = %s", (record_id,))
+                    row = cur.fetchone()
+                    if row and row[0] and isinstance(row[0], datetime):
+                        remote_ts = row[0]
+                        if remote_ts.tzinfo is None:
+                            remote_ts = remote_ts.replace(tzinfo=timezone.utc)
+                        else:
+                            remote_ts = remote_ts.astimezone(timezone.utc)
+
+                        if local_ts <= remote_ts:
+                            mark_as_processed(local_conn, change[0])
+                            return
+                except Exception:
+                    pass
+
+            if table_name == "contact" and "metadata" in data:
+                local_meta = data["metadata"]
+                if isinstance(local_meta, str):
+                    local_meta = json.loads(local_meta)
+                cur.execute("SELECT metadata FROM contact WHERE id = %s", (data["id"],))
+                row = cur.fetchone()
+                if row:
+                    remote_meta = row[0]
+                    if isinstance(remote_meta, str):
+                        remote_meta = json.loads(remote_meta)
+                    if remote_meta == local_meta:
+                        mark_as_processed(local_conn, change[0])
+                        return
+
+            columns = ', '.join(data.keys())
+            placeholders = ', '.join(['%s'] * len(data))
+            values = list(data.values())
+            update_keys = [k for k in data.keys() if k != 'id']
+            update_set = ', '.join([f"{k} = %s" for k in update_keys])
+            update_values = [data[k] for k in update_keys]
+            update_values.append(record_id)
+            cur.execute(
+                f"UPDATE {table_name} SET {update_set} WHERE id = %s",
+                update_values
+            )
+            cur.execute("SELECT metadata, updated_at FROM contact WHERE id = %s", [payload["id"]])
+            updated_row = cur.fetchone()
+        elif operation == 'DELETE':
+            cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
+        conn.commit()
+        mark_as_processed(local_conn, change[0])
+
+def sync():
+    import traceback
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+
+    changes = fetch_pending_changes(local_conn)
+    count = 0
+    for change in changes:
+        try:
+            apply_change(remote_conn, change, local_conn)
+            count += 1
+        except Exception as e:
+            print(f"❌ Misslyckades att applicera ändring på {change[1]} (id={change[2]}): {e}")
+            traceback.print_exc()
+    
+    local_conn.close()
+    remote_conn.close()
+
+if __name__ == "__main__":
+    sync()
+END: sync_to_cloud.py
+
+====================
+📄 Fil: sync_static_tables.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-04-24 17:01:52
+📏 Antal rader: 61
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 6
+🧪 TODO/FIXME: 0
+====================
+START: sync_static_tables.py
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+import psycopg2
+import json
+from datetime import datetime
+
+
+TABLES = ["translation", "booking_settings"]
+
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+
+def fetch_all_from_local(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT * FROM {table}")
+        colnames = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
+        return colnames, rows
+
+
+def clear_remote_table(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"DELETE FROM {table}")
+        conn.commit()
+
+
+def insert_to_remote(conn, table, columns, rows):
+    with conn.cursor() as cur:
+        placeholders = ', '.join(['%s'] * len(columns))
+        colnames = ', '.join(columns)
+        for row in rows:
+            # Hantera jsonb-värden som json-strängar
+            formatted_row = []
+            for i, col in enumerate(columns):
+                value = row[i]
+                if table == 'booking_settings' and col == 'value':
+                    formatted_row.append(json.dumps(value))
+                else:
+                    formatted_row.append(value)
+            cur.execute(f"INSERT INTO {table} ({colnames}) VALUES ({placeholders})", formatted_row)
+        conn.commit()
+
+
+def sync_static_tables():
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+
+    for table in TABLES:
+        print(f"\n⏳ Synkar tabell: {table}...")
+        columns, rows = fetch_all_from_local(local_conn, table)
+        clear_remote_table(remote_conn, table)
+        insert_to_remote(remote_conn, table, columns, rows)
+        print(f"✅ Klar med tabell: {table} ({len(rows)} rader)")
+
+    local_conn.close()
+    remote_conn.close()
+
+
+if __name__ == "__main__":
+    sync_static_tables()
+
+END: sync_static_tables.py
+
+====================
+📄 Fil: sync.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-14 15:43:17
+📏 Antal rader: 82
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 10
+🧪 TODO/FIXME: 0
+====================
+START: sync.py
+import psycopg2
+import json
+from datetime import datetime
+from config import LOCAL_DB_CONFIG
+
+# Anslutning till lokal PostgreSQL
+conn = psycopg2.connect(**LOCAL_DB_CONFIG)
+cursor = conn.cursor()
+
+# Rensa äldre UPDATE-rader (endast senaste behövs per record_id)
+cursor.execute("""
+    DELETE FROM pending_changes pc
+    WHERE operation = 'UPDATE'
+      AND processed = false
+      AND direction = 'out'
+      AND id NOT IN (
+        SELECT id FROM (
+          SELECT id,
+                 ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at DESC) AS rn
+          FROM pending_changes
+          WHERE operation = 'UPDATE'
+            AND processed = false
+            AND direction = 'out'
+        ) sub
+        WHERE rn = 1
+      );
+""")
+
+# Hämta EN ändring per kontakt (record_id) – endast senaste per kontakt exporteras med hjälp av ROW_NUMBER()
+cursor.execute("""
+    SELECT id, table_name, record_id, operation, payload, created_at
+    FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at DESC) as rn
+        FROM pending_changes
+        WHERE processed = false AND direction = 'out'
+    ) sub
+    WHERE rn = 1
+""")
+
+rows = cursor.fetchall()
+
+# Filtrera bort poster där metadata är identisk med befintlig kontakt
+filtered_rows = []
+for row in rows:
+    change_id, table, record_id, operation, payload, created_at = row
+    data = json.loads(payload) if isinstance(payload, str) else payload
+    if table == "contact" and operation == "UPDATE":
+        try:
+            cursor.execute("SELECT metadata FROM contact WHERE id = %s", (record_id,))
+            result = cursor.fetchone()
+            if result:
+                current_metadata = result[0] if isinstance(result[0], dict) else json.loads(result[0])
+                incoming_metadata = data.get("metadata")
+                if isinstance(incoming_metadata, str):
+                    incoming_metadata = json.loads(incoming_metadata)
+                if current_metadata == incoming_metadata:
+                    continue
+        except Exception as e:
+            print(f"⚠️ Kunde inte jämföra metadata för {record_id}: {e}")
+    filtered_rows.append(row)
+rows = filtered_rows
+
+# Skapa exportformat
+export = []
+for row in rows:
+    change_id, table, record_id, operation, payload, created_at = row
+    export.append({
+        "change_id": str(change_id),
+        "table": table,
+        "operation": operation,
+        "data": payload
+    })
+
+# Spara till JSON-fil med tidsstämpel
+if export:
+    first_type = export[0]["table"] if export else "unknown"
+    filename = f"sync_outbox/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{first_type}.json"
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(export, f, indent=2, ensure_ascii=False)
+
+cursor.close()
+conn.close()
+
+END: sync.py
+
+====================
+📄 Fil: sync_all.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-14 15:49:04
+📏 Antal rader: 148
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 6 – ['import os', 'import subprocess', 'import sys', 'import psycopg2', 'import socket', 'import traceback']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 18
+🧪 TODO/FIXME: 0
+====================
+START: sync_all.py
+BASE = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api"
+
+import os
+import subprocess
+from datetime import datetime
+import sys
+import psycopg2
+
+log_dir = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot"
+log_out = os.path.join(log_dir, "macspot_sync.log")
+log_err = os.path.join(log_dir, "macspot_sync_error.log")
+
+# Se till att loggfilerna existerar
+for path in [log_out, log_err]:
+    if not os.path.exists(path):
+        with open(path, 'w'):
+            pass
+
+# Skriv ut manuell/automatisk körningsinfo till loggen
+is_manual = sys.stdout.isatty()
+sys.stdout = open(log_out, 'a')
+sys.stderr = open(log_err, 'a')
+if is_manual:
+    print(f"🖐️ Manuell körning: {datetime.now().isoformat()}")
+else:
+    print(f"🤖 Automatisk körning via launchd: {datetime.now().isoformat()}")
+
+def run_script(name, script_path):
+    subprocess.run(["python", f"{BASE}/{script_path}"], check=True)
+
+try:
+    start_time = datetime.now()
+    def is_database_online(host, port):
+        import socket
+        try:
+            socket.create_connection((host, port), timeout=2)
+            return True
+        except:
+            return False
+
+    # Kontrollera att båda databaser är online innan sync startar
+    if not is_database_online("localhost", 5433):
+        print("❌ Lokal databas är inte tillgänglig (localhost:5433)")
+        exit(1)
+
+    if not is_database_online("macspotpg.postgres.database.azure.com", 5432):
+        print("❌ Azure-databasen är inte tillgänglig (macspotpg.postgres.database.azure.com:5432)")
+        exit(1)
+
+    print(f"📌 Körning initierad: {datetime.now().isoformat()}")
+
+    print(f"\n🔄 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
+
+    scripts_part1 = [
+        ("🟡 Kör sync.py...", "sync.py"),
+        ("🟢 Kör sync_to_cloud.py...", "sync_to_cloud.py")
+    ]
+
+    for msg, script in scripts_part1:
+        run_script(msg, script)
+
+    scripts_part2 = [
+        ("🔵 Kör sync_from_cloud.py...", "sync_from_cloud.py")
+    ]
+
+    for msg, script in scripts_part2:
+        run_script(msg, script)
+
+    today_prefix = datetime.now().strftime('%Y%m%d')
+    outbox_dir = os.path.join(BASE, 'sync_outbox')
+    files = [f for f in os.listdir(outbox_dir) if f.startswith(today_prefix)]
+    files_with_type = [f for f in files if len(f.split("_")) >= 3]
+    num_changes = len(files_with_type)
+
+    if num_changes == 0:
+        print("ℹ️ Ingen förändring hittades att synka.")
+        print("📭 Inga fler ändringar kvar i pending_changes.")
+    else:
+        print(f"📤 Totalt {num_changes} ändring(ar) skickades till molnet:")
+        files = [f for f in sorted(os.listdir(outbox_dir)) if f.startswith(today_prefix)]
+        summary = {}
+        for f in files:
+            parts = f.split("_")
+            if len(parts) >= 3:
+                typ = parts[2].split(".")[0]
+                summary[typ] = summary.get(typ, 0) + 1
+
+        if summary:
+            print("🧾 Sammanfattning per typ:")
+            for typ, count in summary.items():
+                print(f"   • {typ}: {count} st")
+
+        print("📊 Kontroll av återstående ändringar i pending_changes...")
+
+        # Lokalt
+        local = psycopg2.connect(
+            dbname="macspot",
+            user="postgres",
+            host="localhost",
+            port=5433
+        )
+        cur_local = local.cursor()
+        cur_local.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+        """)
+        out_local = cur_local.fetchone()[0]
+        cur_local.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+            GROUP BY record_id
+        """)
+        print(f"   • Lokalt → molnet: {out_local} ändring(ar) kvar över {cur_local.rowcount} kontakt(er).")
+        cur_local.close()
+        local.close()
+
+        # Molnet
+        cloud = psycopg2.connect(
+            dbname="postgres",
+            user="daniel",
+            host="macspotpg.postgres.database.azure.com",
+            port=5432
+        )
+        cur_cloud = cloud.cursor()
+        cur_cloud.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+        """)
+        out_cloud = cur_cloud.fetchone()[0]
+        cur_cloud.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+            GROUP BY record_id
+        """)
+        cur_cloud.close()
+        cloud.close()
+
+    print(f"\n✅ [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk körd.")
+
+except Exception as e:
+    import traceback
+    print("❌ Ett oväntat fel inträffade under körningen:")
+    print(traceback.format_exc())
+
+finally:
+    print(f"🏁 Körning avslutad: {datetime.now().isoformat()}")
+    duration = datetime.now() - start_time
+    print(f"⏱️ Total körtid: {int(duration.total_seconds())} sekunder")
+END: sync_all.py
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 .funcignore
+   # Exclude dev-only files and folders
+   .git
+   .vscode
+   .env
+   *.log
+   test/
+   tests/
+   
+   # Explicitly include all required files and folders
+   !host.json
+   !package.json
+   !package-lock.json
+   
+   !node_modules/
+   !node_modules/**
+   
+   !shared/
+   !shared/**
+   
+   !bookings/
+   !bookings/**
+   !getavailableslots/
+   !getavailableslots/**
+   !validate_contact/
+   !validate_contact/**
+   !meeting_types/
+   !meeting_types/**
+   !refreshCalendarOrigins/
+   !refreshCalendarOrigins/**
+   !refreshTravelTimes/
+   !refreshTravelTimes/**
+   !booking_settings/
+   !booking_settings/**
+   !test_azurecloud/
+   !test_azurecloud/**
+📄 booking_settings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "booking_settings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 bookings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "bookings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 getavailableslots/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "getavailableslots"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 host.json
+   {
+     "version": "2.0",
+     "extensionBundle": {
+       "id": "Microsoft.Azure.Functions.ExtensionBundle",
+       "version": "[4.*, 5.0.0)"
+     },
+     "extensions": {
+       "http": {
+         "cors": {
+           "allowedOrigins": [
+             "https://www.klrab.se"
+           ],
+           "supportCredentials": false
+         }
+       }
+     }
+   }
+📄 meeting_types/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": [ "get" ],
+         "route": "meeting_types"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 package.json
+   {
+     "name": "macspot-api",
+     "version": "1.0.0",
+     "description": "Azure Functions backend för MacSpot CRM/ERP",
+     "scripts": {
+       "start": "func start",
+       "dev": "func start --verbose",
+       "deploy": "func azure functionapp publish macspotbackend",
+       "build": "echo 'Nothing to build'"
+     },
+     "dependencies": {
+       "@azure/functions": "^4.7.0",
+       "@azure/msal-node": "^3.5.1",
+       "@microsoft/microsoft-graph-client": "^3.0.0",
+       "dav": "^1.8.0",
+       "dotenv": "^16.5.0",
+       "isomorphic-fetch": "^3.0.0",
+       "jsonwebtoken": "^9.0.0",
+       "luxon": "^3.4.4",
+       "node-fetch": "^2.7.0",
+       "node-ical": "^0.20.1",
+       "p-limit": "^6.2.0",
+       "pg": "^8.15.6",
+       "uuid": "^9.0.0",
+       "xml2js": "^0.6.2"
+     }
+   }
+
+📄 refreshCalendarOrigins/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 refreshTravelTimes/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 test_azurecloud/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "test_azurecloud"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 validate_contact/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get", "post"],
+         "route": "validate_contact"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 3168
+🧩 Totalt antal funktioner: 49
+🧠 Total komplexitetspoäng: 355
+🧪 Antal TODO/FIXME totalt: 0
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+index.js,47,1,3,1,2
+index.js,182,1,28,5,3
+index.js,248,2,24,5,9
+index.js,36,1,1,0,4
+index.js,112,4,8,0,6
+appleCalendar.js,273,6,19,1,3
+getMsToken.js,57,1,5,0,2
+msGraph.js,185,6,15,0,5
+resolveOrigin.js,235,2,37,21,0
+settingsLoader.js,67,2,11,0,1
+verifySettings.js,52,1,8,0,0
+pgPool.js,20,1,0,0,2
+appleMaps.js,121,5,9,0,2
+returnTravelVerifier.js,66,1,4,1,1
+resolveTravelTime.js,72,1,8,0,0
+zoomClient.js,63,3,3,0,1
+sendMail.js,60,2,3,2,1
+index.js,284,3,25,7,7
+debugLogger.js,23,2,2,0,0
+slotEngine.js,322,4,39,8,6
+sync_from_cloud.py,141,0,28,0,2
+sync_to_cloud.py,211,0,41,0,3
+sync_static_tables.py,61,0,6,0,2
+sync.py,82,0,10,0,2
+sync_all.py,148,0,18,0,6
+📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: available_slots_cache
+  • id (uuid)
+  • travel_time_min (integer)
+  • generated_at (timestamp without time zone)
+  • expires_at (timestamp without time zone)
+  • meeting_length (integer)
+  • slot_day (date)
+  • slot_score (integer)
+  • meeting_type (text)
+  • slot_part (text)
+  • slot_iso (text)
+  🔑 [p] available_slots_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: slot_cache
+  • created_at (timestamp without time zone)
+  • slot_day (date)
+  • slots (jsonb)
+  • id (uuid)
+  • meeting_length (integer)
+  • booking_email (text)
+  • meeting_type (text)
+  • slot_part (text)
+  🔑 [p] slot_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: calendar_origin_cache
+  • created_at (timestamp without time zone)
+  • timestamp (timestamp with time zone)
+  • event_date (date)
+  • id (integer)
+  • end_time (timestamp without time zone)
+  • address (text)
+  • source (text)
+  🔑 [c] calendar_origin_cache_source_check: CHECK ((source = ANY (ARRAY['Apple Calendar'::text, 'Microsoft 365'::text])))
+  🔑 [p] calendar_origin_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: travel_time_cache
+  • travel_minutes (integer)
+  • updated_at (timestamp with time zone)
+  • is_fallback (boolean)
+  • hour (integer)
+  • created_at (timestamp with time zone)
+  • to_address (text)
+  • from_address (text)
+  🔑 [u] unique_travel_key: UNIQUE (from_address, to_address, hour)
+  🧪 Topp 5 rader:
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=10, travel_minutes=21, created_at=2025-05-26 12:00:01.232984+00:00, updated_at=2025-05-26 12:00:01.232984+00:00, is_fallback=False
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=14, travel_minutes=21, created_at=2025-05-26 12:00:01.878755+00:00, updated_at=2025-05-26 12:00:01.878755+00:00, is_fallback=False
+
+📁 Tabell: event_log
+  • received_at (timestamp with time zone)
+  • record_id (uuid)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  • id (uuid)
+  • payload (jsonb)
+  • action (text)
+  • event_type (text)
+  • source (text)
+  • table_name (text)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - source=None, event_type=None, payload=None, received_at=2025-05-26 11:30:25.115769+00:00, id=2ac4e176-edc2-4b4a-bebf-2e9d53c0b6db, action=INSERT, table_name=contact, record_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, timestamp=2025-05-26 11:30:25.115769+00:00, booking_id=None
+    - source=None, event_type=booking_created, payload=None, received_at=2025-05-26 11:30:35.906268+00:00, id=e5120865-2baa-405b-970e-2c356ae1a877, action=None, table_name=None, record_id=None, timestamp=2025-05-26 11:30:35.906268+00:00, booking_id=2b69c259-7579-4310-9b48-88b565cdd7d0
+    - source=None, event_type=booking_created, payload=None, received_at=2025-05-26 11:30:58.035990+00:00, id=e685e28c-0cbb-45fd-a2f9-213bd0847116, action=None, table_name=None, record_id=None, timestamp=2025-05-26 11:30:58.035990+00:00, booking_id=be391645-d37a-4f6d-a1d8-48dd08c4f382
+    - source=None, event_type=booking_created, payload=None, received_at=2025-05-26 11:31:22.504101+00:00, id=9db1d894-7f83-48fc-a7d4-29d66dd5c8af, action=None, table_name=None, record_id=None, timestamp=2025-05-26 11:31:22.504101+00:00, booking_id=0b34a27f-fa2a-4185-95b1-60e64e5d12cd
+    - source=None, event_type=None, payload=None, received_at=2025-05-26 11:31:55.898756+00:00, id=6597f521-fed0-447b-b303-eaeb38c7ddf0, action=UPDATE, table_name=contact, record_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, timestamp=2025-05-26 11:31:55.898756+00:00, booking_id=None
+
+📁 Tabell: booking_settings
+  • value (jsonb)
+  • updated_at (timestamp with time zone)
+  • key (text)
+  • value_type (text)
+  🔑 [u] unique_key: UNIQUE (key)
+  🧪 Topp 5 rader:
+    - key=max_days_in_advance, value=30, value_type=int, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=required_fields, value={'base': ['first_name', 'last_name', 'phone', 'company'], 'zoom': [], 'teams': [], 'atclient': ['address', 'postal_code', 'city', 'country'], 'atoffice': [], 'facetime': []}, value_type=json, updated_at=2025-05-23 15:10:13.460480+00:00
+    - key=default_meeting_subject, value=Möte med KLRA Ledningsrådgivning, value_type=string, updated_at=2025-05-25 10:37:53.619684+00:00
+    - key=email_invite_template, value={'body': 'Hej {{first_name}},\n\nHär kommer en inbjudan till vårt möte.\n\nMed vänliga hälsningar,\nKLRA', 'subject': 'Möte med {{company}}'}, value_type=json, updated_at=2025-05-25 10:37:53.619684+00:00
+    - key=analytics_enabled, value=True, value_type=bool, updated_at=2025-05-25 10:37:53.619684+00:00
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • meeting_type (text)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+  🧪 Topp 5 rader:
+    - start_time=2025-05-27 08:00:00+00:00, end_time=2025-05-27 08:10:00+00:00, meeting_type=zoom, metadata={'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'meeting_id': 88409084527, 'online_link': 'https://us05web.zoom.us/j/88409084527?pwd=omCro2i8pgZlBZ8VJVSbgLtgucptOa.1', 'meeting_length': 10}, created_at=2025-05-26 11:30:34.562000+00:00, contact_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, id=2b69c259-7579-4310-9b48-88b565cdd7d0, updated_at=2025-05-26 11:30:34.562000+00:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-05-28 08:00:00+00:00, end_time=2025-05-28 08:10:00+00:00, meeting_type=facetime, metadata={'meeting_length': 10}, created_at=2025-05-26 11:30:57.976000+00:00, contact_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, id=be391645-d37a-4f6d-a1d8-48dd08c4f382, updated_at=2025-05-26 11:30:57.976000+00:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-05-29 08:00:00+00:00, end_time=2025-05-29 09:00:00+00:00, meeting_type=teams, metadata={'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'online_link': 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_MjY3NmVjNDgtODI2OS00NzUzLWI2MDctNTJkOTI2ZjU0NTY4%40thread.v2/0?context=%7b%22Tid%22%3a%226f2f8e0c-22fc-4d93-bf68-72a916e2f35f%22%2c%22Oid%22%3a%2285224b32-2747-4b0c-bc0f-3bb4e7192aa9%22%7d', 'meeting_length': 60}, created_at=2025-05-26 11:31:20.270000+00:00, contact_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, id=0b34a27f-fa2a-4185-95b1-60e64e5d12cd, updated_at=2025-05-26 11:31:20.270000+00:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-05-30 08:00:00+00:00, end_time=2025-05-30 09:30:00+00:00, meeting_type=atclient, metadata={'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Taxgatan 4, 115 45 Stockholm', 'meeting_length': 90}, created_at=2025-05-26 11:32:02.414000+00:00, contact_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, id=6ca102d7-1881-497a-a49c-c22b92bd42f7, updated_at=2025-05-26 11:32:02.414000+00:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-03 08:00:00+00:00, end_time=2025-06-03 09:30:00+00:00, meeting_type=atoffice, metadata={'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Maria Skolgata 79A, 118 53 Stockholm', 'meeting_length': 90}, created_at=2025-05-26 11:32:29.252000+00:00, contact_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, id=11e8d22a-1f83-4a4a-87c6-ca5beefce8aa, updated_at=2025-05-26 11:32:29.252000+00:00, booking_email=daniel.kallberg@mac.com
+
+📁 Tabell: pending_changes
+  • booking_id (uuid)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • payload (jsonb)
+  • id (uuid)
+  • record_id (uuid)
+  • table_name (text)
+  • operation (text)
+  • change_type (text)
+  • direction (text)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - id=3cf0bacb-d197-4879-a572-f20e54c43f2e, table_name=contact, record_id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, change_type=INSERT, direction=out, processed=False, created_at=2025-05-26 11:30:25.115769+00:00, operation=INSERT, payload={'id': 'a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '0709561480', 'company': 'Test AB', 'last_name': 'Källberg', 'first_name': 'Daniel'}, 'created_at': '2025-05-26T11:30:25.115769+00:00', 'updated_at': '2025-05-26T11:30:25.115769+00:00', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=None
+    - id=a96553de-1ec2-46a3-ac30-d478a8532e94, table_name=bookings, record_id=2b69c259-7579-4310-9b48-88b565cdd7d0, change_type=INSERT, direction=out, processed=False, created_at=2025-05-26 11:30:35.854490+00:00, operation=INSERT, payload={'id': '2b69c259-7579-4310-9b48-88b565cdd7d0', 'end_time': '2025-05-27T08:10:00+00:00', 'metadata': {'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'meeting_id': 88409084527, 'online_link': 'https://us05web.zoom.us/j/88409084527?pwd=omCro2i8pgZlBZ8VJVSbgLtgucptOa.1', 'meeting_length': 10}, 'contact_id': 'a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1', 'created_at': '2025-05-26T11:30:34.562+00:00', 'start_time': '2025-05-27T08:00:00+00:00', 'updated_at': '2025-05-26T11:30:34.562+00:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=2b69c259-7579-4310-9b48-88b565cdd7d0
+    - id=898a2d09-d2ce-45b4-9ef7-e15297257725, table_name=bookings, record_id=2b69c259-7579-4310-9b48-88b565cdd7d0, change_type=INSERT, direction=cloud_to_local, processed=False, created_at=2025-05-26 11:30:35.881000+00:00, operation=None, payload=None, booking_id=2b69c259-7579-4310-9b48-88b565cdd7d0
+    - id=6659c7c8-0d48-4eba-a6db-79243e66de8d, table_name=bookings, record_id=be391645-d37a-4f6d-a1d8-48dd08c4f382, change_type=INSERT, direction=out, processed=False, created_at=2025-05-26 11:30:57.977055+00:00, operation=INSERT, payload={'id': 'be391645-d37a-4f6d-a1d8-48dd08c4f382', 'end_time': '2025-05-28T08:10:00+00:00', 'metadata': {'meeting_length': 10}, 'contact_id': 'a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1', 'created_at': '2025-05-26T11:30:57.976+00:00', 'start_time': '2025-05-28T08:00:00+00:00', 'updated_at': '2025-05-26T11:30:57.976+00:00', 'meeting_type': 'facetime', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=be391645-d37a-4f6d-a1d8-48dd08c4f382
+    - id=45a92537-32e6-4428-b599-bdcefe5007d8, table_name=bookings, record_id=be391645-d37a-4f6d-a1d8-48dd08c4f382, change_type=INSERT, direction=cloud_to_local, processed=False, created_at=2025-05-26 11:30:58.006000+00:00, operation=None, payload=None, booking_id=be391645-d37a-4f6d-a1d8-48dd08c4f382
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  • email (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - metadata={'city': 'STOCKHOLM', 'phone': '0709561480', 'address': 'Kungsgatan 4', 'company': 'Test AB', 'country': 'SVERGIE', 'last_name': 'Källberg', 'first_name': 'Daniel', 'postal_code': '112 45'}, created_at=2025-05-26 11:30:25.115769+00:00, id=a2e0ae07-b2ff-43a0-b044-5ef5f3915ce1, booking_email=daniel.kallberg@mac.com, updated_at=2025-05-26 11:31:55.898756+00:00, email=daniel.kallberg@mac.com
+
