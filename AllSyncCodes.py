@@ -13,30 +13,15 @@ total_todo = 0
 import glob
 
 filnamn_lista = [
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/meeting_types/index.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/validate_contact/index.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/getavailableslots/index.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/refreshCalendarOrigins/index.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/refreshTravelTimes/index.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/calendar/appleCalendar.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/calendar/getMsToken.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/calendar/msGraph.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/calendar/resolveOrigin.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/config/settingsLoader.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/config/verifySettings.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/db/pgPool.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/maps/appleMaps.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/maps/returnTravelVerifier.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/maps/resolveTravelTime.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/calendar/zoomClient.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/notification/sendMail.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/bookings/index.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/utils/debugLogger.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/slots/slotEngine.js"
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_from_cloud.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_to_cloud.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_static_tables.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py"
 ]
 
 # Slutlig sammanslagen fil
-output_fil = os.path.join("/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/AllBackEndCodes_history", f"AllBackendCodes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+output_fil = os.path.join("/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/AllSyncCodes_history", f"AllSyncCodes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
 
 saknade_filer = []
 # Läs och skriv innehåll
