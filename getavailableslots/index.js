@@ -14,10 +14,10 @@ module.exports = async function (context, req) {
   const testStart = new Date();
   const testEnd = new Date(Date.now() + 7 * 86400000);
   if (!(testStart instanceof Date) || isNaN(testStart)) {
-    context.log("⛔ TEST Apple – Ogiltigt testStart:", testStart);
+    debugLog("⛔ TEST Apple – Ogiltigt testStart:", testStart);
   }
   if (!(testEnd instanceof Date) || isNaN(testEnd)) {
-    context.log("⛔ TEST Apple – Ogiltigt testEnd:", testEnd);
+    debugLog("⛔ TEST Apple – Ogiltigt testEnd:", testEnd);
   }
   // context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
   try {
@@ -40,7 +40,7 @@ module.exports = async function (context, req) {
     //   context.log("🧾 Apple Event UID:", e.uid, "Start:", e.start, "End:", e.end, "Summary:", e.summary);
     // }
   } catch (err) {
-    context.log("❌ Apple fetchEventsByDateRange FEL:", err.message);
+    debugLog("❌ Apple fetchEventsByDateRange FEL:", err.message);
   }
   const graphClient = createMsGraphClient();
   // context.log("🧪 Azure Function entrypoint nådd");

@@ -320,6 +320,15 @@ async function generateSlotChunks({
     }
   }
 
+  if (isDebug) {
+    for (const day in bestPerGroup) {
+      for (const part in bestPerGroup[day]) {
+        const slot = bestPerGroup[day][part];
+        context.log(`📆 Slot: ${slot.slot_iso} score=${slot.score}`);
+      }
+    }
+  }
+
   const durationMs = Date.now() - context.startTime;
   context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
   return {
