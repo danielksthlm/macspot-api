@@ -12,16 +12,29 @@ const isDebug = process.env.DEBUG === 'true';
 
 async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
   const timezone = settings.timezone || "Europe/Stockholm";
-  // hoursToTry anger tider i UTC. UTC 08:00 motsvarar 10:00 svensk tid, och UTC 12:00 motsvarar 14:00 svensk tid.
-  const hoursToTry = [8, 12]; // UTC 08:00 → 10:00 svensk tid, UTC 12:00 → 14:00 svensk tid
+  // Generera tidsintervall var 20:e minut i svensk tid mellan öppettid och stängningstid, exkl. lunch
+  const open = DateTime.fromISO(`${day}T${settings.open_time}`, { zone: timezone });
+  const close = DateTime.fromISO(`${day}T${settings.close_time}`, { zone: timezone });
+  const lunchStart = DateTime.fromISO(`${day}T${settings.lunch_start}`, { zone: timezone });
+  const lunchEnd = DateTime.fromISO(`${day}T${settings.lunch_end}`, { zone: timezone });
+
+  const startTimes = [];
+  let current = open;
+  while (current < close) {
+    const duringLunch = current >= lunchStart && current < lunchEnd;
+    if (!duringLunch) {
+      startTimes.push(current.toUTC());
+    }
+    current = current.plus({ minutes: 20 });
+  }
   const slots = [];
 
-  for (const hour of hoursToTry) {
-    const eventId = `${day}T${hour.toString().padStart(2, "0")}:00:00.000Z`;
-    const dateObj = new Date(eventId);
+  for (const utcStart of startTimes) {
+    const eventId = utcStart.toISO();
+    const dateObj = utcStart.toJSDate();
     const weekday = dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
-    const slot_part = hour < 12 ? "fm" : "em";
-    const slotHourStr = `${hour.toString().padStart(2, '0')}:00`;
+    const slot_part = utcStart.hour < 12 ? "fm" : "em";
+    const slotHourStr = utcStart.setZone(timezone).toFormat('HH:mm');
     if (slotHourStr >= settings.lunch_start && slotHourStr < settings.lunch_end) {
       if (isDebug) context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
       continue;
@@ -60,7 +73,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const { travelTimeMin } = await resolveTravelTime({
       origin: originInfo.origin,
       destination,
-      hour,
+      hour: utcStart.hour,
       db: pool,
       accessToken: context.accessToken || null,
       context
