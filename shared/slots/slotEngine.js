@@ -263,7 +263,7 @@ async function generateSlotChunks({
       appleClient,
       meeting_length,
       meeting_type,
-      eventCache
+      eventCache: context.eventCache || {}
     });
   });
 
