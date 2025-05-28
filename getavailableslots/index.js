@@ -3,7 +3,7 @@ const createMsGraphClient = require('../shared/calendar/msGraph');
 const createAppleClient = require('../shared/calendar/appleCalendar');
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
-console.log("✅ getavailableslots/index.js laddad");
+// console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
 
 module.exports = async function (context, req) {
@@ -17,7 +17,7 @@ module.exports = async function (context, req) {
   if (!(testEnd instanceof Date) || isNaN(testEnd)) {
     context.log("⛔ TEST Apple – Ogiltigt testEnd:", testEnd);
   }
-  context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
+  // context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
   try {
     const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
     // [BEVIS] Loggning för att visa om Apple CalDAV faktiskt svarar
@@ -30,20 +30,20 @@ module.exports = async function (context, req) {
         context.log("📆 [BEVIS] Apple Event:", ev);
       }
     }
-    context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
-    for (const ev of testAppleRange) {
-      context.log("📆 Apple Event:", ev);
-    }
-    for (const e of testAppleRange) {
-      context.log("🧾 Apple Event UID:", e.uid, "Start:", e.start, "End:", e.end, "Summary:", e.summary);
-    }
+    // context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
+    // for (const ev of testAppleRange) {
+    //   context.log("📆 Apple Event:", ev);
+    // }
+    // for (const e of testAppleRange) {
+    //   context.log("🧾 Apple Event UID:", e.uid, "Start:", e.start, "End:", e.end, "Summary:", e.summary);
+    // }
   } catch (err) {
     context.log("❌ Apple fetchEventsByDateRange FEL:", err.message);
   }
   const graphClient = createMsGraphClient();
-  context.log("🧪 Azure Function entrypoint nådd");
-  context.log("🧪 graphClient.getEvent:", typeof graphClient.getEvent === "function");
-  context.log("🧪 appleClient.getEvent:", typeof appleClient.getEvent === "function");
+  // context.log("🧪 Azure Function entrypoint nådd");
+  // context.log("🧪 graphClient.getEvent:", typeof graphClient.getEvent === "function");
+  // context.log("🧪 appleClient.getEvent:", typeof appleClient.getEvent === "function");
 
   try {
     const client = await db.connect();
@@ -216,7 +216,7 @@ module.exports = async function (context, req) {
     const durationMs = Date.now() - startSlotGen;
     context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     context.log("✅ generateSlotChunks kördes utan fel");
-    context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
+    // context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
     if (chosenSlotsResult?.chosenSlots?.length) {
       for (const slot of chosenSlotsResult.chosenSlots) {
