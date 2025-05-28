@@ -227,6 +227,13 @@ module.exports = async function (context, req) {
     //   }
     // }
 
+    const slots = chosenSlotsResult?.chosenSlots || [];
+    const fm = slots.filter(s => s.slot_part === 'fm');
+    const em = slots.filter(s => s.slot_part === 'em');
+
+    fm.forEach(s => context.log(`☀️ FM: ${s.slot_iso} – score: ${s.score}`));
+    em.forEach(s => context.log(`🌙 EM: ${s.slot_iso} – score: ${s.score}`));
+
     // context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
     context.res = {
       status: 200,
