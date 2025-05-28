@@ -11,6 +11,12 @@ module.exports = async function (context, req) {
   // 🧪 TEST: Logga fetchEventsByDateRange direkt vid start med explicit tidsintervall och robust felhantering
   const testStart = new Date();
   const testEnd = new Date(Date.now() + 7 * 86400000);
+  if (!(testStart instanceof Date) || isNaN(testStart)) {
+    context.log("⛔ TEST Apple – Ogiltigt testStart:", testStart);
+  }
+  if (!(testEnd instanceof Date) || isNaN(testEnd)) {
+    context.log("⛔ TEST Apple – Ogiltigt testEnd:", testEnd);
+  }
   context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
   try {
     const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
@@ -97,6 +103,15 @@ module.exports = async function (context, req) {
 
       const startDateStr = days[0].toISOString().split('T')[0];
       const endDateStr = days[days.length - 1].toISOString().split('T')[0];
+
+      const startDate = days[0];
+      const endDate = days[days.length - 1];
+      if (!(startDate instanceof Date) || isNaN(startDate)) {
+        context.log("⛔ Ogiltigt startDate skickat till fetchEventsByDateRange:", startDate);
+      }
+      if (!(endDate instanceof Date) || isNaN(endDate)) {
+        context.log("⛔ Ogiltigt endDate skickat till fetchEventsByDateRange:", endDate);
+      }
 
       const allBookingsRes = await client.query(
         'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
