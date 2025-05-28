@@ -331,6 +331,7 @@ async function generateSlotChunks({
 
   const durationMs = Date.now() - context.startTime;
   context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
+  context.log(`📤 Response skickas med antal slots: ${chosen.length}`);
   return {
     chosenSlots: chosen.sort((a, b) => new Date(a.slot_iso) - new Date(b.slot_iso)),
     slotMapResult: slotMap,
