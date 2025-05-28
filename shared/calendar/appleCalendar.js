@@ -145,6 +145,8 @@ function createAppleClient(context) {
   }
 
       const items = Array.isArray(responses) ? responses : [responses];
+      context.log("📎 Alla href som jämförs:", items.map(i => i.href || i['D:href']));
+      context.log("🎯 CALDAV path som jämförs mot:", targetPath);
       context.log(`🔍 Antal CalDAV-responses totalt: ${items.length}`);
       const targetPath = new URL(process.env.CALDAV_CALENDAR_URL.trim()).pathname;
       const filteredItems = items.filter(item => {
