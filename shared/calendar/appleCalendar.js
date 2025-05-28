@@ -153,7 +153,7 @@ function createAppleClient(context) {
 
       const results = [];
 
-      for (const item of filteredItems) {
+      for (const item of items) {
         context.log("📥 Rå item-data innan calendar-data-extraktion:", JSON.stringify(item, null, 2));
         let calendarData = item?.['propstat']?.['prop']?.['calendar-data'] || item?.['D:propstat']?.['D:prop']?.['C:calendar-data'];
 
