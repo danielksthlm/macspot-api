@@ -93,6 +93,7 @@ function createAppleClient(context) {
         },
         body: xmlBody
       });
+      context.log("📡 CalDAV response status:", res.status, "res.ok:", res.ok);
 
       const xml = await res.text();
       context.log("📄 Rå CalDAV XML-svar LÄNGD:", xml.length);
@@ -103,6 +104,7 @@ function createAppleClient(context) {
         context.log("⚠️ XML-svar verkar tomt eller för kort – XML:", xml);
       }
       context.log("📄 Rått CalDAV XML-svar (2000 första tecken):", xml.slice(0, 2000));
+      context.log("🧾 Fullt CalDAV XML-svar (trim):", xml.trim().slice(0, 5000));
       context.log("🔎 FULLT XML-svar från CalDAV:\n" + xml);
       const contentType = res.headers.get("content-type");
       context.log("🧾 Content-Type från CalDAV-svar:", contentType);
