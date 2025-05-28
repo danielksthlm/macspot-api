@@ -1,13 +1,8 @@
-
 function createDebugLogger(context) {
   const isDebug = process.env.DEBUG === 'true';
-  const skipReasons = {};
 
   const debugLog = (msg) => {
-    if (msg.startsWith('⛔') || msg.startsWith('🍽️') || msg.startsWith('📛')) {
-      const reason = msg.split(' – ')[0];
-      skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-    }
+    // Optional skip reason tracking removed for production cleanliness
     if (isDebug) {
       if (typeof context?.log === 'function') {
         context.log(msg);
@@ -18,8 +13,7 @@ function createDebugLogger(context) {
   };
 
   return {
-    debugLog,
-    getSkipSummary: () => skipReasons
+    debugLog
   };
 }
 

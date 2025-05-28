@@ -220,14 +220,14 @@ module.exports = async function (context, req) {
     debugLog("✅ generateSlotChunks kördes utan fel");
     // context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
-    if (chosenSlotsResult?.chosenSlots?.length) {
-      for (const slot of chosenSlotsResult.chosenSlots) {
-        const slotHour = new Date(slot.slot_iso).getUTCHours();
-        context.log(`📆 Slot: ${slot.slot_iso}, Part: ${slot.slot_part}, Origin: ${slot.origin}, Source: ${slot.source}`);
-      }
-    }
+    // if (chosenSlotsResult?.chosenSlots?.length) {
+    //   for (const slot of chosenSlotsResult.chosenSlots) {
+    //     const slotHour = new Date(slot.slot_iso).getUTCHours();
+    //     context.log(`📆 Slot: ${slot.slot_iso}, Part: ${slot.slot_part}, Origin: ${slot.origin}, Source: ${slot.source}`);
+    //   }
+    // }
 
-    context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
+    // context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
     context.res = {
       status: 200,
       body: {
@@ -245,6 +245,6 @@ module.exports = async function (context, req) {
     context.log("🔥 FEL i minimal testfunktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
-  debugLog("🎯 Slut på exekvering av getavailableslots");
-  debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+  // debugLog("🎯 Slut på exekvering av getavailableslots");
+  // debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
 };
