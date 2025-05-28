@@ -230,10 +230,13 @@ function createAppleClient(context) {
         context.log("⏱️ Kontroll: dtstart =", dt, ">", new Date().toISOString(), "→", new Date(dt) > new Date());
       }
 
-      const now = new Date();
+      const now = DateTime.local().setZone("Europe/Stockholm");
       const upcoming = results.filter(ev => {
-        const dt = ev.dtstart.replace(/^(\d{8})$/, '$1T000000');
-        return new Date(dt) > now;
+        const dtRaw = ev.dtstart.replace(/^(\d{8})$/, '$1T000000');
+        const dt = DateTime.fromFormat(dtRaw, "yyyyLLdd'T'HHmmss", { zone: "UTC" }).setZone("Europe/Stockholm");
+        const isFuture = dt > now;
+        context.log("🕓 Filter upcoming –", { dtRaw, dt: dt.toISO(), now: now.toISO(), isFuture });
+        return isFuture;
       });
       context.log(`✅ Hittade ${results.length} events totalt`);
       context.log(`📊 upcoming.length: ${upcoming.length}`);
