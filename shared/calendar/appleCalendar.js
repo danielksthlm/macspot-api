@@ -149,13 +149,14 @@ function createAppleClient(context) {
       context.log("📎 Alla href som jämförs:", items.map(i => i.href || i['D:href']));
       context.log("🎯 CALDAV path som jämförs mot:", targetPath);
       context.log(`🔍 Antal CalDAV-responses totalt: ${items.length}`);
-      const filteredItems = items.filter(item => {
+      const filteredItems = items; // TEMP: inaktiverat filter för test
+      context.log("📎 Alla href som jämförs:", items.map(i => i.href || i['D:href']));
+      context.log("🎯 CALDAV path som jämförs mot:", targetPath);
+      for (const item of items) {
         const href = item['href'] || item['D:href'] || '';
-        context.log("🔍 Jämför href:", href.trim(), "med targetPath:", targetPath);
         const match = href.trim().startsWith(targetPath.replace(/\/$/, ''));
-        context.log("🔗 href:", href.trim(), "→ matchar?", match);
-        return match;
-      });
+        context.log("🔗 href:", href.trim(), "→ matchar targetPath?", match);
+      }
 
       const results = [];
 
