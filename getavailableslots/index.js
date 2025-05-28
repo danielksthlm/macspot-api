@@ -14,6 +14,16 @@ module.exports = async function (context, req) {
   context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
   try {
     const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
+    // [BEVIS] Loggning för att visa om Apple CalDAV faktiskt svarar
+    if (!testAppleRange || testAppleRange.length === 0) {
+      context.log("⛔ [BEVIS] Apple CalDAV returnerade inga events – möjligt problem med API eller filter.");
+    } else {
+      context.log(`✅ [BEVIS] Apple CalDAV returnerade ${testAppleRange.length} event(s).`);
+      const preview = testAppleRange.slice(0, 3);
+      for (const ev of preview) {
+        context.log("📆 [BEVIS] Apple Event:", ev);
+      }
+    }
     context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
     for (const ev of testAppleRange) {
       context.log("📆 Apple Event:", ev);
