@@ -270,4 +270,4 @@ function createAppleClient(context) {
   return { getEvent, fetchEventsByDateRange };
 }
 
-module.exports = () => createAppleClient({ log: console.log });
+module.exports = (context) => createAppleClient(context || { log: console.log });
