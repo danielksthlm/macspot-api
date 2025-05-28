@@ -94,11 +94,13 @@ function createAppleClient(context) {
         },
         body: xmlBody
       });
+      console.log("📡 [BEVIS] CalDAV REPORT-anrop skickat, status:", res.status);
       context.log("📡 CalDAV-anrop utfört, statuskod:", res.status);
       context.log("📡 CalDAV response OK?", res.ok);
       context.log("📤 CalDAV fetch response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
 
       const xml = await res.text();
+      console.log("📡 [BEVIS] Fick svar från Apple CalDAV – raw XML första 300 tecken:", xml.slice(0, 300));
       context.log("📤 Fick raw XML (1000 tecken):", xml.slice(0, 1000));
       context.log("🧾 FULL XML-RÅDATA:", xml.slice(0, 10000));
       context.log("📤 Är texten tom?", xml.trim().length === 0);
@@ -112,17 +114,20 @@ function createAppleClient(context) {
       context.log("📄 Fick XML-svar, längd:", xml.length);
 
       if (!xml || xml.length < 20) {
+        console.log("⛔ [BEVIS] Tomt eller ogiltigt XML-svar från Apple.");
         context.log("⚠️ XML-svar verkar tomt – avbryter parsing.");
         return [];
       }
 
       context.log("🧾 FULL XML-RÅDATA:", xml.slice(0, 10000));
+      console.log("🧪 [BEVIS] Startar parsing av Apple CalDAV-XML...");
       context.log("🔍 Försöker parsa XML...");
       const parsed = await xml2js.parseStringPromise(xml, {
         explicitArray: false,
         tagNameProcessors: [xml2js.processors.stripPrefix],
         mergeAttrs: true
       });
+      console.log("✅ [BEVIS] Parsing lyckades – parsed keys:", Object.keys(parsed));
       context.log("🧪 DEBUG – Nycklar på toppnivå i parsed:", Object.keys(parsed));
       context.log("🧪 DEBUG – Är parsed.multistatus.response en array?", Array.isArray(parsed?.multistatus?.response));
       context.log("🧪 DEBUG – Antal responses:", parsed?.multistatus?.response?.length);
@@ -249,6 +254,7 @@ function createAppleClient(context) {
       context.log("📊 Antal upcoming events:", upcoming.length);
       context.log("📤 Returnerar upcoming-events till getavailableslots – första 3:", upcoming.slice(0, 3));
       context.log("✅ fetchEventsByDateRange avslutas – returnerar:", JSON.stringify(upcoming, null, 2));
+      console.log("📤 [BEVIS] Antal events returnerade från Apple:", upcoming.length);
       return upcoming;
     } catch (err) {
       context.log("❌ Fel i fetchEventsByDateRange try/catch:", err.stack || err.message);
