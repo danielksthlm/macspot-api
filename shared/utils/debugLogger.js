@@ -1,4 +1,3 @@
-console.log("🧪 debugLogger.js laddades");
 
 function createDebugLogger(context) {
   const isDebug = process.env.DEBUG === 'true';
@@ -9,8 +8,12 @@ function createDebugLogger(context) {
       const reason = msg.split(' – ')[0];
       skipReasons[reason] = (skipReasons[reason] || 0) + 1;
     }
-    if (isDebug && context?.log) {
-      context.log(msg);
+    if (isDebug) {
+      if (typeof context?.log === 'function') {
+        context.log(msg);
+      } else {
+        console.log(msg);
+      }
     }
   };
 
