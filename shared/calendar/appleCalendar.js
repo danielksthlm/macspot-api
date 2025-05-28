@@ -100,6 +100,7 @@ function createAppleClient(context) {
 
       const xml = await res.text();
       context.log("📤 Fick raw XML (1000 tecken):", xml.slice(0, 1000));
+      context.log("🧾 FULL XML-RÅDATA:", xml.slice(0, 10000));
       context.log("📤 Är texten tom?", xml.trim().length === 0);
       context.log("📤 Innehåller VCALENDAR?", xml.includes("VCALENDAR"));
       context.log("📤 Innehåller VEVENT?", xml.includes("VEVENT"));
@@ -174,6 +175,7 @@ function createAppleClient(context) {
           context.log("📁 Analyserar href:", href);
           context.log("📄 calendarData:", calendarData.slice(0, 500));
         }
+        context.log("📄 preview calendarData (500 tecken):", typeof calendarData === "string" ? calendarData.slice(0, 500) : "(ej sträng)");
 
         const href = item['href'] || item['D:href'];
         if (!calendarData || !calendarData.includes('VEVENT')) {
@@ -187,9 +189,9 @@ function createAppleClient(context) {
             }
           });
           calendarData = await fallbackRes.text();
+          context.log("📄 Fallback calendarData (500 tecken):", calendarData.slice(0, 500));
           context.log("📁 Fallback-URL:", fullUrl);
           context.log("📁 Fallback-response status:", fallbackRes.status);
-          context.log("📁 Fallback calendarData (första 500 tecken):", calendarData.slice(0, 500));
           if (!calendarData.includes("VEVENT")) {
             context.log("⛔ Inget VEVENT i fallback-data – hoppar denna:", href);
             continue;
@@ -199,7 +201,7 @@ function createAppleClient(context) {
         context.log("📄 full calendarData för matchAll():", calendarData.slice(0, 2000));
         context.log("📄 full calendarData (preview 500 tecken):", calendarData.slice(0, 500));
         const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\S\s]*?END:VEVENT/g));
-        context.log("🔍 Antal VEVENT hittade:", vevents.length);
+        context.log("🔍 Antal VEVENT hittade i calendarData:", vevents.length);
         if (vevents.length === 0) {
           const uid = calendarData.match(/UID:(.*)/)?.[1]?.trim();
           context.log("⚠️ Ingen VEVENT hittades i denna calendarData – UID?:", uid);
