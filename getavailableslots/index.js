@@ -101,6 +101,22 @@ module.exports = async function (context, req) {
         return date;
       });
 
+      // 🔍 Validera days[]
+      days = days.filter((d, idx) => {
+        const isValid = d instanceof Date && !isNaN(d);
+        if (!isValid) {
+          context.log(`⛔ Ogiltigt datum i days[${idx}]:`, d);
+        }
+        return isValid;
+      });
+
+      if (days.length === 0) {
+        context.log("⛔ Alla datum i days[] var ogiltiga – avbryter exekvering.");
+        context.res = { status: 500, body: { error: "Inga giltiga datum kunde genereras" } };
+        client.release();
+        return;
+      }
+
       const startDateStr = days[0].toISOString().split('T')[0];
       const endDateStr = days[days.length - 1].toISOString().split('T')[0];
 
