@@ -96,8 +96,10 @@ function createAppleClient(context) {
       });
       context.log("📡 CalDAV-anrop utfört, statuskod:", res.status);
       context.log("📡 CalDAV response OK?", res.ok);
+      context.log("📤 CalDAV fetch response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
 
       const xml = await res.text();
+      context.log("📤 Rå XML-längd:", xml.length);
       context.log("📄 CalDAV response text (första 1000 tecken):", xml.slice(0, 1000));
       context.log("📄 Full längd på svar:", xml.length);
       context.log("📄 Rå XML:", xml.slice(0, 2000));
@@ -116,6 +118,9 @@ function createAppleClient(context) {
         tagNameProcessors: [xml2js.processors.stripPrefix],
         mergeAttrs: true
       });
+      context.log("🧪 DEBUG – Nycklar på toppnivå i parsed:", Object.keys(parsed));
+      context.log("🧪 DEBUG – Är parsed.multistatus.response en array?", Array.isArray(parsed?.multistatus?.response));
+      context.log("🧪 DEBUG – Antal responses:", parsed?.multistatus?.response?.length);
       context.log("🧾 xml2js parsed objekt (första 5000 tecken):", JSON.stringify(parsed).slice(0, 5000));
       context.log("🧾 parsed objekt (10 000 tecken):", JSON.stringify(parsed).slice(0, 10000));
       context.log("✅ xml2js parsing lyckades:", JSON.stringify(parsed, null, 2));
@@ -129,6 +134,7 @@ function createAppleClient(context) {
       }
       context.log("📦 parsed XML till objekt:", JSON.stringify(parsed, null, 2));
       const responses = parsed?.['multistatus']?.['response'] || parsed?.['D:multistatus']?.['D:response'];
+      context.log("📤 Antal responses efter parsing:", responses ? responses.length || 1 : 0);
   if (!responses) {
     context.log("⛔ Inga responses hittades i CalDAV-XML – parsed var:", JSON.stringify(parsed, null, 2));
     return [];
@@ -148,6 +154,7 @@ function createAppleClient(context) {
       const results = [];
 
       for (const item of filteredItems) {
+        context.log("📥 Rå item-data innan calendar-data-extraktion:", JSON.stringify(item, null, 2));
         let calendarData = item?.['propstat']?.['prop']?.['calendar-data'] || item?.['D:propstat']?.['D:prop']?.['C:calendar-data'];
 
         if (!calendarData) {
@@ -164,6 +171,7 @@ function createAppleClient(context) {
         const href = item['href'] || item['D:href'];
         if (!calendarData || !calendarData.includes('VEVENT')) {
           context.log("❔ Ingen VEVENT hittad i calendar-data, försöker fallback:", href);
+          context.log("📥 calendarData saknar VEVENT, startar fallback om möjligt.");
           const fullUrl = `${caldavUrl.replace(/\/$/, '')}${href}`;
           const fallbackRes = await fetch(fullUrl, {
             method: "GET",
@@ -216,6 +224,7 @@ function createAppleClient(context) {
       context.log("📦 Slutresultat – upcoming events:", JSON.stringify(upcoming, null, 2));
       context.log("📊 Antal upcoming events:", upcoming.length);
       context.log("📤 Returnerar upcoming-events till getavailableslots – första 3:", upcoming.slice(0, 3));
+      context.log("✅ fetchEventsByDateRange avslutas – returnerar:", JSON.stringify(upcoming, null, 2));
       return upcoming;
     } catch (err) {
       context.log("❌ Fel i fetchEventsByDateRange try/catch:", err.stack || err.message);
