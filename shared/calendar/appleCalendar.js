@@ -84,6 +84,7 @@ function createAppleClient(context) {
     </C:calendar-query>`;
 
     try {
+      context.log("📡 Initierar CalDAV REPORT-request…");
       const res = await fetch(caldavUrl, {
         method: "REPORT",
         headers: {
@@ -93,22 +94,17 @@ function createAppleClient(context) {
         },
         body: xmlBody
       });
-      context.log("📡 CalDAV response status:", res.status, "res.ok:", res.ok);
+      context.log("📡 CalDAV HTTP-status:", res.status, "res.ok:", res.ok);
 
       const xml = await res.text();
-      context.log("📄 Rå CalDAV XML-svar LÄNGD:", xml.length);
-      context.log("📄 Rå CalDAV XML-svar – START:", xml.slice(0, 500));
-      context.log("📄 Rå CalDAV XML-svar – MITT:", xml.slice(500, 1000));
-      context.log("📄 Rå CalDAV XML-svar – SLUT:", xml.slice(-500));
-      if (!xml || xml.length < 50) {
-        context.log("⚠️ XML-svar verkar tomt eller för kort – XML:", xml);
+      context.log("📄 Fick XML-svar, längd:", xml.length);
+
+      if (!xml || xml.length < 20) {
+        context.log("⚠️ XML-svar verkar tomt – avbryter parsing.");
+        return [];
       }
-      context.log("📄 Rått CalDAV XML-svar (2000 första tecken):", xml.slice(0, 2000));
-      context.log("🧾 Fullt CalDAV XML-svar (trim):", xml.trim().slice(0, 5000));
-      context.log("🔎 FULLT XML-svar från CalDAV:\n" + xml);
-      const contentType = res.headers.get("content-type");
-      context.log("🧾 Content-Type från CalDAV-svar:", contentType);
-      context.log("🔍 XML innan parsing:", xml.slice(0, 2000));
+
+      context.log("🔍 Försöker parsa XML...");
       const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [xml2js.processors.stripPrefix] });
       context.log("✅ xml2js parsing lyckades:", JSON.stringify(parsed, null, 2));
       context.log("✅ xml2js.parseStringPromise lyckades – parsed objekt:");
@@ -203,7 +199,7 @@ function createAppleClient(context) {
       context.log("📤 Returnerar upcoming-events till getavailableslots – första 3:", upcoming.slice(0, 3));
       return upcoming;
     } catch (err) {
-      context.log("❌ Fel i fetchEventsByDateRange():", err.message);
+      context.log("❌ Fel i fetchEventsByDateRange try/catch:", err.stack || err.message);
       return [];
     }
   }
