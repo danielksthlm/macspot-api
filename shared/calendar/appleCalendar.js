@@ -106,8 +106,14 @@ function createAppleClient(context) {
         return [];
       }
 
+      context.log("🧾 FULL XML-RÅDATA:", xml.slice(0, 10000));
       context.log("🔍 Försöker parsa XML...");
-      const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [xml2js.processors.stripPrefix] });
+      const parsed = await xml2js.parseStringPromise(xml, {
+        explicitArray: false,
+        tagNameProcessors: [xml2js.processors.stripPrefix],
+        mergeAttrs: true
+      });
+      context.log("🧾 parsed objekt (10 000 tecken):", JSON.stringify(parsed).slice(0, 10000));
       context.log("✅ xml2js parsing lyckades:", JSON.stringify(parsed, null, 2));
       context.log("✅ xml2js.parseStringPromise lyckades – parsed objekt:");
       context.log(JSON.stringify(parsed, null, 2));
@@ -169,7 +175,9 @@ function createAppleClient(context) {
           }
         }
 
-        const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g));
+        context.log("📄 full calendarData för matchAll():", calendarData.slice(0, 2000));
+        const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\S\s]*?END:VEVENT/g));
+        context.log(`🔍 VEVENT hittades: ${vevents.length} st`);
         for (const vevent of vevents) {
           const v = vevent[0];
           context.log("🧪 VEVENT:", v.slice(0, 300));
