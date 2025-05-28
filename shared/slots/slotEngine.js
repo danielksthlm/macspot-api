@@ -103,6 +103,10 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       slot_part
     };
 
+    if (isDebug) {
+      context.log(`🧪 SLOT TEST: ${slot.slot_iso} part=${slot.slot_part} travel=${slot.travel_time_min}min score=${slot.score}`);
+    }
+
     // --- Score calculation logic ---
     // Använd context.bookingsByDay som källa till befintliga bokningar per dag
     const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
@@ -168,6 +172,11 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
 
   // Returnera endast de två bästa
   const topSlots = [bestFm, bestEm].filter(Boolean);
+  const allSlots = [...fmSlots, ...emSlots];
+  allSlots.forEach(s => {
+    const icon = s.slot_part === 'fm' ? '☀️' : '🌙';
+    context.log(`${icon} ${s.slot_part.toUpperCase()}: ${s.slot_iso} – score: ${s.score}`);
+  });
   return topSlots;
 }
 
