@@ -63,24 +63,14 @@ function createAppleClient(context) {
       return [];
     }
 
-    const rangeStart = DateTime.fromISO(startDate).toFormat("yyyyMMdd'T'HHmmss'Z'");
-    const rangeEnd = DateTime.fromISO(endDate).toFormat("yyyyMMdd'T'HHmmss'Z'");
-
     const xmlBody = `
-    <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
-                      xmlns:D="DAV:">
-      <D:prop>
-        <D:getetag/>
-        <C:calendar-data/>
-      </D:prop>
+    <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">
       <C:filter>
         <C:comp-filter name="VCALENDAR">
-          <C:comp-filter name="VEVENT">
-            <C:time-range start="${rangeStart}" end="${rangeEnd}"/>
-          </C:comp-filter>
+          <C:comp-filter name="VEVENT"/>
         </C:comp-filter>
       </C:filter>
-    </C:calendar-query>`.trim();
+    </C:calendar-query>`;
 
     try {
       const res = await fetch(caldavUrl, {
