@@ -66,6 +66,7 @@ function createAppleClient(context) {
     const startIso = DateTime.fromJSDate(startDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
     const endIso = DateTime.fromJSDate(endDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
     context.log("📅 Använder time-range:", { startIso, endIso });
+    context.log("📆 REPORT-request time range:", { startIso, endIso });
     const xmlBody = `
     <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
                       xmlns:D="DAV:">
@@ -97,11 +98,13 @@ function createAppleClient(context) {
       if (!xml || xml.length < 50) {
         context.log("⚠️ XML-svar verkar tomt eller för kort – XML:", xml);
       }
+      context.log("📄 Rått CalDAV XML-svar (2000 första tecken):", xml.slice(0, 2000));
       context.log("🔎 FULLT XML-svar från CalDAV:\n" + xml);
       const contentType = res.headers.get("content-type");
       context.log("🧾 Content-Type från CalDAV-svar:", contentType);
       context.log("🔍 XML innan parsing:", xml.slice(0, 2000));
       const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [xml2js.processors.stripPrefix] });
+      context.log("✅ xml2js parsing lyckades:", JSON.stringify(parsed, null, 2));
       context.log("✅ xml2js.parseStringPromise lyckades – parsed objekt:");
       context.log(JSON.stringify(parsed, null, 2));
       context.log("🧩 parsed multistatus keys:", Object.keys(parsed));
