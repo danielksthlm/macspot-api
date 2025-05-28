@@ -29,6 +29,47 @@ module.exports = async function (context, req) {
       context.log("📌 Exempel på event:", events[0]);
     }
 
+    // 🔍 Direkt CalDAV-test mot Apple
+    const caldavUrl = process.env.CALDAV_CALENDAR_URL;
+    const username = process.env.CALDAV_USER;
+    const password = process.env.CALDAV_PASSWORD;
+
+    const xmlBody = `
+    <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
+                      xmlns:D="DAV:">
+      <D:prop>
+        <D:getetag/>
+        <C:calendar-data/>
+      </D:prop>
+      <C:filter>
+        <C:comp-filter name="VCALENDAR">
+          <C:comp-filter name="VEVENT">
+            <C:time-range start="20250528T000000Z" end="20250628T000000Z"/>
+          </C:comp-filter>
+        </C:comp-filter>
+      </C:filter>
+    </C:calendar-query>`;
+
+    try {
+      context.log("📡 TEST – skickar CalDAV REPORT direkt till Apple...");
+      const caldavRes = await fetch(caldavUrl, {
+        method: "REPORT",
+        headers: {
+          "Authorization": "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
+          "Depth": "1",
+          "Content-Type": "application/xml"
+        },
+        body: xmlBody
+      });
+
+      const caldavText = await caldavRes.text();
+      context.log("📡 Apple CalDAV response status:", caldavRes.status);
+      context.log("📄 Första 1000 tecken av svar:", caldavText.slice(0, 1000));
+      context.log("🔍 Innehåller VEVENT?", caldavText.includes("VEVENT"));
+    } catch (err) {
+      context.log("❌ Direkt CalDAV-test misslyckades:", err.message);
+    }
+
     context.res = {
       status: 200,
       body: {
