@@ -94,9 +94,12 @@ function createAppleClient(context) {
         },
         body: xmlBody
       });
-      context.log("📡 CalDAV HTTP-status:", res.status, "res.ok:", res.ok);
+      context.log("📡 CalDAV-anrop utfört, statuskod:", res.status);
+      context.log("📡 CalDAV response OK?", res.ok);
 
       const xml = await res.text();
+      context.log("📄 CalDAV response text (första 1000 tecken):", xml.slice(0, 1000));
+      context.log("📄 Full längd på svar:", xml.length);
       context.log("📄 Rå XML:", xml.slice(0, 2000));
       context.log("🔍 Innehåller <href>? →", xml.includes("&lt;href&gt;") || xml.includes("<href>"));
       context.log("📄 Fick XML-svar, längd:", xml.length);
@@ -113,6 +116,7 @@ function createAppleClient(context) {
         tagNameProcessors: [xml2js.processors.stripPrefix],
         mergeAttrs: true
       });
+      context.log("🧾 xml2js parsed objekt (första 5000 tecken):", JSON.stringify(parsed).slice(0, 5000));
       context.log("🧾 parsed objekt (10 000 tecken):", JSON.stringify(parsed).slice(0, 10000));
       context.log("✅ xml2js parsing lyckades:", JSON.stringify(parsed, null, 2));
       context.log("✅ xml2js.parseStringPromise lyckades – parsed objekt:");
@@ -168,7 +172,9 @@ function createAppleClient(context) {
             }
           });
           calendarData = await fallbackRes.text();
-          context.log("📄 Fallback calendarData:", calendarData.slice(0, 500));
+          context.log("📁 Fallback-URL:", fullUrl);
+          context.log("📁 Fallback-response status:", fallbackRes.status);
+          context.log("📁 Fallback calendarData (första 500 tecken):", calendarData.slice(0, 500));
           if (!calendarData.includes("VEVENT")) {
             context.log("⛔ Inget VEVENT i fallback-data – hoppar denna:", href);
             continue;
@@ -207,6 +213,8 @@ function createAppleClient(context) {
       for (const u of upcoming) {
         context.log("📆 Upcoming:", u);
       }
+      context.log("📦 Slutresultat – upcoming events:", JSON.stringify(upcoming, null, 2));
+      context.log("📊 Antal upcoming events:", upcoming.length);
       context.log("📤 Returnerar upcoming-events till getavailableslots – första 3:", upcoming.slice(0, 3));
       return upcoming;
     } catch (err) {
