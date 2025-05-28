@@ -12,7 +12,8 @@ const isDebug = process.env.DEBUG === 'true';
 
 async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
   const timezone = settings.timezone || "Europe/Stockholm";
-  const hoursToTry = [8, 12]; // UTC → 10:00 och 14:00 svensk tid
+  // hoursToTry anger tider i UTC. UTC 08:00 motsvarar 10:00 svensk tid, och UTC 12:00 motsvarar 14:00 svensk tid.
+  const hoursToTry = [8, 12]; // UTC 08:00 → 10:00 svensk tid, UTC 12:00 → 14:00 svensk tid
   const slots = [];
 
   for (const hour of hoursToTry) {
