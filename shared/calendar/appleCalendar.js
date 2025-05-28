@@ -63,11 +63,21 @@ function createAppleClient(context) {
       return [];
     }
 
+    const startIso = DateTime.fromJSDate(startDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
+    const endIso = DateTime.fromJSDate(endDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
+    context.log("📅 Använder time-range:", { startIso, endIso });
     const xmlBody = `
-    <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
+                      xmlns:D="DAV:">
+      <D:prop>
+        <D:getetag/>
+        <C:calendar-data/>
+      </D:prop>
       <C:filter>
         <C:comp-filter name="VCALENDAR">
-          <C:comp-filter name="VEVENT"/>
+          <C:comp-filter name="VEVENT">
+            <C:time-range start="${startIso}" end="${endIso}"/>
+          </C:comp-filter>
         </C:comp-filter>
       </C:filter>
     </C:calendar-query>`;
@@ -84,10 +94,23 @@ function createAppleClient(context) {
       });
 
       const xml = await res.text();
+      if (!xml || xml.length < 50) {
+        context.log("⚠️ XML-svar verkar tomt eller för kort – XML:", xml);
+      }
       context.log("🔎 FULLT XML-svar från CalDAV:\n" + xml);
+      const contentType = res.headers.get("content-type");
+      context.log("🧾 Content-Type från CalDAV-svar:", contentType);
       context.log("🔍 XML innan parsing:", xml.slice(0, 2000));
       const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [xml2js.processors.stripPrefix] });
-  context.log("📦 parsed XML till objekt:", JSON.stringify(parsed, null, 2));
+      context.log("✅ xml2js.parseStringPromise lyckades – parsed objekt:");
+      context.log(JSON.stringify(parsed, null, 2));
+      context.log("🧩 parsed multistatus keys:", Object.keys(parsed));
+      context.log("🧩 parsed.multistatus.response (rå):", JSON.stringify(parsed?.['multistatus']?.['response'], null, 2));
+      context.log("🧩 parsed.D:multistatus.D:response (rå):", JSON.stringify(parsed?.['D:multistatus']?.['D:response'], null, 2));
+      if (!parsed?.['multistatus']?.['response'] && !parsed?.['D:multistatus']?.['D:response']) {
+        context.log("⛔ parsed innehåller inte förväntade response-nycklar:", JSON.stringify(parsed, null, 2));
+      }
+      context.log("📦 parsed XML till objekt:", JSON.stringify(parsed, null, 2));
       const responses = parsed?.['multistatus']?.['response'] || parsed?.['D:multistatus']?.['D:response'];
   if (!responses) {
     context.log("⛔ Inga responses hittades i CalDAV-XML – parsed var:", JSON.stringify(parsed, null, 2));
@@ -108,6 +131,10 @@ function createAppleClient(context) {
 
       for (const item of filteredItems) {
         let calendarData = item?.['propstat']?.['prop']?.['calendar-data'] || item?.['D:propstat']?.['D:prop']?.['C:calendar-data'];
+
+        if (!calendarData) {
+          context.log("⚠️ Ingen calendar-data hittad i item:", JSON.stringify(item, null, 2));
+        }
 
         if (calendarData && typeof calendarData === 'object' && '_' in calendarData) {
           calendarData = calendarData._;
@@ -164,6 +191,7 @@ function createAppleClient(context) {
       for (const u of upcoming) {
         context.log("📆 Upcoming:", u);
       }
+      context.log("📤 Returnerar upcoming-events till getavailableslots – första 3:", upcoming.slice(0, 3));
       return upcoming;
     } catch (err) {
       context.log("❌ Fel i fetchEventsByDateRange():", err.message);

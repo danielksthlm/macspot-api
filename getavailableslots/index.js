@@ -8,11 +8,18 @@ require('../shared/config/verifySettings');
 
 module.exports = async function (context, req) {
   const appleClient = createAppleClient(context);
-  // 🧪 TEST: Logga fetchEventsByDateRange direkt vid start
-  const testAppleRange = await appleClient.fetchEventsByDateRange(new Date(), new Date(Date.now() + 7 * 86400000));
-  context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
-  for (const e of testAppleRange) {
-    context.log("🧾 Apple Event:", e);
+  // 🧪 TEST: Logga fetchEventsByDateRange direkt vid start med explicit tidsintervall och robust felhantering
+  const testStart = new Date();
+  const testEnd = new Date(Date.now() + 7 * 86400000);
+  context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
+  try {
+    const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
+    context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
+    for (const e of testAppleRange) {
+      context.log("🧾 Apple Event UID:", e.uid, "Start:", e.start, "End:", e.end, "Summary:", e.summary);
+    }
+  } catch (err) {
+    context.log("❌ Apple fetchEventsByDateRange FEL:", err.message);
   }
   const graphClient = createMsGraphClient();
   context.log("🧪 Azure Function entrypoint nådd");
