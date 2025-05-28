@@ -68,7 +68,12 @@ function createAppleClient(context) {
       return [];
     }
 
-    const parseDate = (d) => (d instanceof Date ? DateTime.fromJSDate(d) : DateTime.fromISO(d));
+    const parseDate = (d) => {
+      if (d instanceof Date) return DateTime.fromJSDate(d);
+      const parsed = new Date(d);
+      if (!isNaN(parsed.getTime())) return DateTime.fromJSDate(parsed);
+      return DateTime.invalid("Ogiltigt datumformat");
+    };
     const startIso = parseDate(startDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
     const endIso = parseDate(endDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
     context.log("📅 Använder time-range:", { startIso, endIso });
