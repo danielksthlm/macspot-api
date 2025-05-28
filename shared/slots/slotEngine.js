@@ -8,6 +8,8 @@ const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
+const isDebug = process.env.DEBUG === 'true';
+
 async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
   const timezone = settings.timezone || "Europe/Stockholm";
   const hoursToTry = [8, 12]; // UTC → 10:00 och 14:00 svensk tid
@@ -20,22 +22,22 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const slot_part = hour < 12 ? "fm" : "em";
     const slotHourStr = `${hour.toString().padStart(2, '0')}:00`;
     if (slotHourStr >= settings.lunch_start && slotHourStr < settings.lunch_end) {
-      context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
+      if (isDebug) context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
       continue;
     }
     const isWeekend = ["saturday", "sunday"].includes(weekday);
     if (settings.block_weekends && isWeekend) {
-      context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
+      if (isDebug) context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
       continue;
     }
     if (meeting_type === 'atclient' && Array.isArray(settings.allowed_atclient_meeting_days)) {
       if (!settings.allowed_atclient_meeting_days.includes(weekday)) {
-        context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
+        if (isDebug) context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
         continue;
       }
     }
 
-    context.log(`📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder`);
+    if (isDebug) context.log(`📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder`);
     const originInfo = await resolveOriginAddress({
       eventId,
       calendarId: 'system',
@@ -130,7 +132,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       );
     });
     if (hasConflict) {
-      context.log(`⛔ Slot ${eventId} krockar med möte inom buffer – hoppar`);
+      if (isDebug) context.log(`⛔ Slot ${eventId} krockar med möte inom buffer – hoppar`);
       continue;
     }
 
@@ -176,7 +178,7 @@ async function generateSlotChunks({
       [fallbackDate]
     );
     if (rows.length > 0) {
-      context.log(`🟡 Använder slot_cache som fallback (${fallbackDate})`);
+      context.log(`✅ Använder slot_cache som fallback (${fallbackDate})`);
       return {
         chosenSlots: rows[0].slots || [],
         slotMapResult: {},
@@ -211,10 +213,12 @@ async function generateSlotChunks({
       bookingsByDay[date].push({ start, end });
       msAddedCount++;
     }
-    context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
-    context.log("📋 MS Graph – alla händelser:");
-    for (const ev of msEvents) {
-      context.log(`  • ${ev.subject || '(utan titel)'}: ${ev.start} → ${ev.end}`);
+    if (isDebug) {
+      context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
+      context.log("📋 MS Graph – alla händelser:");
+      for (const ev of msEvents) {
+        context.log(`  • ${ev.subject || '(utan titel)'}: ${ev.start} → ${ev.end}`);
+      }
     }
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
@@ -244,13 +248,15 @@ async function generateSlotChunks({
         context.log(`⚠️ Apple event parsing error: ${err.message}`);
       }
     }
-    context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
-    context.log("📋 Apple Calendar – alla händelser:");
-    for (const ev of appleEvents) {
-      context.log(`  • ${ev.summary || '(utan titel)'}: ${ev.dtstart} → ${ev.dtend}`);
-    }
-    if (!Array.isArray(appleEvents)) {
-      context.log("⛔ appleEvents är inte en array – faktiskt värde:", JSON.stringify(appleEvents, null, 2));
+    if (isDebug) {
+      context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
+      context.log("📋 Apple Calendar – alla händelser:");
+      for (const ev of appleEvents) {
+        context.log(`  • ${ev.summary || '(utan titel)'}: ${ev.dtstart} → ${ev.dtend}`);
+      }
+      if (!Array.isArray(appleEvents)) {
+        context.log("⛔ appleEvents är inte en array – faktiskt värde:", JSON.stringify(appleEvents, null, 2));
+      }
     }
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);

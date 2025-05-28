@@ -3,6 +3,8 @@ const createMsGraphClient = require('../shared/calendar/msGraph');
 const createAppleClient = require('../shared/calendar/appleCalendar');
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
+const isDebug = process.env.DEBUG === 'true';
+const debugLog = (msg) => { if (isDebug) context.log(msg); };
 // console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
 
@@ -55,8 +57,8 @@ module.exports = async function (context, req) {
     }
 
     const { email, meeting_type, meeting_length, contact_id } = req.body;
-    context.log("✅ Request body innehåller:", { email, meeting_type });
-    context.log("✅ Steg 1: Anropar DB med contact_id:", contact_id);
+    debugLog("✅ Request body innehåller: " + JSON.stringify({ email, meeting_type }));
+    debugLog("✅ Steg 1: Anropar DB med contact_id: " + contact_id);
 
     // Declare allBookings, days, and contact at the top-level scope of the outer try block
     let allBookings = [];
@@ -68,9 +70,9 @@ module.exports = async function (context, req) {
       const contactRes = await client.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
       contact = contactRes.rows[0];
       if (contact) {
-        context.log("✅ Kontakt hittad:", contact.id);
+        debugLog("✅ Kontakt hittad: " + contact.id);
       } else {
-        context.log("⚠️ Ingen kontakt hittad för contact_id:", contact_id);
+        debugLog("⚠️ Ingen kontakt hittad för contact_id: " + contact_id);
       }
     } catch (err) {
       context.log("🔥 DB-fel:", err.message);
@@ -79,7 +81,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    context.log("✅ Steg 2: Laddar booking_settings...");
+    debugLog("✅ Steg 2: Laddar booking_settings...");
 
     const { getSettings } = require('../shared/config/settingsLoader');
     const verifyBookingSettings = require('../shared/config/verifySettings');
@@ -87,11 +89,11 @@ module.exports = async function (context, req) {
     let settings;
     try {
       settings = await getSettings(context);
-      context.log("✅ Steg 2a: Inställningar laddade – nycklar:", Object.keys(settings).join(', '));
+      debugLog("✅ Steg 2a: Inställningar laddade – nycklar: " + Object.keys(settings).join(', '));
       verifyBookingSettings(settings, context);
-      context.log("✅ Steg 2b: Inställningar verifierade");
+      debugLog("✅ Steg 2b: Inställningar verifierade");
 
-      context.log("✅ Steg 3: Genererar days[] och laddar bokningar");
+      debugLog("✅ Steg 3: Genererar days[] och laddar bokningar");
 
       const maxDays = settings.max_days_in_advance || 14;
       const today = new Date();
@@ -105,7 +107,7 @@ module.exports = async function (context, req) {
       days = days.filter((d, idx) => {
         const isValid = d instanceof Date && !isNaN(d);
         if (!isValid) {
-          context.log(`⛔ Ogiltigt datum i days[${idx}]:`, d);
+          debugLog(`⛔ Ogiltigt datum i days[${idx}]: ` + d);
         }
         return isValid;
       });
@@ -123,17 +125,17 @@ module.exports = async function (context, req) {
       const startDate = days[0];
       const endDate = days[days.length - 1];
       if (!(startDate instanceof Date) || isNaN(startDate)) {
-        context.log("⛔ Ogiltigt startDate skickat till fetchEventsByDateRange:", startDate);
+        debugLog("⛔ Ogiltigt startDate skickat till fetchEventsByDateRange: " + startDate);
       }
       if (!(endDate instanceof Date) || isNaN(endDate)) {
-        context.log("⛔ Ogiltigt endDate skickat till fetchEventsByDateRange:", endDate);
+        debugLog("⛔ Ogiltigt endDate skickat till fetchEventsByDateRange: " + endDate);
       }
 
       const allBookingsRes = await client.query(
         'SELECT start_time, end_time, meeting_type FROM bookings WHERE start_time::date >= $1 AND start_time::date <= $2',
         [startDateStr, endDateStr]
       );
-      context.log("🔢 Antal bokningar hämtade:", allBookingsRes.rows.length);
+      debugLog("🔢 Antal bokningar hämtade: " + allBookingsRes.rows.length);
 
       allBookings = allBookingsRes.rows.map(b => ({
         start: new Date(b.start_time).getTime(),
@@ -147,7 +149,7 @@ module.exports = async function (context, req) {
         bookingsByDay[booking.date].push({ start: booking.start, end: booking.end });
       }
 
-      context.log("✅ Steg 3: Dagar genererade och bokningar summerade");
+      debugLog("✅ Steg 3: Dagar genererade och bokningar summerade");
 
     } catch (err) {
       context.log("🔥 Fel vid laddning/verifiering av settings:", err.message);
@@ -159,7 +161,7 @@ module.exports = async function (context, req) {
     let generateSlotChunks;
     try {
       generateSlotChunks = require('../shared/slots/slotEngine').generateSlotChunks;
-      context.log("✅ generateSlotChunks import ok");
+      debugLog("✅ generateSlotChunks import ok");
     } catch (importErr) {
       context.log("❌ Misslyckades importera generateSlotChunks:", importErr.message);
       context.res = { status: 500, body: { error: "Import error", detail: importErr.message } };
@@ -185,9 +187,9 @@ module.exports = async function (context, req) {
 
     const appleMapsToken = await getAppleMapsAccessToken(context);
     if (appleMapsToken) {
-      context.log("✅ Apple Maps token hämtad – längd:", appleMapsToken.length);
+      debugLog("✅ Apple Maps token hämtad – längd: " + appleMapsToken.length);
     } else {
-      context.log("⚠️ Apple Maps token saknas – fallback kommer att användas");
+      debugLog("⚠️ Apple Maps token saknas – fallback kommer att användas");
     }
 
     // Riktigt anrop till generateSlotChunks
@@ -214,8 +216,8 @@ module.exports = async function (context, req) {
       logSlotContext: true
     });
     const durationMs = Date.now() - startSlotGen;
-    context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
-    context.log("✅ generateSlotChunks kördes utan fel");
+    debugLog(`⏱️ Slotgenerering klar på ${durationMs} ms`);
+    debugLog("✅ generateSlotChunks kördes utan fel");
     // context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
     if (chosenSlotsResult?.chosenSlots?.length) {
@@ -238,11 +240,11 @@ module.exports = async function (context, req) {
       }
     };
     client.release();
-    context.log("✅ Databasanslutning släppt");
+    debugLog("✅ Databasanslutning släppt");
   } catch (err) {
     context.log("🔥 FEL i minimal testfunktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
-  context.log("🎯 Slut på exekvering av getavailableslots");
-  context.log("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+  debugLog("🎯 Slut på exekvering av getavailableslots");
+  debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
 };
