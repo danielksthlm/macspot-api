@@ -145,10 +145,10 @@ function createAppleClient(context) {
   }
 
       const items = Array.isArray(responses) ? responses : [responses];
+      const targetPath = new URL(process.env.CALDAV_CALENDAR_URL.trim()).pathname;
       context.log("📎 Alla href som jämförs:", items.map(i => i.href || i['D:href']));
       context.log("🎯 CALDAV path som jämförs mot:", targetPath);
       context.log(`🔍 Antal CalDAV-responses totalt: ${items.length}`);
-      const targetPath = new URL(process.env.CALDAV_CALENDAR_URL.trim()).pathname;
       const filteredItems = items.filter(item => {
         const href = item['href'] || item['D:href'] || '';
         context.log("🔍 Jämför href:", href.trim(), "med targetPath:", targetPath);
