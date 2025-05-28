@@ -223,6 +223,13 @@ function createAppleClient(context) {
         return aTime - bTime;
       });
 
+      // 🧪 DEBUG-logg före filter
+      context.log("🧪 DEBUG – Apple-events före filter:", JSON.stringify(results, null, 2));
+      for (const ev of results) {
+        const dt = ev.dtstart.replace(/^(\d{8})$/, '$1T000000');
+        context.log("⏱️ Kontroll: dtstart =", dt, ">", new Date().toISOString(), "→", new Date(dt) > new Date());
+      }
+
       const now = new Date();
       const upcoming = results.filter(ev => {
         const dt = ev.dtstart.replace(/^(\d{8})$/, '$1T000000');
