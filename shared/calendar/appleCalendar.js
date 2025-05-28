@@ -197,8 +197,13 @@ function createAppleClient(context) {
         }
 
         context.log("📄 full calendarData för matchAll():", calendarData.slice(0, 2000));
+        context.log("📄 full calendarData (preview 500 tecken):", calendarData.slice(0, 500));
         const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\S\s]*?END:VEVENT/g));
-        context.log(`🔍 VEVENT hittades: ${vevents.length} st`);
+        context.log("🔍 Antal VEVENT hittade:", vevents.length);
+        if (vevents.length === 0) {
+          const uid = calendarData.match(/UID:(.*)/)?.[1]?.trim();
+          context.log("⚠️ Ingen VEVENT hittades i denna calendarData – UID?:", uid);
+        }
         for (const vevent of vevents) {
           const v = vevent[0];
           context.log("🧪 VEVENT:", v.slice(0, 300));
