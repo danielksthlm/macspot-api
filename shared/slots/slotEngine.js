@@ -309,9 +309,13 @@ async function generateSlotChunks({
       try {
         const start = new Date(ev.dtstart).getTime();
         const end = new Date(ev.dtend).getTime();
+        // Log event range inclusion
+        context.log(`📅 AppleEvent start: ${ev.dtstart}, end: ${ev.dtend}, title: ${ev.summary}`);
         if (isNaN(start) || isNaN(end)) continue;
         const date = new Date(ev.dtstart).toISOString().split("T")[0];
         if (!bookingsByDay[date]) bookingsByDay[date] = [];
+        // Log before adding to bookingsByDay
+        context.log(`✅ Lägger till blockering i bookingsByDay: ${date} → ${new Date(start).toISOString()} → ${new Date(end).toISOString()}`);
         bookingsByDay[date].push({ start, end });
         appleAddedCount++;
       } catch (err) {
