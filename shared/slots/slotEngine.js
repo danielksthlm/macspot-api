@@ -189,6 +189,16 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       });
       continue;
     }
+    // Blockera även om sloten börjar exakt när ett event börjar, eller slutar exakt när ett event slutar
+    const hardMatchConflict = existing.some(b => {
+      return (
+        b.start === slotStart || b.end === slotEnd
+      );
+    });
+    if (hardMatchConflict) {
+      context.log(`⛔ Slot ${eventId} börjar eller slutar exakt när ett event börjar/slutar – hoppar`);
+      continue;
+    }
 
     // Standardpoäng är 10. Dra av poäng för stor lucka före eller efter.
     let fragmentationPenalty = 0;

@@ -347,6 +347,16 @@ window.CalendarModule = {
     }, 'POST')
     .then(data => {
       console.log('🧪 Rått slotData från API:', data);
+      // --- DEBUG: Kontrollera om slot för 2025-05-30 finns ---
+      const debugTarget = '2025-05-30';
+      if (data.slots.some(s => s.slot_iso.includes(debugTarget))) {
+        console.warn('🔍 OBS! Slot finns för debugTarget:', debugTarget);
+        data.slots
+          .filter(s => s.slot_iso.includes(debugTarget))
+          .forEach(s => console.log('⏰ Slot:', s.slot_iso));
+      } else {
+        console.warn('✅ Ingen slot visas för', debugTarget);
+      }
       if (!Array.isArray(data.slots)) {
         console.warn('⚠️ API svarar utan slot-array:', data);
         return;
