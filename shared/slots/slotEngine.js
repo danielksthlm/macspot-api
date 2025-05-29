@@ -1,7 +1,5 @@
 console.log("🧪 slotEngine.js laddades");
-
 const pool = require('../db/pgPool');
-
 const { DateTime } = require("luxon");
 const Holidays = require('date-holidays');
 const { resolveOriginAddress } = require("../calendar/resolveOrigin");
