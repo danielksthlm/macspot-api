@@ -21,8 +21,9 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
   const startTimes = [];
   let current = open;
   while (current < close) {
-    const duringLunch = current >= lunchStart && current < lunchEnd;
-    if (!duringLunch) {
+    const end = current.plus({ minutes: meeting_length });
+    const overlapsLunch = current < lunchEnd && end > lunchStart;
+    if (!overlapsLunch) {
       startTimes.push(current.toUTC());
     }
     current = current.plus({ minutes: 20 });
