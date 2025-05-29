@@ -248,10 +248,11 @@ module.exports = async function (context, req) {
     };
     client.release();
     debugLog("✅ Databasanslutning släppt");
+    debugLog("🎯 Slut på exekvering av getavailableslots");
   } catch (err) {
     context.log("🔥 FEL i minimal testfunktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
-  // debugLog("🎯 Slut på exekvering av getavailableslots");
-  // debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+  debugLog("🎯 Slut på exekvering av getavailableslots");
+  debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
 };
