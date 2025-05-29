@@ -167,7 +167,17 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       );
     });
     if (hasConflict) {
-      if (isDebug) context.log(`⛔ Slot ${eventId} krockar med möte inom buffer – hoppar`);
+      context.log(`⛔ Slot ${eventId} krockar med möte inom buffer (${settings.buffer_between_meetings || 0} min) – hoppar`);
+      existing.forEach(b => {
+        const bStartStr = new Date(b.start).toISOString();
+        const bEndStr = new Date(b.end).toISOString();
+        if (
+          b.start < slotEnd + bufferMs &&
+          b.end > slotStart - bufferMs
+        ) {
+          context.log(`   ⚠️  Konflikt med: ${bStartStr} → ${bEndStr}`);
+        }
+      });
       continue;
     }
 
