@@ -9,7 +9,6 @@ const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
-const Holidays = require('date-holidays');
 const hd = new Holidays('SE'); // Svenska helgdagar
 
 const isDebug = process.env.DEBUG === 'true';
