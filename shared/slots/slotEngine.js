@@ -6,9 +6,7 @@ const { resolveOriginAddress } = require("../calendar/resolveOrigin");
 const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
-
 const hd = new Holidays('SE'); // Svenska helgdagar
-
 const isDebug = process.env.DEBUG === 'true';
 
 async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
