@@ -3,15 +3,20 @@ console.log("🧪 slotEngine.js laddades");
 const pool = require('../db/pgPool');
 
 const { DateTime } = require("luxon");
+const Holidays = require('date-holidays');
 const { resolveOriginAddress } = require("../calendar/resolveOrigin");
 const { resolveTravelTime } = require("../maps/resolveTravelTime");
 const msGraph = require("../calendar/msGraph");
 const appleCalendar = require("../calendar/appleCalendar");
 
+const Holidays = require('date-holidays');
+const hd = new Holidays('SE'); // Svenska helgdagar
+
 const isDebug = process.env.DEBUG === 'true';
 
 async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
   const timezone = settings.timezone || "Europe/Stockholm";
+  const holidays = settings.block_holidays ? new Holidays('SE') : null;
   // Generera tidsintervall var 20:e minut i svensk tid mellan öppettid och stängningstid, exkl. lunch
   const open = DateTime.fromISO(`${day}T${settings.open_time}`, { zone: timezone });
   const close = DateTime.fromISO(`${day}T${settings.close_time}`, { zone: timezone });
@@ -24,6 +29,12 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const end = current.plus({ minutes: meeting_length });
     const overlapsLunch = current < lunchEnd && end > lunchStart;
     if (!overlapsLunch) {
+      const isHoliday = settings.block_holidays && holidays?.isHoliday(new Date(current.toISO()));
+      if (isHoliday) {
+        if (isDebug) context.log(`⛔ Helgdag – hoppar ${current.toISODate()}`);
+        current = current.plus({ minutes: 20 });
+        continue;
+      }
       startTimes.push(current.toUTC());
     }
     current = current.plus({ minutes: 20 });
@@ -50,6 +61,12 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
         if (isDebug) context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
         continue;
       }
+    }
+
+    const isHoliday = hd.isHoliday(dateObj);
+    if (settings.block_holidays && isHoliday) {
+      if (isDebug) context.log(`🎌 Helgdag ${isHoliday[0]?.name} – hoppar ${eventId}`);
+      continue;
     }
 
     if (isDebug) context.log(`📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder`);
