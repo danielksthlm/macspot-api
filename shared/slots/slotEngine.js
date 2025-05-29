@@ -20,6 +20,12 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
 
   const startTimes = [];
   let current = open;
+  // Använd context.bookingsByDay som källa till befintliga bokningar per dag
+  const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
+  // Vi behöver slotDateIso för denna dag
+  // day är en ISO-sträng för dagen, t.ex. "2024-06-08"
+  const slotDateIso = day;
+  const existing = bookingsByDay[slotDateIso] || [];
   while (current < close) {
     const end = current.plus({ minutes: meeting_length });
     const overlapsLunch = current < lunchEnd && end > lunchStart;
@@ -51,18 +57,11 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     current = current.plus({ minutes: 20 });
   }
   const slots = [];
-
-  // Använd context.bookingsByDay som källa till befintliga bokningar per dag
-  const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
-  // Vi behöver slotDateIso för denna dag
-  // day är en ISO-sträng för dagen, t.ex. "2024-06-08"
-  const slotDateIso = day;
   // Beräkna dagens start och slut
   const dayStart = new Date(`${slotDateIso}T${settings.open_time}`);
   const dayEnd = new Date(`${slotDateIso}T${settings.close_time}`);
   dayStart.setHours(parseInt(settings.open_time.split(':')[0], 10), parseInt(settings.open_time.split(':')[1], 10));
   dayEnd.setHours(parseInt(settings.close_time.split(':')[0], 10), parseInt(settings.close_time.split(':')[1], 10));
-  const existing = bookingsByDay[slotDateIso] || [];
   const fullDayStart = dayStart.getTime();
   const fullDayEnd = dayEnd.getTime();
   const fullDayBlock = existing.some(ev => ev.start <= fullDayStart && ev.end >= fullDayEnd);
