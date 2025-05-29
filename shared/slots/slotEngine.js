@@ -68,6 +68,23 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       continue;
     }
 
+    // --- Kontrollera om hela dagen blockeras av ett heldagsevent ---
+    // Använd context.bookingsByDay som källa till befintliga bokningar per dag
+    const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
+    const slotDateIso = dateObj.toISOString().split("T")[0];
+    const dayStart = new Date(dateObj);
+    const dayEnd = new Date(dateObj);
+    dayStart.setHours(parseInt(settings.open_time.split(':')[0], 10), parseInt(settings.open_time.split(':')[1], 10));
+    dayEnd.setHours(parseInt(settings.close_time.split(':')[0], 10), parseInt(settings.close_time.split(':')[1], 10));
+    const existing = bookingsByDay[slotDateIso] || [];
+    const fullDayStart = dayStart.getTime();
+    const fullDayEnd = dayEnd.getTime();
+    const fullDayBlock = existing.some(ev => ev.start <= fullDayStart && ev.end >= fullDayEnd);
+    if (fullDayBlock) {
+      context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
+      return [];
+    }
+
     if (isDebug) context.log(`📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder`);
     const originInfo = await resolveOriginAddress({
       eventId,
@@ -102,11 +119,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     }
 
     const endTime = new Date(dateObj.getTime() + meeting_length * 60000);
-    const dayStart = new Date(dateObj);
-    const dayEnd = new Date(dateObj);
-    dayStart.setHours(parseInt(settings.open_time.split(':')[0], 10), parseInt(settings.open_time.split(':')[1], 10));
-    dayEnd.setHours(parseInt(settings.close_time.split(':')[0], 10), parseInt(settings.close_time.split(':')[1], 10));
-
+    // dayStart och dayEnd redan definierade ovan
     if (endTime > dayEnd) {
       context.log(`⛔ Slot ${eventId} går utanför öppettid (${settings.close_time}) – hoppar`);
       continue;
@@ -138,20 +151,15 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     }
 
     // --- Score calculation logic ---
-    // Använd context.bookingsByDay som källa till befintliga bokningar per dag
-    const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
-    const slotDateIso = dateObj.toISOString().split("T")[0];
     const slotStart = dateObj.getTime();
     const slotEnd = slotStart + meeting_length * 60000;
-
-    const existing = bookingsByDay[slotDateIso] || [];
+    // existing redan definierad ovan
     let gapBefore = null;
     let gapAfter = null;
 
     for (const b of existing) {
       const bStart = b.start;
       const bEnd = b.end;
-
       if (bEnd <= slotStart) {
         gapBefore = slotStart - bEnd;
       } else if (bStart >= slotEnd && gapAfter === null) {
