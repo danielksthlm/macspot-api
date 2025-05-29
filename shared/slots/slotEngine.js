@@ -30,6 +30,22 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
         current = current.plus({ minutes: 20 });
         continue;
       }
+      // --- NY KOD: Kontrollera om sloten krockar med event i bookingsByDay (inkl. heldagsevent) ---
+      const slotStartMs = current.toMillis();
+      const slotEndMs = end.toMillis();
+      const bufferMsEarly = (settings.buffer_between_meetings || 0) * 60000;
+      const slotConflictsWithEvent = existing.some(ev => {
+        return (
+          ev.start < slotEndMs + bufferMsEarly &&
+          ev.end > slotStartMs - bufferMsEarly
+        );
+      });
+      if (slotConflictsWithEvent) {
+        if (isDebug) context.log(`⛔ Slot krockar med event i bookingsByDay – hoppar ${current.toISO()}`);
+        current = current.plus({ minutes: 20 });
+        continue;
+      }
+      // --- SLUT NY KOD ---
       startTimes.push(current.toUTC());
     }
     current = current.plus({ minutes: 20 });
