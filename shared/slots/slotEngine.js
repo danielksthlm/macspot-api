@@ -200,14 +200,6 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       continue;
     }
 
-    // Blockera slotar som ligger helt inom ett befintligt event
-    const isWithinAnyEvent = existing.some(b => {
-      return slotStart >= b.start && slotEnd <= b.end;
-    });
-    if (isWithinAnyEvent) {
-      context.log(`⛔ Slot ${eventId} ligger helt inom ett event – hoppar`);
-      continue;
-    }
 
     // Standardpoäng är 10. Dra av poäng för stor lucka före eller efter.
     let fragmentationPenalty = 0;
@@ -216,15 +208,6 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     }
 
     slot.score = 10 - fragmentationPenalty;
-
-    // Blockera slotar som ligger helt inom ett befintligt event
-    const isWithinAnyEvent = existing.some(b => {
-      return slotStart >= b.start && slotEnd <= b.end;
-    });
-    if (isWithinAnyEvent) {
-      context.log(`⛔ Slot ${eventId} ligger helt inom ett event – hoppar`);
-      continue;
-    }
 
     slots.push(slot);
   }
