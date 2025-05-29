@@ -61,7 +61,11 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
   const fullDayStart = DateTime.fromISO(`${slotDateIso}T${settings.open_time}`, { zone: timezone }).toMillis();
   const fullDayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toMillis();
   const dayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toJSDate();
-  const fullDayBlock = existing.some(ev => ev.start <= fullDayStart && ev.end >= fullDayEnd);
+  const fullDayBlock = existing.some(ev => {
+    const evStart = Number(ev.start);
+    const evEnd = Number(ev.end);
+    return evStart <= fullDayStart && evEnd >= fullDayEnd;
+  });
   if (fullDayBlock) {
     context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
     return [];
@@ -339,8 +343,9 @@ async function generateSlotChunks({
     let appleAddedCount = 0;
     for (const ev of appleEvents) {
       try {
-        const start = new Date(ev.dtstart).getTime();
-        const end = new Date(ev.dtend).getTime();
+        // Ensure start and end are cast to numbers explicitly
+        const start = Number(new Date(ev.dtstart));
+        const end = Number(new Date(ev.dtend));
         // Log event range inclusion
         context.log(`📅 AppleEvent start: ${ev.dtstart}, end: ${ev.dtend}, title: ${ev.summary}`);
         if (isNaN(start) || isNaN(end)) continue;
