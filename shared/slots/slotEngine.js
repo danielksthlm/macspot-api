@@ -60,6 +60,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
   // Beräkna dagens start och slut
   const fullDayStart = DateTime.fromISO(`${slotDateIso}T${settings.open_time}`, { zone: timezone }).toMillis();
   const fullDayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toMillis();
+  const dayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toJSDate();
   const fullDayBlock = existing.some(ev => ev.start <= fullDayStart && ev.end >= fullDayEnd);
   if (fullDayBlock) {
     context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
