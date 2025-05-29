@@ -58,12 +58,8 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
   }
   const slots = [];
   // Beräkna dagens start och slut
-  const dayStart = new Date(`${slotDateIso}T${settings.open_time}`);
-  const dayEnd = new Date(`${slotDateIso}T${settings.close_time}`);
-  dayStart.setHours(parseInt(settings.open_time.split(':')[0], 10), parseInt(settings.open_time.split(':')[1], 10));
-  dayEnd.setHours(parseInt(settings.close_time.split(':')[0], 10), parseInt(settings.close_time.split(':')[1], 10));
-  const fullDayStart = dayStart.getTime();
-  const fullDayEnd = dayEnd.getTime();
+  const fullDayStart = DateTime.fromISO(`${slotDateIso}T${settings.open_time}`, { zone: timezone }).toMillis();
+  const fullDayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toMillis();
   const fullDayBlock = existing.some(ev => ev.start <= fullDayStart && ev.end >= fullDayEnd);
   if (fullDayBlock) {
     context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
