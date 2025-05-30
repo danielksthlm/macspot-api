@@ -193,27 +193,6 @@ module.exports = async function (context, req) {
       debugLog("⚠️ Apple Maps token saknas – fallback kommer att användas");
     }
 
-    // Initialize arrays for blocked slots logging
-    const blockedWeekend = [];
-    const blockedHoliday = [];
-    const blockedConflict = [];
-
-    // Wrap debugHelper.log to intercept specific block logs if isDebug
-    if (isDebug) {
-      const originalLog = debugHelper.log.bind(debugHelper);
-      debugHelper.log = (msg) => {
-        if (msg.startsWith("⛔ Helg blockerad")) {
-          blockedWeekend.push(msg);
-        } else if (msg.startsWith("⛔ Helgdag")) {
-          blockedHoliday.push(msg);
-        } else if (msg.startsWith("⛔ Slot krockar med event")) {
-          blockedConflict.push(msg);
-        } else {
-          originalLog(msg);
-        }
-      };
-    }
-
     // Riktigt anrop till generateSlotChunks
     const slotGroupPicked = {};
     const startSlotGen = Date.now();
@@ -241,19 +220,6 @@ module.exports = async function (context, req) {
     debugLog(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     debugLog("✅ generateSlotChunks kördes utan fel");
     debugLog("🔎 Efter generateSlotChunks – dags att filtrera FM/EM");
-
-    // After slot generation, log collected blocked slots if any
-    if (isDebug) {
-      if (blockedWeekend.length) {
-        debugLog("⛔ Helg blockerad – följande slots hoppades:\n" + blockedWeekend.join('\n'));
-      }
-      if (blockedHoliday.length) {
-        debugLog("⛔ Helgdag – följande slots hoppades:\n" + blockedHoliday.join('\n'));
-      }
-      if (blockedConflict.length) {
-        debugLog("⛔ Slot krockar med event – följande slots hoppades:\n" + blockedConflict.join('\n'));
-      }
-    }
 
     const slots = Array.isArray(chosenSlotsResult?.chosenSlots) ? chosenSlotsResult.chosenSlots : [];
     const fallbackCount = slots.filter(s => s.source === 'fallback').length;
