@@ -1,4 +1,4 @@
-console.log("🧪 returnTravelVerifier.js laddades");
+const DEBUG = process.env.DEBUG === 'true';
 const { URL } = require('url');
 
 async function verifyReturnTravelFeasibility({
@@ -16,7 +16,7 @@ async function verifyReturnTravelFeasibility({
   const prevEnd = new Date(previousBooking.end);
 
   if (from === to) {
-    context.log(`💾 Returrestid är 0 min (${from} → ${to}) – ingen cache behövs`);
+    if (DEBUG) context.log(`💾 Returrestid är 0 min (${from} → ${to}) – ingen cache behövs`);
     return { isFeasible: true };
   }
 
@@ -46,19 +46,19 @@ async function verifyReturnTravelFeasibility({
         ON CONFLICT (from_address, to_address, hour)
         DO UPDATE SET travel_minutes = EXCLUDED.travel_minutes
       `, [from, to, hour, returnMinutes]);
-      context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
+      if (DEBUG) context.log(`💾 Returrestid sparad: ${returnMinutes} min (${from} → ${to} @ ${hour}:00)`);
     } else {
-      context.log(`⚠️ Hoppar caching av retur – saknar from_address (${from}) eller to_address (${to})`);
+      if (DEBUG) context.log(`⚠️ Hoppar caching av retur – saknar from_address (${from}) eller to_address (${to})`);
     }
 
     if (arrivalTime > slotTime) {
-      context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
+      if (DEBUG) context.log(`⛔ Slot ${slotTime.toISOString()} avvisad – retur från tidigare möte hinner inte fram i tid (ankomst ${arrivalTime.toISOString()})`);
       return { isFeasible: false, reason: 'retur hinner inte fram', arrivalTime };
     }
 
     return { isFeasible: true };
   } catch (err) {
-    context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
+    if (DEBUG) context.log(`⚠️ Kunde inte verifiera returrestid från tidigare möte: ${err.message}`);
     return { isFeasible: true }; // fail open
   }
 }

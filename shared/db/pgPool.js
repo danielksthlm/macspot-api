@@ -4,9 +4,6 @@ require('dotenv').config();
 const useSSL = process.env.PG_USE_SSL === 'true';
 const sslConfig = useSSL ? { rejectUnauthorized: false } : false;
 
-console.log("🧪 shared/db/pgPool.js laddades");
-console.log("🔍 PG_USE_SSL:", process.env.PG_USE_SSL);
-console.log("🔍 ssl config:", sslConfig);
 
 const pool = new Pool({
   user: process.env.PGUSER,

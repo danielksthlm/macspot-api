@@ -4,6 +4,7 @@ const { DateTime } = require("luxon");
 
 function createAppleClient(context) {
   const debugLog = (...args) => { if (process.env.DEBUG === 'true') context.log(...args); };
+  const DEBUG = process.env.DEBUG === 'true';
 
   async function getEvent(calendarId, eventId) {
     const caldavUrl = process.env.CALDAV_CALENDAR_URL;
@@ -11,7 +12,7 @@ function createAppleClient(context) {
     const password = process.env.CALDAV_PASSWORD;
 
     if (!caldavUrl || !username || !password) {
-      context.log("⚠️ Missing CalDAV credentials");
+      if (DEBUG) context.log("⚠️ Missing CalDAV credentials");
       return null;
     }
 
@@ -25,7 +26,7 @@ function createAppleClient(context) {
       });
 
       if (!icsRes.ok) {
-        context.log(`⚠️ Misslyckades hämta ICS-fil: ${eventUrl}`);
+        if (DEBUG) context.log(`⚠️ Misslyckades hämta ICS-fil: ${eventUrl}`);
         return null;
       }
 
@@ -37,15 +38,15 @@ function createAppleClient(context) {
       const endTime = endTimeMatch ? endTimeMatch[1].trim() : null;
 
       if (location && endTime) {
-        context.log("✅ Hittade event med location och endTime:", { location, endTime });
+        if (DEBUG) context.log("✅ Hittade event med location och endTime:", { location, endTime });
         return { location, endTime };
       }
 
-      context.log("⚠️ Inget event med både location och endTime hittades.");
+      if (DEBUG) context.log("⚠️ Inget event med både location och endTime hittades.");
       return null;
 
     } catch (err) {
-      context.log("⚠️ Error i getEvent():", err.message);
+      if (DEBUG) context.log("⚠️ Error i getEvent():", err.message);
       return null;
     }
   }
@@ -57,7 +58,7 @@ function createAppleClient(context) {
 
 
     if (!caldavUrl || !username || !password) {
-      context.log("⚠️ Missing CalDAV credentials");
+      if (DEBUG) context.log("⚠️ Missing CalDAV credentials");
       return [];
     }
 
@@ -99,7 +100,7 @@ function createAppleClient(context) {
       const xml = await res.text();
 
       if (!xml || xml.length < 20) {
-        context.log("⚠️ XML-svar verkar tomt – avbryter parsing.");
+        if (DEBUG) context.log("⚠️ XML-svar verkar tomt – avbryter parsing.");
         return [];
       }
 
@@ -112,7 +113,7 @@ function createAppleClient(context) {
       const responses = parsed?.['multistatus']?.['response'] || parsed?.['D:multistatus']?.['D:response'];
 
       if (!responses) {
-        context.log("⚠️ Inga responses hittades i CalDAV-XML");
+        if (DEBUG) context.log("⚠️ Inga responses hittades i CalDAV-XML");
         return [];
       }
 
@@ -173,7 +174,7 @@ function createAppleClient(context) {
 
       return upcoming;
     } catch (err) {
-      context.log("❌ Fel i fetchEventsByDateRange try/catch:", err.stack || err.message);
+      if (DEBUG) context.log("❌ Fel i fetchEventsByDateRange try/catch:", err.stack || err.message);
       return [];
     }
   }
