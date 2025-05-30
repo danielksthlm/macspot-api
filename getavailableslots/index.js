@@ -246,6 +246,8 @@ module.exports = async function (context, req) {
     
     // Moved this debugLog line here, just before sending response:
     debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+    debugLog("📋 getavailableslots – sista logg före response.");
+    context.log("✅ getavailableslots – context.res sätts nu, detta är sista logg.");
 
     // context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
@@ -291,6 +293,7 @@ module.exports = async function (context, req) {
       };
       context.log("✅ Azure Function getavailableslots har returnerat response.");
     }
+
 
   } catch (err) {
     context.log("🔥 FEL i funktion:", err.message);
