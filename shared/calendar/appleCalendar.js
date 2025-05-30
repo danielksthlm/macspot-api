@@ -149,6 +149,7 @@ function createAppleClient(context) {
         const vevents = Array.from(calendarData.matchAll(/BEGIN:VEVENT[\S\s]*?END:VEVENT/g));
         for (const vevent of vevents) {
           const v = vevent[0];
+          if (DEBUG) context.log("🧪 VEVENT RAW:\n", v);
           const summary = v.match(/SUMMARY:(.*)/)?.[1]?.trim() ?? "–";
           const dtstart = v.match(/DTSTART(?:;[^:]*)?:(\d{8}(T\d{6})?)/)?.[1]?.trim() ?? "–";
           const dtend = v.match(/DTEND(?:;[^:]*)?:(\d{8}(T\d{6})?)/)?.[1]?.trim() ?? "–";
@@ -166,6 +167,7 @@ function createAppleClient(context) {
           const end = parseToEpoch(dtend);
 
           results.push({ summary, dtstart, dtend, location, uid, start, end });
+          if (DEBUG) context.log("✅ Parsed Apple Event:", { summary, dtstart, dtend, location, uid });
         }
       }
 
