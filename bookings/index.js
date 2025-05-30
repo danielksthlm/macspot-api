@@ -147,8 +147,6 @@ module.exports = async function (context, req) {
         });
         if (!eventResult) {
           context.log("⚠️ createEvent returnerade null");
-        } else {
-          debugLog("📨 createEvent respons från Graph:", JSON.stringify(eventResult, null, 2));
         }
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
@@ -170,8 +168,7 @@ module.exports = async function (context, req) {
 
         bookingFields.synced_to_calendar = true;
       } catch (err) {
-        debugLog('⚠️ createEvent misslyckades: ' + err.message);
-        debugLog("❌ Detaljerat fel från createEvent:", err);
+        // loggar för misslyckade createEvent tas bort enligt instruktion
       }
     } else if (meeting_type.toLowerCase() === 'zoom') {
       try {
@@ -208,14 +205,11 @@ module.exports = async function (context, req) {
             body: emailBody,
           });
           debugLog('✅ Zoominbjudan skickad via e-post');
-          debugLog(`🔗 Länk som skickades: ${online_link}`);
         } catch (emailErr) {
-          debugLog('⚠️ Misslyckades skicka e-post för Zoom:', emailErr.message);
         }
 
         bookingFields.synced_to_calendar = true;
       } catch (err) {
-        debugLog('⚠️ Zoom createMeeting failed:', err.message);
       }
     } else if (meeting_type.toLowerCase() === 'facetime') {
       if (combinedMetadata.phone) {
@@ -231,12 +225,9 @@ module.exports = async function (context, req) {
 
           await sendMail({ to: email, subject: emailSubject, body: emailBody });
           debugLog('✅ FaceTime-inbjudan skickad via e-post');
-          debugLog(`🔗 Länk som skickades: ${online_link}`);
         } catch (emailErr) {
-          debugLog('⚠️ Misslyckades skicka e-post för FaceTime:', emailErr.message);
         }
       } else {
-        debugLog('⚠️ Saknar telefonnummer för FaceTime – ingen länk skapad');
       }
     } else if (meeting_type.toLowerCase() === 'atclient') {
       combinedMetadata.location = combinedMetadata.location || combinedMetadata.address || settings.default_home_address || 'Hos kund';
@@ -249,9 +240,7 @@ module.exports = async function (context, req) {
 
         await sendMail({ to: email, subject: emailSubject, body: emailBody });
         debugLog('✅ atClient-inbjudan skickad via e-post');
-        debugLog(`🔗 Länk som skickades: ${online_link}`);
       } catch (emailErr) {
-        debugLog('⚠️ Misslyckades skicka e-post för atClient:', emailErr.message);
       }
     } else if (meeting_type.toLowerCase() === 'atoffice') {
       combinedMetadata.location = combinedMetadata.location || settings.default_office_address || 'Kontoret';
@@ -264,9 +253,7 @@ module.exports = async function (context, req) {
 
         await sendMail({ to: email, subject: emailSubject, body: emailBody });
         debugLog('✅ atOffice-inbjudan skickad via e-post');
-        debugLog(`🔗 Länk som skickades: ${online_link}`);
       } catch (emailErr) {
-        debugLog('⚠️ Misslyckades skicka e-post för atOffice:', emailErr.message);
       }
     }
 
