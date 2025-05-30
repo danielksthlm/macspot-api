@@ -68,7 +68,7 @@ module.exports = async function (context, req) {
     const settings = await getSettings(context);
 
     // Kontrollera att alla required_fields finns i metadata eller req.body
-    const requiredFieldsFromSettings = settings.required_fields || [];
+    const requiredFieldsFromSettings = Array.isArray(settings.required_fields) ? settings.required_fields : [];
     const missingRequired = requiredFieldsFromSettings.filter(field => {
       if (field.startsWith('metadata.')) {
         const key = field.replace('metadata.', '');
