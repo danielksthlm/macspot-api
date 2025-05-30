@@ -24,12 +24,12 @@ module.exports = async function (context, req) {
     const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
     // [BEVIS] Loggning för att visa om Apple CalDAV faktiskt svarar
     if (!testAppleRange || testAppleRange.length === 0) {
-      context.log("⛔ [BEVIS] Apple CalDAV returnerade inga events – möjligt problem med API eller filter.");
+      debugLog("⛔ [BEVIS] Apple CalDAV returnerade inga events – möjligt problem med API eller filter.");
     } else {
-      context.log(`✅ [BEVIS] Apple CalDAV returnerade ${testAppleRange.length} event(s).`);
+      debugLog(`✅ [BEVIS] Apple CalDAV returnerade ${testAppleRange.length} event(s).`);
       const preview = testAppleRange.slice(0, 3);
       for (const ev of preview) {
-        context.log("📆 [BEVIS] Apple Event:", ev);
+        debugLog("📆 [BEVIS] Apple Event:", ev);
       }
     }
     // context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
@@ -219,6 +219,14 @@ module.exports = async function (context, req) {
     const durationMs = Date.now() - startSlotGen;
     debugLog(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     debugLog("✅ generateSlotChunks kördes utan fel");
+    // Flyttad summering och slutloggar direkt efter generateSlotChunks, innan response:
+    debugLog("🎯 Slut på exekvering av getavailableslots");
+    const finalSlots = chosenSlotsResult?.chosenSlots || [];
+    const finalApple = finalSlots.filter(s => s.source === 'apple').length;
+    const finalFallback = finalSlots.filter(s => s.source === 'fallback').length;
+    debugLog(`🎉 Slutlig summering: ${finalSlots.length} slots, ${finalApple} Apple Maps, ${finalFallback} fallback`);
+    debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+
     // context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
     // if (chosenSlotsResult?.chosenSlots?.length) {
@@ -231,12 +239,12 @@ module.exports = async function (context, req) {
     const slots = chosenSlotsResult?.chosenSlots || [];
     const fallbackCount = slots.filter(s => s.source === 'fallback').length;
     const appleCount = slots.filter(s => s.source === 'apple').length;
-    context.log(`📊 Slot-källor: ${appleCount} med Apple Maps, ${fallbackCount} med fallback`);
+    debugLog(`📊 Slot-källor: ${appleCount} med Apple Maps, ${fallbackCount} med fallback`);
     const fm = slots.filter(s => s.slot_part === 'fm');
     const em = slots.filter(s => s.slot_part === 'em');
 
-    fm.forEach(s => context.log(`☀️ FM: ${s.slot_iso} – score: ${s.score}`));
-    em.forEach(s => context.log(`🌙 EM: ${s.slot_iso} – score: ${s.score}`));
+    fm.forEach(s => debugLog(`☀️ FM: ${s.slot_iso} – score: ${s.score}`));
+    em.forEach(s => debugLog(`🌙 EM: ${s.slot_iso} – score: ${s.score}`));
 
     // context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
     context.res = {
@@ -256,12 +264,10 @@ module.exports = async function (context, req) {
     };
     client.release();
     debugLog("✅ Databasanslutning släppt");
-    debugLog("🎯 Slut på exekvering av getavailableslots");
+
   } catch (err) {
     context.log("🔥 FEL i funktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
-  debugLog("🎯 Slut på exekvering av getavailableslots");
-  debugLog(`🎉 Slutlig summering: ${slots.length} slots, ${appleCount} Apple Maps, ${fallbackCount} fallback`);
-  debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+  // (Flyttad summering och slutloggar till rätt plats)
 };
