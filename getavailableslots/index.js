@@ -224,7 +224,7 @@ module.exports = async function (context, req) {
     const fallbackCount = slots.filter(s => s.source === 'fallback').length;
     const appleCount = slots.filter(s => s.source === 'apple').length;
 
-    // Flyttat block för fm/em loggning hit, innan slutloggar:
+    // Flyttat block för fm/em loggning precis före slutlogg:
     const fm = slots.filter(s => s.slot_part === 'fm');
     const em = slots.filter(s => s.slot_part === 'em');
 
