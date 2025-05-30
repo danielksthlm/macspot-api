@@ -216,11 +216,12 @@ module.exports = async function (context, req) {
       slotGroupPicked,
       logSlotContext: true
     });
+    debugLog("📈 chosenSlotsResult: " + JSON.stringify(chosenSlotsResult));
     const durationMs = Date.now() - startSlotGen;
     debugLog(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     debugLog("✅ generateSlotChunks kördes utan fel");
 
-    const slots = chosenSlotsResult?.chosenSlots || [];
+    const slots = Array.isArray(chosenSlotsResult?.chosenSlots) ? chosenSlotsResult.chosenSlots : [];
     const fallbackCount = slots.filter(s => s.source === 'fallback').length;
     const appleCount = slots.filter(s => s.source === 'apple').length;
 
@@ -232,7 +233,7 @@ module.exports = async function (context, req) {
     em.forEach(s => debugLog(`🌙 EM: ${s.slot_iso} – score: ${s.score}`));
 
     debugLog("🎯 Slut på exekvering av getavailableslots");
-    const finalSlots = chosenSlotsResult?.chosenSlots || [];
+    const finalSlots = Array.isArray(chosenSlotsResult?.chosenSlots) ? chosenSlotsResult.chosenSlots : [];
     const finalApple = finalSlots.filter(s => s.source === 'apple').length;
     const finalFallback = finalSlots.filter(s => s.source === 'fallback').length;
     debugLog(`🎉 Slutlig summering: ${finalSlots.length} slots, ${finalApple} Apple Maps, ${finalFallback} fallback`);
