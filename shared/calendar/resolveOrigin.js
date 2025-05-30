@@ -11,7 +11,6 @@
  * Miljövariabler:
  * - SKIP_DB=true  → hoppar över all databaslogik (läs/skriv)
  */
-console.log("🧪 resolveOrigin.js laddades");
 const memoryCache = {};
 
 function cleanAddress(address) {
@@ -224,7 +223,9 @@ async function resolveOriginAddress({ eventId, calendarId, pool, context, graphC
     originEndTime
   };
   debugLog(`🧠 resolveOriginAddress resultat: ${latestOrigin} (källa: ${originSource})`);
-  context.log(`📤 resolveOriginAddress return: ${latestOrigin} (källa: ${originSource}, endTime: ${originEndTime?.toISOString?.() || 'null'})`);
+  if (process.env.DEBUG === 'true' && context?.log) {
+    context.log(`📤 resolveOriginAddress return: ${latestOrigin} (källa: ${originSource}, endTime: ${originEndTime?.toISOString?.() || 'null'})`);
+  }
   return { origin: cleanAddress(latestOrigin), originSource, originEndTime };
 }
 

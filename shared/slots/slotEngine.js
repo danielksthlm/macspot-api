@@ -251,7 +251,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
   const allSlots = [...fmSlots, ...emSlots];
   allSlots.forEach(s => {
     const icon = s.slot_part === 'fm' ? '☀️' : '🌙';
-    context.log(`${icon} ${s.slot_part.toUpperCase()}: ${s.slot_iso} – score: ${s.score}`);
+    if (isDebug) context.log(`${icon} ${s.slot_part.toUpperCase()}: ${s.slot_iso} – score: ${s.score}`);
   });
   return topSlots;
 }
@@ -426,8 +426,8 @@ async function generateSlotChunks({
   }
 
   const durationMs = Date.now() - context.startTime;
-  context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
-  context.log(`📤 Response skickas med antal slots: ${chosen.length}`);
+  if (isDebug) context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
+  if (isDebug) context.log(`📤 Response skickas med antal slots: ${chosen.length}`);
   return {
     chosenSlots: chosen.sort((a, b) => new Date(a.slot_iso) - new Date(b.slot_iso)),
     slotMapResult: slotMap,
