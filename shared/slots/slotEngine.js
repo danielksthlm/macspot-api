@@ -31,7 +31,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     if (!overlapsLunch) {
       const isHoliday = settings.block_holidays && holidays?.isHoliday(new Date(current.toISO()));
       if (isHoliday) {
-        if (isDebug) context.log(`⛔ Helgdag – hoppar ${current.toISODate()}`);
+        // if (isDebug) context.log(`⛔ Helgdag – hoppar ${current.toISODate()}`);
         current = current.plus({ minutes: 20 });
         continue;
       }
@@ -46,7 +46,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
         );
       });
       if (slotConflictsWithEvent) {
-        if (isDebug) context.log(`⛔ Slot krockar med event i bookingsByDay – hoppar ${current.toISO()}`);
+        // if (isDebug) context.log(`⛔ Slot krockar med event i bookingsByDay – hoppar ${current.toISO()}`);
         current = current.plus({ minutes: 20 });
         continue;
       }
@@ -66,7 +66,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     return evStart <= fullDayStart && evEnd >= fullDayEnd;
   });
   if (fullDayBlock) {
-    context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
+    // context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
     return [];
   }
 
@@ -77,17 +77,17 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const slot_part = utcStart.hour < 12 ? "fm" : "em";
     const slotHourStr = utcStart.setZone(timezone).toFormat('HH:mm');
     if (slotHourStr >= settings.lunch_start && slotHourStr < settings.lunch_end) {
-      if (isDebug) context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
+      // if (isDebug) context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
       continue;
     }
     const isWeekend = ["saturday", "sunday"].includes(weekday);
     if (settings.block_weekends && isWeekend) {
-      if (isDebug) context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
+      // if (isDebug) context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
       continue;
     }
     if (meeting_type === 'atclient' && Array.isArray(settings.allowed_atclient_meeting_days)) {
       if (!settings.allowed_atclient_meeting_days.includes(weekday)) {
-        if (isDebug) context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
+        // if (isDebug) context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
         continue;
       }
     }
@@ -114,7 +114,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     });
 
     if (!originInfo?.origin) {
-      context.log(`⚠️ Kunde inte fastställa origin för ${eventId}`);
+      // context.log(`⚠️ Kunde inte fastställa origin för ${eventId}`);
       continue;
     }
 
@@ -131,21 +131,21 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     const travelSource = travelTimeResult?.source || 'fallback';
 
     if (!travelTimeMin || typeof travelTimeMin !== "number") {
-      context.log.warn(`⚠️ Ogiltig restid, hoppar slot: ${eventId}`);
+      // context.log.warn(`⚠️ Ogiltig restid, hoppar slot: ${eventId}`);
       continue;
     }
 
     const endTime = new Date(dateObj.getTime() + meeting_length * 60000);
     // dayStart och dayEnd redan definierade ovan
     if (endTime > dayEnd) {
-      context.log(`⛔ Slot ${eventId} går utanför öppettid (${settings.close_time}) – hoppar`);
+      // context.log(`⛔ Slot ${eventId} går utanför öppettid (${settings.close_time}) – hoppar`);
       continue;
     }
 
     // Skip slots that are too soon to reach based on travel time and current time
     const now = Date.now();
     if (dateObj.getTime() - now < travelTimeMin * 60 * 1000) {
-      context.log(`⛔ Slot ${eventId} är för nära i tid – restid ${travelTimeMin} min, nu=${new Date(now).toISOString()} – hoppar`);
+      // context.log(`⛔ Slot ${eventId} är för nära i tid – restid ${travelTimeMin} min, nu=${new Date(now).toISOString()} – hoppar`);
       continue;
     }
 
@@ -189,17 +189,17 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       );
     });
     if (hasConflict) {
-      context.log(`⛔ Slot ${eventId} krockar med möte inom buffer (${settings.buffer_between_meetings || 0} min) – hoppar`);
-      existing.forEach(b => {
-        const bStartStr = new Date(b.start).toISOString();
-        const bEndStr = new Date(b.end).toISOString();
-        if (
-          b.start < slotEnd + bufferMs &&
-          b.end > slotStart - bufferMs
-        ) {
-          context.log(`   ⚠️  Konflikt med: ${bStartStr} → ${bEndStr}`);
-        }
-      });
+      // context.log(`⛔ Slot ${eventId} krockar med möte inom buffer (${settings.buffer_between_meetings || 0} min) – hoppar`);
+      // existing.forEach(b => {
+      //   const bStartStr = new Date(b.start).toISOString();
+      //   const bEndStr = new Date(b.end).toISOString();
+      //   if (
+      //     b.start < slotEnd + bufferMs &&
+      //     b.end > slotStart - bufferMs
+      //   ) {
+      //     context.log(`   ⚠️  Konflikt med: ${bStartStr} → ${bEndStr}`);
+      //   }
+      // });
       continue;
     }
     // Blockera även om sloten börjar exakt när ett event börjar, eller slutar exakt när ett event slutar
@@ -209,7 +209,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       );
     });
     if (hardMatchConflict) {
-      context.log(`⛔ Slot ${eventId} börjar eller slutar exakt när ett event börjar/slutar – hoppar`);
+      // context.log(`⛔ Slot ${eventId} börjar eller slutar exakt när ett event börjar/slutar – hoppar`);
       continue;
     }
 
@@ -223,9 +223,9 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     slot.score = 10 - fragmentationPenalty;
 
     slots.push(slot);
-    if (isDebug && travelSource === 'fallback') {
-      context.log(`⚠️ Slot ${eventId} använder fallback för restid (ingen accessToken)`);
-    }
+    // if (isDebug && travelSource === 'fallback') {
+    //   context.log(`⚠️ Slot ${eventId} använder fallback för restid (ingen accessToken)`);
+    // }
   }
 
   // Separera förmiddag och eftermiddag
