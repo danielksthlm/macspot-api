@@ -26,7 +26,7 @@ module.exports = async function (context, req) {
 
   const { email, meeting_type, meeting_length, slot_iso, contact_id, metadata = {} } = req.body;
 
-  if (!email || !email.includes('@')) {
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
     context.log('❌ Ogiltig eller saknad e-postadress:', email);
     context.res = {
       status: 400,
@@ -84,6 +84,7 @@ module.exports = async function (context, req) {
     const created_at = new Date();
     const updated_at = created_at;
 
+    const fields = {};
 
     metadata.meeting_length = meeting_length;
 
