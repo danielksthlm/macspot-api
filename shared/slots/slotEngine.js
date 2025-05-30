@@ -47,6 +47,16 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       const slotStartMs = current.toMillis();
       const slotEndMs = end.toMillis();
       const bufferMsEarly = (settings.buffer_between_meetings || 0) * 60000;
+      if (isDebug) {
+        context.log(`🔍 Kontroll av konflikt för slot: ${current.toISO()} → ${end.toISO()}`);
+        for (const ev of existing) {
+          const evStart = new Date(ev.start).toISOString();
+          const evEnd = new Date(ev.end).toISOString();
+          context.log(`   📆 Event: ${evStart} → ${evEnd}`);
+          context.log(`     ↪︎ Jämförelse: ev.start < slotEndMs + bufferMsEarly = ${ev.start} < ${slotEndMs + bufferMsEarly}`);
+          context.log(`     ↪︎ Jämförelse: ev.end > slotStartMs - bufferMsEarly = ${ev.end} > ${slotStartMs - bufferMsEarly}`);
+        }
+      }
       const slotConflictsWithEvent = existing.some(ev => {
         return (
           ev.start < slotEndMs + bufferMsEarly &&
