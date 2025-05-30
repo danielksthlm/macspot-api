@@ -31,6 +31,24 @@ module.exports = async function (context, req) {
       for (const ev of preview) {
         debugLog("📆 [BEVIS] Apple Event:", ev);
       }
+      // --- BEGIN: Apple events till bookingsByDay ---
+      for (const ev of testAppleRange) {
+        if (!bookingsByDay[ev.date]) bookingsByDay[ev.date] = [];
+        bookingsByDay[ev.date].push({
+          start: new Date(ev.start).getTime(),
+          end: new Date(ev.end).getTime()
+        });
+      }
+      debugLog("📥 Apple events insatta i bookingsByDay:");
+      Object.entries(bookingsByDay).forEach(([date, events]) => {
+        debugLog(`📅 ${date}: ${events.length} event(s)`);
+        events.forEach(ev => {
+          const start = new Date(ev.start).toISOString();
+          const end = new Date(ev.end).toISOString();
+          debugLog(`   ⏰ ${start} → ${end}`);
+        });
+      });
+      // --- END: Apple events till bookingsByDay ---
     }
     // context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
     // for (const ev of testAppleRange) {
