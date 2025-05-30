@@ -4,11 +4,11 @@ const createAppleClient = require('../shared/calendar/appleCalendar');
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
 const isDebug = process.env.DEBUG === 'true';
-const debugLog = (msg) => { if (isDebug) context.log(msg); };
 // console.log("✅ getavailableslots/index.js laddad");
 require('../shared/config/verifySettings');
 
 module.exports = async function (context, req) {
+  const debugLog = (msg) => { if (isDebug) context.log(msg); };
   const appleClient = createAppleClient(context);
   // 🧪 TEST: Logga fetchEventsByDateRange direkt vid start med explicit tidsintervall och robust felhantering
   const testStart = new Date();
@@ -262,5 +262,6 @@ module.exports = async function (context, req) {
     context.res = { status: 500, body: { error: err.message } };
   }
   debugLog("🎯 Slut på exekvering av getavailableslots");
+  debugLog(`🎉 Slutlig summering: ${slots.length} slots, ${appleCount} Apple Maps, ${fallbackCount} fallback`);
   debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
 };
