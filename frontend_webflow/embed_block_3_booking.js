@@ -90,6 +90,13 @@
       const cltMeetingTypeEl = document.getElementById('clt_meetingtype');
       const cltMeetingLengthEl = document.getElementById('clt_meetinglength');
       const cltSlotIsoEl = document.getElementById('clt_meetingtime');
+      const cltEmailEl = document.getElementById('clt_email');
+      const cltEmail = cltEmailEl?.value.trim();
+
+      if (!cltEmail || !cltEmail.includes('@')) {
+        alert('Ange en giltig e-postadress.');
+        return;
+      }
 
       const cltContactId = cltContactIdEl?.value.trim();
       const cltMeetingType = cltMeetingTypeEl?.value.trim();
@@ -107,7 +114,8 @@
         contact_id: cltContactId,
         meeting_type: cltMeetingType,
         meeting_length: cltMeetingLength,
-        slot_iso: cltSlotIso
+        slot_iso: cltSlotIso,
+        email: cltEmail
       };
 
       submitBooking(bookingPayload);

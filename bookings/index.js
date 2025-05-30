@@ -26,6 +26,15 @@ module.exports = async function (context, req) {
 
   const { email, meeting_type, meeting_length, slot_iso, contact_id, metadata = {} } = req.body;
 
+  if (!email || !email.includes('@')) {
+    context.log('❌ Ogiltig eller saknad e-postadress:', email);
+    context.res = {
+      status: 400,
+      body: { error: 'Ogiltig eller saknad e-postadress' }
+    };
+    return;
+  }
+
   const parsedLength = parseInt(meeting_length, 10);
   if (isNaN(parsedLength) || parsedLength <= 0) {
     context.log('❌ Ogiltig möteslängd:', meeting_length);
