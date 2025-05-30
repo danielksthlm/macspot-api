@@ -36,6 +36,14 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
         continue;
       }
       // --- NY KOD: Kontrollera om sloten krockar med event i bookingsByDay (inkl. heldagsevent) ---
+      if (isDebug) {
+        context.log(`📋 Befintliga bokningar för ${slotDateIso}:`);
+        for (const ev of existing) {
+          const start = new Date(ev.start).toISOString();
+          const end = new Date(ev.end).toISOString();
+          context.log(`   📆 ${start} → ${end}`);
+        }
+      }
       const slotStartMs = current.toMillis();
       const slotEndMs = end.toMillis();
       const bufferMsEarly = (settings.buffer_between_meetings || 0) * 60000;
