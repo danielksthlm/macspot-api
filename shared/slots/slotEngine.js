@@ -273,6 +273,36 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
   // Returnera endast de två bästa
   const topSlots = [bestFm, bestEm].filter(Boolean);
   const allSlots = [...fmSlots, ...emSlots];
+  // === LOG SELECTED TOP SLOTS ===
+  if (isDebug) {
+    if (topSlots.length > 0) {
+      context.log(`✅ Slot-kandidater valda för ${slotDateIso}:`);
+      topSlots.forEach(slot => {
+        const icon = slot.slot_part === 'fm' ? '☀️' : '🌙';
+        const t = DateTime.fromISO(slot.slot_iso).setZone(timezone).toFormat("yyyy-MM-dd HH:mm");
+        context.log(`   ${icon} ${slot.slot_part.toUpperCase()} ${t} (${slot.score}/10, ${slot.travel_time_min} min restid)`);
+      });
+    } else {
+      context.log(`⛔ Inga valda slot-kandidater för ${slotDateIso}`);
+    }
+  }
+  // === BLOCK: Slot-summering/debug innan slots loggas ===
+  if (isDebug) {
+    const blockedSummary = [];
+    if (startTimes.length === 0) {
+      blockedSummary.push("⛔ Inga starttider genererades p.g.a. heldagsevent, helgdag eller block");
+    }
+    if (fullDayBlock) {
+      blockedSummary.push("⛔ Dagen blockeras helt p.g.a. heldagsevent");
+    }
+    if (startTimes.length > 0 && allSlots.length === 0) {
+      blockedSummary.push("⛔ Alla slots filtrerades bort av regler: t.ex. restid, konflikt, öppettid, veckokvot, m.m.");
+    }
+    if (blockedSummary.length > 0) {
+      context.log(`🧾 Slot-summering ${slotDateIso}:`);
+      for (const line of blockedSummary) context.log("   " + line);
+    }
+  }
   allSlots.forEach(s => {
     const icon = s.slot_part === 'fm' ? '☀️' : '🌙';
     if (isDebug) context.log(`${icon} ${s.slot_part.toUpperCase()}: ${s.slot_iso} – score: ${s.score}`);
