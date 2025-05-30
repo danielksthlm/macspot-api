@@ -186,6 +186,7 @@ module.exports = async function (context, req) {
     const debugHelper = createDebugLogger(context);
 
     const appleMapsToken = await getAppleMapsAccessToken(context);
+    context.accessToken = appleMapsToken;
     if (appleMapsToken) {
       debugLog("✅ Apple Maps token hämtad – längd: " + appleMapsToken.length);
     } else {
