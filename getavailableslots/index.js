@@ -231,6 +231,7 @@ module.exports = async function (context, req) {
 
     debugLog("📋 Tillgängliga FM-slots:\n" + fm.map(s => `☀️ ${s.slot_local} (${s.slot_iso}) – score: ${s.score}`).join('\n'));
     debugLog("📋 Tillgängliga EM-slots:\n" + em.map(s => `🌙 ${s.slot_local} (${s.slot_iso}) – score: ${s.score}`).join('\n'));
+    debugHelper.logSlotsSummary(slots);
 
     // 📋 Logga tydlig lista på tillgängliga slots (en rad per slot)
     if (isDebug) {

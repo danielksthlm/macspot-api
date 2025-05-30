@@ -11,8 +11,16 @@ function createDebugLogger(context) {
     }
   };
 
+  const debugLogSlotsSummary = (slots) => {
+    if (!isDebug) return;
+    const fmSlots = slots.filter(s => s.slot_part === 'FM');
+    const emSlots = slots.filter(s => s.slot_part === 'EM');
+    console.log(`📋 Totalt: ${slots.length} | ☀️ FM: ${fmSlots.length} | 🌙 EM: ${emSlots.length}`);
+  };
+
   return {
-    log: debugLog
+    log: debugLog,
+    logSlotsSummary: debugLogSlotsSummary
   };
 }
 
