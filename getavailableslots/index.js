@@ -282,12 +282,14 @@ module.exports = async function (context, req) {
       debugLog("✅ Databasanslutning släppt");
       debugLog("✅ client.release() lyckades");
       debugLog("🏁 Funktion getavailableslots/index.js avslutad helt utan fel");
+      context.log("✅ Azure Function getavailableslots har returnerat response.");
     } catch (err) {
       debugLog("❌ Fel vid response/build/release: " + err.message);
       context.res = {
         status: 500,
         body: { error: "Internal error after slot gen", detail: err.message }
       };
+      context.log("✅ Azure Function getavailableslots har returnerat response.");
     }
 
   } catch (err) {
