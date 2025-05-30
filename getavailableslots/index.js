@@ -219,7 +219,18 @@ module.exports = async function (context, req) {
     const durationMs = Date.now() - startSlotGen;
     debugLog(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     debugLog("✅ generateSlotChunks kördes utan fel");
-    // Flyttad summering och slutloggar direkt efter generateSlotChunks, innan response:
+
+    const slots = chosenSlotsResult?.chosenSlots || [];
+    const fallbackCount = slots.filter(s => s.source === 'fallback').length;
+    const appleCount = slots.filter(s => s.source === 'apple').length;
+
+    // Flyttat block för fm/em loggning hit, innan slutloggar:
+    const fm = slots.filter(s => s.slot_part === 'fm');
+    const em = slots.filter(s => s.slot_part === 'em');
+
+    fm.forEach(s => debugLog(`☀️ FM: ${s.slot_iso} – score: ${s.score}`));
+    em.forEach(s => debugLog(`🌙 EM: ${s.slot_iso} – score: ${s.score}`));
+
     debugLog("🎯 Slut på exekvering av getavailableslots");
     const finalSlots = chosenSlotsResult?.chosenSlots || [];
     const finalApple = finalSlots.filter(s => s.source === 'apple').length;
@@ -236,15 +247,7 @@ module.exports = async function (context, req) {
     //   }
     // }
 
-    const slots = chosenSlotsResult?.chosenSlots || [];
-    const fallbackCount = slots.filter(s => s.source === 'fallback').length;
-    const appleCount = slots.filter(s => s.source === 'apple').length;
     debugLog(`📊 Slot-källor: ${appleCount} med Apple Maps, ${fallbackCount} med fallback`);
-    const fm = slots.filter(s => s.slot_part === 'fm');
-    const em = slots.filter(s => s.slot_part === 'em');
-
-    fm.forEach(s => debugLog(`☀️ FM: ${s.slot_iso} – score: ${s.score}`));
-    em.forEach(s => debugLog(`🌙 EM: ${s.slot_iso} – score: ${s.score}`));
 
     // context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
     context.res = {
