@@ -34,10 +34,12 @@ module.exports = async function (context, req) {
       // --- BEGIN: Apple events till bookingsByDay ---
       for (const ev of testAppleRange) {
         if (!bookingsByDay[ev.date]) bookingsByDay[ev.date] = [];
-        bookingsByDay[ev.date].push({
-          start: new Date(ev.start).getTime(),
-          end: new Date(ev.end).getTime()
-        });
+        if (ev.start && ev.end) {
+          bookingsByDay[ev.date].push({
+            start: new Date(ev.start).getTime(),
+            end: new Date(ev.end).getTime()
+          });
+        }
       }
       debugLog("📥 Apple events insatta i bookingsByDay:");
       Object.entries(bookingsByDay).forEach(([date, events]) => {
