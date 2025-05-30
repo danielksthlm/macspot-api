@@ -243,11 +243,11 @@ module.exports = async function (context, req) {
       INSERT INTO bookings (
         id, start_time, end_time, meeting_type,
         metadata, created_at, updated_at,
-        contact_id, booking_email, ip_address, user_agent
+        contact_id, booking_email
       ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7,
-        $8, $9, $10, $11
+        $8, $9
       )
     `;
 
