@@ -26,41 +26,50 @@ module.exports = async function (context, req) {
 
   const { email, meeting_type, meeting_length, slot_iso, contact_id, metadata = {} } = req.body;
 
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
-    context.log('❌ Ogiltig eller saknad e-postadress:', email);
-    context.res = {
-      status: 400,
-      body: { error: 'Ogiltig eller saknad e-postadress' }
-    };
-    return;
-  }
-
-  const parsedLength = parseInt(meeting_length, 10);
-  if (isNaN(parsedLength) || parsedLength <= 0) {
-    context.log('❌ Ogiltig möteslängd:', meeting_length);
-    context.res = { status: 400, body: { error: "Invalid meeting_length" } };
-    return;
-  }
-
-  const parsedStart = new Date(slot_iso);
-  if (isNaN(parsedStart.getTime())) {
-    context.log('❌ Ogiltigt slot_iso:', slot_iso);
-    context.res = { status: 400, body: { error: "Invalid slot_iso datetime" } };
-    return;
-  }
-
-  const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
-  for (const key of requiredEnv) {
-    if (!process.env[key]) {
-      context.log('❌ Saknar env:', key);
-      context.res = { status: 500, body: { error: `Missing environment variable: ${key}` } };
-      return;
-    }
-  }
-
   let db;
   try {
     db = await pool.connect();
+
+    const contactRes = await db.query('SELECT metadata FROM contact WHERE id = $1', [contact_id]);
+    const dbMetadata = (contactRes.rows[0] && contactRes.rows[0].metadata) || {};
+    const combinedMetadata = { ...dbMetadata, ...metadata };
+
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      context.log('❌ Ogiltig eller saknad e-postadress:', email);
+      context.res = {
+        status: 400,
+        body: { error: 'Ogiltig eller saknad e-postadress' }
+      };
+      db.release();
+      return;
+    }
+
+    const parsedLength = parseInt(meeting_length, 10);
+    if (isNaN(parsedLength) || parsedLength <= 0) {
+      context.log('❌ Ogiltig möteslängd:', meeting_length);
+      context.res = { status: 400, body: { error: "Invalid meeting_length" } };
+      db.release();
+      return;
+    }
+
+    const parsedStart = new Date(slot_iso);
+    if (isNaN(parsedStart.getTime())) {
+      context.log('❌ Ogiltigt slot_iso:', slot_iso);
+      context.res = { status: 400, body: { error: "Invalid slot_iso datetime" } };
+      db.release();
+      return;
+    }
+
+    const requiredEnv = ['PGUSER', 'PGHOST', 'PGDATABASE', 'PGPASSWORD', 'PGPORT'];
+    for (const key of requiredEnv) {
+      if (!process.env[key]) {
+        context.log('❌ Saknar env:', key);
+        context.res = { status: 500, body: { error: `Missing environment variable: ${key}` } };
+        db.release();
+        return;
+      }
+    }
+
     const debugHelper = createDebugLogger(context);
     const debugLog = debugHelper.debugLog || ((...args) => context.log('[⚠️ fallback log]', ...args));
     debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
@@ -75,7 +84,7 @@ module.exports = async function (context, req) {
       : [];
     const requiredFieldsFromSettings = [...new Set([...baseFields, ...specificFields])];
     const missingRequired = requiredFieldsFromSettings.filter(field => {
-      return !(field in req.body) && !(field in metadata);
+      return !(field in req.body) && !(field in combinedMetadata);
     });
 
     if (missingRequired.length > 0) {
@@ -99,6 +108,7 @@ module.exports = async function (context, req) {
         status: 409,
         body: { error: 'Booking already exists for this time.' }
       };
+      db.release();
       return;
     }
     const startTime = parsedStart;
@@ -107,16 +117,16 @@ module.exports = async function (context, req) {
     const updated_at = created_at;
 
 
-    metadata.meeting_length = meeting_length;
-    metadata.ip_address = ipAddress;
-    metadata.user_agent = userAgent;
+    combinedMetadata.meeting_length = meeting_length;
+    combinedMetadata.ip_address = ipAddress;
+    combinedMetadata.user_agent = userAgent;
 
     const bookingFields = {
       id,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       meeting_type,
-      metadata: metadata,
+      metadata: combinedMetadata,
       created_at,
       updated_at,
       contact_id: contact_id || null,
@@ -125,8 +135,8 @@ module.exports = async function (context, req) {
 
     let online_link = null;
     if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
-      const subject = metadata.subject || settings.default_meeting_subject || 'Möte';
-      const location = metadata.location || 'Online';
+      const subject = combinedMetadata.subject || settings.default_meeting_subject || 'Möte';
+      const location = combinedMetadata.location || 'Online';
       try {
         const eventResult = await graphClient.createEvent({
           start: startTime.toISOString(),
@@ -142,9 +152,9 @@ module.exports = async function (context, req) {
         }
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
-          metadata.online_link = online_link;
-          metadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
-          metadata.location = eventResult.location || location || 'Online';
+          combinedMetadata.online_link = online_link;
+          combinedMetadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
+          combinedMetadata.location = eventResult.location || location || 'Online';
         }
 
         // Extrahera mötesinfo från bodyPreview oavsett joinUrl
@@ -152,10 +162,10 @@ module.exports = async function (context, req) {
         const idMatch = body.match(/Mötes-ID:\s*(\d[\d\s]*)/);
         const pwMatch = body.match(/Lösenord:\s*([A-Za-z0-9]+)/);
 
-        if (idMatch) metadata.meeting_id = idMatch[1].trim();
-        if (pwMatch) metadata.passcode = pwMatch[1].trim();
+        if (idMatch) combinedMetadata.meeting_id = idMatch[1].trim();
+        if (pwMatch) combinedMetadata.passcode = pwMatch[1].trim();
         if (body && !eventResult?.onlineMeetingUrl) {
-          metadata.body_preview = body;
+          combinedMetadata.body_preview = body;
         }
 
         bookingFields.synced_to_calendar = true;
@@ -166,27 +176,27 @@ module.exports = async function (context, req) {
     } else if (meeting_type.toLowerCase() === 'zoom') {
       try {
         const result = await zoomClient.createMeeting({
-          topic: metadata.subject || settings.default_meeting_subject,
+          topic: combinedMetadata.subject || settings.default_meeting_subject,
           start: startTime.toISOString(),
           duration: parsedLength
         });
         online_link = result.join_url;
-        metadata.online_link = online_link;
-        metadata.meeting_id = result.id;
-        metadata.subject = result.topic;
-        metadata.location = 'Online';
+        combinedMetadata.online_link = online_link;
+        combinedMetadata.meeting_id = result.id;
+        combinedMetadata.subject = result.topic;
+        combinedMetadata.location = 'Online';
 
         // Generate email subject and body using settings and injected online_link
         const emailTemplate = settings.email_invite_template || {};
         const emailSubject =
           (emailTemplate.subject
-            ? emailTemplate.subject.replace('{{company}}', metadata.company || 'din organisation')
+            ? emailTemplate.subject.replace('{{company}}', combinedMetadata.company || 'din organisation')
             : 'Möte');
         const emailBody =
           (emailTemplate.body
             ? emailTemplate.body
-                .replace('{{first_name}}', metadata.first_name || '')
-                .replace('{{company}}', metadata.company || '')
+                .replace('{{first_name}}', combinedMetadata.first_name || '')
+                .replace('{{company}}', combinedMetadata.company || '')
                 .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
             : `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`);
 
@@ -208,16 +218,16 @@ module.exports = async function (context, req) {
         debugLog('⚠️ Zoom createMeeting failed:', err.message);
       }
     } else if (meeting_type.toLowerCase() === 'facetime') {
-      if (metadata.phone) {
-        online_link = `facetime:${metadata.phone}`;
-        metadata.online_link = online_link;
-        metadata.subject = metadata.subject || settings.default_meeting_subject || 'FaceTime';
-        metadata.location = metadata.location || 'FaceTime';
+      if (combinedMetadata.phone) {
+        online_link = `facetime:${combinedMetadata.phone}`;
+        combinedMetadata.online_link = online_link;
+        combinedMetadata.subject = combinedMetadata.subject || settings.default_meeting_subject || 'FaceTime';
+        combinedMetadata.location = combinedMetadata.location || 'FaceTime';
 
         try {
           const emailTemplate = settings.email_invite_template || {};
-          const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'FaceTime-möte';
-          const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n🔗 FaceTime-länk: ${online_link}`;
+          const emailSubject = emailTemplate.subject?.replace('{{company}}', combinedMetadata.company || 'din organisation') || 'FaceTime-möte';
+          const emailBody = `${emailTemplate.body?.replace('{{first_name}}', combinedMetadata.first_name || '').replace('{{company}}', combinedMetadata.company || '') || ''}\n\n🔗 FaceTime-länk: ${online_link}`;
 
           await sendMail({ to: email, subject: emailSubject, body: emailBody });
           debugLog('✅ FaceTime-inbjudan skickad via e-post');
@@ -229,13 +239,13 @@ module.exports = async function (context, req) {
         debugLog('⚠️ Saknar telefonnummer för FaceTime – ingen länk skapad');
       }
     } else if (meeting_type.toLowerCase() === 'atclient') {
-      metadata.location = metadata.location || metadata.address || settings.default_home_address || 'Hos kund';
-      metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte hos kund';
+      combinedMetadata.location = combinedMetadata.location || combinedMetadata.address || settings.default_home_address || 'Hos kund';
+      combinedMetadata.subject = combinedMetadata.subject || settings.default_meeting_subject || 'Möte hos kund';
 
       try {
         const emailTemplate = settings.email_invite_template || {};
-        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte hos kund';
-        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n📍 Adress: ${metadata.location}`;
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', combinedMetadata.company || 'din organisation') || 'Möte hos kund';
+        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', combinedMetadata.first_name || '').replace('{{company}}', combinedMetadata.company || '') || ''}\n\n📍 Adress: ${combinedMetadata.location}`;
 
         await sendMail({ to: email, subject: emailSubject, body: emailBody });
         debugLog('✅ atClient-inbjudan skickad via e-post');
@@ -244,13 +254,13 @@ module.exports = async function (context, req) {
         debugLog('⚠️ Misslyckades skicka e-post för atClient:', emailErr.message);
       }
     } else if (meeting_type.toLowerCase() === 'atoffice') {
-      metadata.location = metadata.location || settings.default_office_address || 'Kontoret';
-      metadata.subject = metadata.subject || settings.default_meeting_subject || 'Möte på kontoret';
+      combinedMetadata.location = combinedMetadata.location || settings.default_office_address || 'Kontoret';
+      combinedMetadata.subject = combinedMetadata.subject || settings.default_meeting_subject || 'Möte på kontoret';
 
       try {
         const emailTemplate = settings.email_invite_template || {};
-        const emailSubject = emailTemplate.subject?.replace('{{company}}', metadata.company || 'din organisation') || 'Möte på kontoret';
-        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', metadata.first_name || '').replace('{{company}}', metadata.company || '') || ''}\n\n📍 Plats: ${metadata.location}`;
+        const emailSubject = emailTemplate.subject?.replace('{{company}}', combinedMetadata.company || 'din organisation') || 'Möte på kontoret';
+        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', combinedMetadata.first_name || '').replace('{{company}}', combinedMetadata.company || '') || ''}\n\n📍 Plats: ${combinedMetadata.location}`;
 
         await sendMail({ to: email, subject: emailSubject, body: emailBody });
         debugLog('✅ atOffice-inbjudan skickad via e-post');
