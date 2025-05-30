@@ -63,7 +63,13 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
   const fullDayBlock = existing.some(ev => {
     const evStart = Number(ev.start);
     const evEnd = Number(ev.end);
-    return evStart <= fullDayStart && evEnd >= fullDayEnd;
+    const coveredDuration = evEnd - evStart;
+    const fullDayDuration = fullDayEnd - fullDayStart;
+    return (
+      evStart <= fullDayStart + 30 * 60 * 1000 &&
+      evEnd >= fullDayEnd - 30 * 60 * 1000 &&
+      coveredDuration >= fullDayDuration * 0.95
+    );
   });
   if (fullDayBlock) {
     // context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
