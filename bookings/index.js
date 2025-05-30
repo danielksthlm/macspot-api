@@ -87,6 +87,8 @@ module.exports = async function (context, req) {
 
 
     metadata.meeting_length = meeting_length;
+    metadata.ip_address = ipAddress;
+    metadata.user_agent = userAgent;
 
     const bookingFields = {
       id,
@@ -97,9 +99,7 @@ module.exports = async function (context, req) {
       created_at,
       updated_at,
       contact_id: contact_id || null,
-      booking_email: email || null,
-      ip_address: ipAddress,
-      user_agent: userAgent
+      booking_email: email || null
     };
 
     let online_link = null;
