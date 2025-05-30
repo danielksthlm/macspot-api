@@ -154,7 +154,18 @@ function createAppleClient(context) {
           const dtend = v.match(/DTEND(?:;[^:]*)?:(\d{8}(T\d{6})?)/)?.[1]?.trim() ?? "–";
           const location = v.match(/LOCATION:(.*)/)?.[1]?.trim() ?? "–";
           const uid = v.match(/UID:(.*)/)?.[1]?.trim() ?? "–";
-          results.push({ summary, dtstart, dtend, location, uid });
+
+          const parseToEpoch = (dt) => {
+            const clean = dt.replace(/^(\d{8})$/, '$1T000000');
+            return DateTime.fromFormat(clean, "yyyyLLdd'T'HHmmss", { zone: "UTC" })
+              .setZone("Europe/Stockholm")
+              .toMillis();
+          };
+
+          const start = parseToEpoch(dtstart);
+          const end = parseToEpoch(dtend);
+
+          results.push({ summary, dtstart, dtend, location, uid, start, end });
         }
       }
 
