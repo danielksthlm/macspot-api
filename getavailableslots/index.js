@@ -219,6 +219,7 @@ module.exports = async function (context, req) {
     const durationMs = Date.now() - startSlotGen;
     debugLog(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     debugLog("✅ generateSlotChunks kördes utan fel");
+    debugLog("🔎 Efter generateSlotChunks – dags att filtrera FM/EM");
 
     const slots = Array.isArray(chosenSlotsResult?.chosenSlots) ? chosenSlotsResult.chosenSlots : [];
     const fallbackCount = slots.filter(s => s.source === 'fallback').length;
@@ -253,26 +254,31 @@ module.exports = async function (context, req) {
 
     // context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
     debugLog("⏳ På väg att returnera response...");
-    context.res = {
-      status: 200,
-      body: {
-        message: "✅ getavailableslots är kontaktbar och fungerar i full version",
-        received: { email, meeting_type, meeting_length },
-        travel_stats: {
-          apple_count: appleCount,
-          fallback_count: fallbackCount
-        },
-        slots: Array.isArray(chosenSlotsResult?.chosenSlots)
-          ? chosenSlotsResult.chosenSlots.map(slot => ({
-              ...slot,
-              score: slot.score ?? null
-            }))
-          : []
-      }
-    };
-    client.release();
-    debugLog("✅ Databasanslutning släppt");
-    debugLog("🏁 Funktion getavailableslots/index.js avslutad helt utan fel");
+    try {
+      context.res = {
+        status: 200,
+        body: {
+          message: "✅ getavailableslots är kontaktbar och fungerar i full version",
+          received: { email, meeting_type, meeting_length },
+          travel_stats: {
+            apple_count: appleCount,
+            fallback_count: fallbackCount
+          },
+          slots: Array.isArray(chosenSlotsResult?.chosenSlots)
+            ? chosenSlotsResult.chosenSlots.map(slot => ({
+                ...slot,
+                score: slot.score ?? null
+              }))
+            : []
+        }
+      };
+      client.release();
+      debugLog("✅ Databasanslutning släppt");
+      debugLog("🏁 Funktion getavailableslots/index.js avslutad helt utan fel");
+    } catch (err) {
+      debugLog("❌ Fel vid response/build/release: " + err.message);
+      context.res = { status: 500, body: { error: "Internal error after slot gen", detail: err.message } };
+    }
 
   } catch (err) {
     context.log("🔥 FEL i funktion:", err.message);
