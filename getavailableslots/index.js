@@ -274,6 +274,7 @@ module.exports = async function (context, req) {
       };
       client.release();
       debugLog("✅ Databasanslutning släppt");
+      debugLog("✅ client.release() lyckades");
       debugLog("🏁 Funktion getavailableslots/index.js avslutad helt utan fel");
     } catch (err) {
       debugLog("❌ Fel vid response/build/release: " + err.message);
@@ -285,4 +286,5 @@ module.exports = async function (context, req) {
     context.res = { status: 500, body: { error: err.message } };
   }
   // (Flyttad summering och slutloggar till rätt plats)
+  context.log("🧪 SLUTPUNKT: Nådde allra sista raden");
 };
