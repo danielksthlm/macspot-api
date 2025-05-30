@@ -58,11 +58,12 @@ module.exports = async function (context, req) {
     }
   }
 
-  const db = await pool.connect();
-  const debugHelper = createDebugLogger(context);
-  const debugLog = debugHelper.debugLog;
-  debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
+  let db;
   try {
+    db = await pool.connect();
+    const debugHelper = createDebugLogger(context);
+    const debugLog = debugHelper.debugLog;
+    debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
     // Läs in booking_settings
     const settings = await getSettings(context);
 
@@ -297,6 +298,6 @@ module.exports = async function (context, req) {
       }
     };
   } finally {
-    db.release();
+    if (db) db.release();
   }
 };
