@@ -84,7 +84,6 @@ module.exports = async function (context, req) {
     const created_at = new Date();
     const updated_at = created_at;
 
-    const fields = {};
 
     metadata.meeting_length = meeting_length;
 
