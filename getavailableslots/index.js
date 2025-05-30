@@ -232,6 +232,12 @@ module.exports = async function (context, req) {
     fm.forEach(s => debugLog(`☀️ FM: ${s.slot_iso} – score: ${s.score}`));
     em.forEach(s => debugLog(`🌙 EM: ${s.slot_iso} – score: ${s.score}`));
 
+    // 📋 Logga tydlig lista på tillgängliga slots (en rad per slot)
+    if (isDebug) {
+      const uniqueSlotLog = slots.map(s => `${s.slot_local} (${s.weekday}, ${s.slot_part}, score: ${s.score})`).join('\n');
+      debugLog("📋 Tillgängliga slots:\n" + uniqueSlotLog);
+    }
+
     debugLog("🎯 Slut på exekvering av getavailableslots");
     const finalSlots = Array.isArray(chosenSlotsResult?.chosenSlots) ? chosenSlotsResult.chosenSlots : [];
     const finalApple = finalSlots.filter(s => s.source === 'apple').length;
