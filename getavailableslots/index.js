@@ -216,7 +216,6 @@ module.exports = async function (context, req) {
       slotGroupPicked,
       logSlotContext: true
     });
-    debugLog("📈 chosenSlotsResult: " + JSON.stringify(chosenSlotsResult));
     const durationMs = Date.now() - startSlotGen;
     debugLog(`⏱️ Slotgenerering klar på ${durationMs} ms`);
     debugLog("✅ generateSlotChunks kördes utan fel");
@@ -240,7 +239,6 @@ module.exports = async function (context, req) {
     
     // Moved this debugLog line here, just before sending response:
     debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
-    debugLog(`📤 Response skickas med antal slots: ${slots.length}`);
 
     // context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
