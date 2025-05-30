@@ -75,6 +75,7 @@ module.exports = async function (context, req) {
     debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
     // Läs in booking_settings
     const settings = await getSettings(context);
+    const emailBodyTemplates = settings.email_body_templates || {};
 
     // Kontrollera att alla required_fields finns i metadata eller req.body
     const requiredFieldsConfig = settings.required_fields || {};
@@ -135,13 +136,17 @@ module.exports = async function (context, req) {
 
     let online_link = null;
     if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
-      const subject = combinedMetadata.subject || settings.default_meeting_subject || 'Möte';
+      const subjectTemplates = settings.email_subject_templates || {};
+      const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
+      const emailSubject = subjectTemplate
+        .replace('{{first_name}}', combinedMetadata.first_name || '')
+        .replace('{{company}}', combinedMetadata.company || 'din organisation');
       const location = combinedMetadata.location || 'Online';
       try {
         const eventResult = await graphClient.createEvent({
           start: startTime.toISOString(),
           end: endTime.toISOString(),
-          subject,
+          subject: emailSubject,
           location,
           attendees: [email]
         });
@@ -151,7 +156,7 @@ module.exports = async function (context, req) {
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
           combinedMetadata.online_link = online_link;
-          combinedMetadata.subject = eventResult.subject || subject || settings.default_meeting_subject || 'Möte';
+          combinedMetadata.subject = eventResult.subject || emailSubject || settings.default_meeting_subject || 'Möte';
           combinedMetadata.location = eventResult.location || location || 'Online';
         }
 
@@ -184,25 +189,29 @@ module.exports = async function (context, req) {
         combinedMetadata.location = 'Online';
 
         // Generate email subject and body using settings and injected online_link
-        const emailTemplate = settings.email_invite_template || {};
-        const emailSubject =
-          (emailTemplate.subject
-            ? emailTemplate.subject.replace('{{company}}', combinedMetadata.company || 'din organisation')
-            : 'Möte');
-        const emailBody =
-          (emailTemplate.body
-            ? emailTemplate.body
-                .replace('{{first_name}}', combinedMetadata.first_name || '')
-                .replace('{{company}}', combinedMetadata.company || '')
-                .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
-            : `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`);
+        const subjectTemplates = settings.email_subject_templates || {};
+        const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
+        const emailSubject = subjectTemplate
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || 'din organisation');
+        const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
+        const emailBody = emailBodyTemplate
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || '')
+          .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+          .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+          .replace('{{location}}', combinedMetadata.location || '')
+          .replace('{{phone}}', combinedMetadata.phone || '')
+          .replace('{{online_link}}', online_link || '');
+        const emailSignature = settings.email_signature || '';
+        const finalEmailBody = emailBody + '\n\n' + emailSignature;
 
         // Skicka e-post via Graph (placeholder – implementera din mailfunktion)
         try {
           await sendMail({
             to: email,
             subject: emailSubject,
-            body: emailBody,
+            body: finalEmailBody,
           });
           debugLog('✅ Zoominbjudan skickad via e-post');
         } catch (emailErr) {
@@ -215,15 +224,28 @@ module.exports = async function (context, req) {
       if (combinedMetadata.phone) {
         online_link = `facetime:${combinedMetadata.phone}`;
         combinedMetadata.online_link = online_link;
-        combinedMetadata.subject = combinedMetadata.subject || settings.default_meeting_subject || 'FaceTime';
+        const subjectTemplates = settings.email_subject_templates || {};
+        const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
+        const emailSubject = subjectTemplate
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || 'din organisation');
+        combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'FaceTime';
         combinedMetadata.location = combinedMetadata.location || 'FaceTime';
 
         try {
-          const emailTemplate = settings.email_invite_template || {};
-          const emailSubject = emailTemplate.subject?.replace('{{company}}', combinedMetadata.company || 'din organisation') || 'FaceTime-möte';
-          const emailBody = `${emailTemplate.body?.replace('{{first_name}}', combinedMetadata.first_name || '').replace('{{company}}', combinedMetadata.company || '') || ''}\n\n🔗 FaceTime-länk: ${online_link}`;
+          const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
+          const emailBody = emailBodyTemplate
+            .replace('{{first_name}}', combinedMetadata.first_name || '')
+            .replace('{{company}}', combinedMetadata.company || '')
+            .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+            .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+            .replace('{{location}}', combinedMetadata.location || '')
+            .replace('{{phone}}', combinedMetadata.phone || '')
+            .replace('{{online_link}}', online_link || '');
+          const emailSignature = settings.email_signature || '';
+          const finalEmailBody = emailBody + '\n\n' + emailSignature;
 
-          await sendMail({ to: email, subject: emailSubject, body: emailBody });
+          await sendMail({ to: email, subject: emailSubject, body: finalEmailBody });
           debugLog('✅ FaceTime-inbjudan skickad via e-post');
         } catch (emailErr) {
         }
@@ -231,27 +253,53 @@ module.exports = async function (context, req) {
       }
     } else if (meeting_type.toLowerCase() === 'atclient') {
       combinedMetadata.location = combinedMetadata.location || combinedMetadata.address || settings.default_home_address || 'Hos kund';
-      combinedMetadata.subject = combinedMetadata.subject || settings.default_meeting_subject || 'Möte hos kund';
+      const subjectTemplates = settings.email_subject_templates || {};
+      const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
+      const emailSubject = subjectTemplate
+        .replace('{{first_name}}', combinedMetadata.first_name || '')
+        .replace('{{company}}', combinedMetadata.company || 'din organisation');
+      combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'Möte hos kund';
 
       try {
-        const emailTemplate = settings.email_invite_template || {};
-        const emailSubject = emailTemplate.subject?.replace('{{company}}', combinedMetadata.company || 'din organisation') || 'Möte hos kund';
-        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', combinedMetadata.first_name || '').replace('{{company}}', combinedMetadata.company || '') || ''}\n\n📍 Adress: ${combinedMetadata.location}`;
+        const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
+        const emailBody = emailBodyTemplate
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || '')
+          .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+          .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+          .replace('{{location}}', combinedMetadata.location || '')
+          .replace('{{phone}}', combinedMetadata.phone || '')
+          .replace('{{online_link}}', online_link || '');
+        const emailSignature = settings.email_signature || '';
+        const finalEmailBody = emailBody + '\n\n' + emailSignature;
 
-        await sendMail({ to: email, subject: emailSubject, body: emailBody });
+        await sendMail({ to: email, subject: emailSubject, body: finalEmailBody });
         debugLog('✅ atClient-inbjudan skickad via e-post');
       } catch (emailErr) {
       }
     } else if (meeting_type.toLowerCase() === 'atoffice') {
       combinedMetadata.location = combinedMetadata.location || settings.default_office_address || 'Kontoret';
-      combinedMetadata.subject = combinedMetadata.subject || settings.default_meeting_subject || 'Möte på kontoret';
+      const subjectTemplates = settings.email_subject_templates || {};
+      const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
+      const emailSubject = subjectTemplate
+        .replace('{{first_name}}', combinedMetadata.first_name || '')
+        .replace('{{company}}', combinedMetadata.company || 'din organisation');
+      combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'Möte på kontoret';
 
       try {
-        const emailTemplate = settings.email_invite_template || {};
-        const emailSubject = emailTemplate.subject?.replace('{{company}}', combinedMetadata.company || 'din organisation') || 'Möte på kontoret';
-        const emailBody = `${emailTemplate.body?.replace('{{first_name}}', combinedMetadata.first_name || '').replace('{{company}}', combinedMetadata.company || '') || ''}\n\n📍 Plats: ${combinedMetadata.location}`;
+        const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
+        const emailBody = emailBodyTemplate
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || '')
+          .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+          .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
+          .replace('{{location}}', combinedMetadata.location || '')
+          .replace('{{phone}}', combinedMetadata.phone || '')
+          .replace('{{online_link}}', online_link || '');
+        const emailSignature = settings.email_signature || '';
+        const finalEmailBody = emailBody + '\n\n' + emailSignature;
 
-        await sendMail({ to: email, subject: emailSubject, body: emailBody });
+        await sendMail({ to: email, subject: emailSubject, body: finalEmailBody });
         debugLog('✅ atOffice-inbjudan skickad via e-post');
       } catch (emailErr) {
       }
