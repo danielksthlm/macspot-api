@@ -270,8 +270,20 @@ module.exports = async function (context, req) {
         $8, $9
       )
     `;
-
+    /*
     const values = Object.values(bookingFields);
+    */
+    const values = [
+      bookingFields.id,
+      bookingFields.start_time,
+      bookingFields.end_time,
+      bookingFields.meeting_type,
+      bookingFields.metadata,
+      bookingFields.created_at,
+      bookingFields.updated_at,
+      bookingFields.contact_id,
+      bookingFields.booking_email
+    ];
     await db.query(query, values);
     // Logga pending change för denna bokning
     await db.query(
