@@ -69,9 +69,10 @@ module.exports = async function (context, req) {
     // --- BEGIN: Apple events till bookingsByDay ---
     if (typeof testAppleRange !== "undefined" && Array.isArray(testAppleRange)) {
       for (const ev of testAppleRange) {
-        if (!bookingsByDay[ev.date]) bookingsByDay[ev.date] = [];
         if (ev.start && ev.end) {
-          bookingsByDay[ev.date].push({
+          const dateKey = new Date(ev.start).toISOString().split('T')[0];
+          if (!bookingsByDay[dateKey]) bookingsByDay[dateKey] = [];
+          bookingsByDay[dateKey].push({
             start: new Date(ev.start).getTime(),
             end: new Date(ev.end).getTime()
           });
