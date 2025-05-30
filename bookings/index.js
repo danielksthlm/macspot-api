@@ -67,6 +67,26 @@ module.exports = async function (context, req) {
     // Läs in booking_settings
     const settings = await getSettings(context);
 
+    // Kontrollera att alla required_fields finns i metadata eller req.body
+    const requiredFieldsFromSettings = settings.required_fields || [];
+    const missingRequired = requiredFieldsFromSettings.filter(field => {
+      if (field.startsWith('metadata.')) {
+        const key = field.replace('metadata.', '');
+        return !metadata[key];
+      }
+      return !req.body[field];
+    });
+
+    if (missingRequired.length > 0) {
+      context.log('❌ Saknade obligatoriska fält enligt settings:', missingRequired);
+      context.res = {
+        status: 400,
+        body: { error: `Saknade obligatoriska fält: ${missingRequired.join(', ')}` }
+      };
+      db.release();
+      return;
+    }
+
     const id = uuidv4();
     // Kontrollera om en bokning redan finns
     const existing = await db.query(
