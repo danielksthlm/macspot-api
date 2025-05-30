@@ -228,6 +228,9 @@ module.exports = async function (context, req) {
     // }
 
     const slots = chosenSlotsResult?.chosenSlots || [];
+    const fallbackCount = slots.filter(s => s.source === 'fallback').length;
+    const appleCount = slots.filter(s => s.source === 'apple').length;
+    context.log(`📊 Slot-källor: ${appleCount} med Apple Maps, ${fallbackCount} med fallback`);
     const fm = slots.filter(s => s.slot_part === 'fm');
     const em = slots.filter(s => s.slot_part === 'em');
 
@@ -240,6 +243,10 @@ module.exports = async function (context, req) {
       body: {
         message: "✅ getavailableslots är kontaktbar och fungerar i full version",
         received: { email, meeting_type, meeting_length },
+        travel_stats: {
+          apple_count: appleCount,
+          fallback_count: fallbackCount
+        },
         slots: (chosenSlotsResult?.chosenSlots || []).map(slot => ({
           ...slot,
           score: slot.score ?? null
@@ -250,7 +257,7 @@ module.exports = async function (context, req) {
     debugLog("✅ Databasanslutning släppt");
     debugLog("🎯 Slut på exekvering av getavailableslots");
   } catch (err) {
-    context.log("🔥 FEL i minimal testfunktion:", err.message);
+    context.log("🔥 FEL i funktion:", err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
   debugLog("🎯 Slut på exekvering av getavailableslots");

@@ -121,7 +121,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     }
 
     const destination = settings.default_office_address;
-    const { travelTimeMin } = await resolveTravelTime({
+    const travelTimeResult = await resolveTravelTime({
       origin: originInfo.origin,
       destination,
       hour: utcStart.hour,
@@ -129,6 +129,8 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       accessToken: context.accessToken || null,
       context
     });
+    const travelTimeMin = travelTimeResult?.travelTimeMin;
+    const travelSource = travelTimeResult?.source || 'fallback';
 
     if (!travelTimeMin || typeof travelTimeMin !== "number") {
       context.log.warn(`⚠️ Ogiltig restid, hoppar slot: ${eventId}`);
@@ -156,7 +158,7 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       travel_time_min: travelTimeMin,
       origin: originInfo.origin,
       originEndTime: originInfo.originEndTime,
-      source: originInfo.originSource,
+      source: travelSource,
       require_approval: settings.require_approval,
       meeting_length,
       weekday,
@@ -226,6 +228,9 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     slot.score = 10 - fragmentationPenalty;
 
     slots.push(slot);
+    if (isDebug && travelSource === 'fallback') {
+      context.log(`⚠️ Slot ${eventId} använder fallback för restid (ingen accessToken)`);
+    }
   }
 
   // Separera förmiddag och eftermiddag
