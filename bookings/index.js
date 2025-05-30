@@ -9,6 +9,10 @@ const { sendMail } = require('../shared/notification/sendMail');
 
 module.exports = async function (context, req) {
   context.log('📥 bookings/index.js startar');
+  const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  context.log(`🌐 IP: ${ipAddress}`);
+  context.log(`🧭 User-Agent: ${userAgent}`);
   const requiredFields = ['meeting_type', 'meeting_length', 'slot_iso'];
   context.log('🔍 req.body:', req.body);
   const missing = requiredFields.filter(k => !req.body?.[k]);
@@ -220,18 +224,20 @@ module.exports = async function (context, req) {
       created_at,
       updated_at,
       contact_id: contact_id || null,
-      booking_email: email || null
+      booking_email: email || null,
+      ip_address: ipAddress,
+      user_agent: userAgent
     };
 
     const query = `
       INSERT INTO bookings (
         id, start_time, end_time, meeting_type,
         metadata, created_at, updated_at,
-        contact_id, booking_email
+        contact_id, booking_email, ip_address, user_agent
       ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7,
-        $8, $9
+        $8, $9, $10, $11
       )
     `;
 
