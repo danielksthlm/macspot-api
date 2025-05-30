@@ -274,6 +274,7 @@ module.exports = async function (context, req) {
     };
     client.release();
     debugLog("✅ Databasanslutning släppt");
+    debugLog("🏁 Funktion getavailableslots/index.js avslutad helt utan fel");
 
   } catch (err) {
     context.log("🔥 FEL i funktion:", err.message);
