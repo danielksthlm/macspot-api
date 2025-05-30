@@ -236,7 +236,10 @@ module.exports = async function (context, req) {
     const finalApple = finalSlots.filter(s => s.source === 'apple').length;
     const finalFallback = finalSlots.filter(s => s.source === 'fallback').length;
     debugLog(`🎉 Slutlig summering: ${finalSlots.length} slots, ${finalApple} Apple Maps, ${finalFallback} fallback`);
+    
+    // Moved this debugLog line here, just before sending response:
     debugLog("✅ getavailableslots/index.js – HELA FUNKTIONEN KÖRDES UTAN FEL");
+    debugLog(`📤 Response skickas med antal slots: ${slots.length}`);
 
     // context.log("📦 Slotresultat:", JSON.stringify(chosenSlotsResult?.chosenSlots || [], null, 2));
 
