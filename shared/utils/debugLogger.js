@@ -12,7 +12,7 @@ function createDebugLogger(context) {
   };
 
   return {
-    debugLog
+    log: debugLog
   };
 }
 
