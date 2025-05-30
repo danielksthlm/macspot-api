@@ -75,11 +75,7 @@ module.exports = async function (context, req) {
       : [];
     const requiredFieldsFromSettings = [...new Set([...baseFields, ...specificFields])];
     const missingRequired = requiredFieldsFromSettings.filter(field => {
-      if (field.startsWith('metadata.')) {
-        const key = field.replace('metadata.', '');
-        return !metadata[key];
-      }
-      return !req.body[field];
+      return !(field in req.body) && !(field in metadata);
     });
 
     if (missingRequired.length > 0) {
