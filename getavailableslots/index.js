@@ -284,7 +284,10 @@ module.exports = async function (context, req) {
       debugLog("🏁 Funktion getavailableslots/index.js avslutad helt utan fel");
     } catch (err) {
       debugLog("❌ Fel vid response/build/release: " + err.message);
-      context.res = { status: 500, body: { error: "Internal error after slot gen", detail: err.message } };
+      context.res = {
+        status: 500,
+        body: { error: "Internal error after slot gen", detail: err.message }
+      };
     }
 
   } catch (err) {
