@@ -66,6 +66,10 @@
       }, 10000);
     } catch (error) {
       console.error('❌ submitBooking – fel från fetchJSON:', error.message || error);
+      console.warn('📡 Payload vid fel:', payload);
+      console.warn('📡 User-Agent:', navigator.userAgent);
+      // console.warn('📡 Browser IP:', await (await fetch('https://api.ipify.org?format=json')).json());
+      // IP-hämtning blockeras av CORS i Webflow – logga istället på backend.
       // Show error UI
       const errorEl = document.querySelector('.w-form-fail');
       const successEl = document.querySelector('.w-form-done');

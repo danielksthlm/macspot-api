@@ -285,6 +285,9 @@ module.exports = async function (context, req) {
     };
   } catch (err) {
     context.log.error("❌ Booking error:", err.message);
+    context.log.error("📦 Request body:", req.body);
+    context.log.error("🌐 IP:", ipAddress);
+    context.log.error("🧭 User-Agent:", userAgent);
     context.log.error("❌ Fullt felobjekt:", err);
     context.res = {
       status: 500,
