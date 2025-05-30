@@ -1,4 +1,3 @@
-console.log("🧪 appleCalendar.js laddades");
 const fetch = require("node-fetch");
 const xml2js = require("xml2js");
 const { DateTime } = require("luxon");
@@ -7,7 +6,6 @@ function createAppleClient(context) {
   const debugLog = (...args) => { if (process.env.DEBUG === 'true') context.log(...args); };
 
   async function getEvent(calendarId, eventId) {
-    if (process.env.DEBUG === 'true') context.log("🍏 appleClient.getEvent() anropad med:", { calendarId, eventId });
     const caldavUrl = process.env.CALDAV_CALENDAR_URL;
     const username = process.env.CALDAV_USER;
     const password = process.env.CALDAV_PASSWORD;
@@ -32,7 +30,6 @@ function createAppleClient(context) {
       }
 
       const icsText = await icsRes.text();
-      if (process.env.DEBUG === 'true') context.log("🧾 Förhandsvisning av ICS-innehåll (första 500 tecken):", icsText.slice(0, 500));
       const locationMatch = icsText.match(/LOCATION:(.*)/);
       const endTimeMatch = icsText.match(/DTEND(?:;[^:]*)?:(.*)/);
 
@@ -58,12 +55,6 @@ function createAppleClient(context) {
     const username = process.env.CALDAV_USER;
     const password = process.env.CALDAV_PASSWORD;
 
-    if (process.env.DEBUG === 'true') context.log("🧪 fetchEventsByDateRange() kallas med:", { startDate, endDate });
-    if (process.env.DEBUG === 'true') context.log("🧪 CALDAV_REQUEST DEBUG – Headers:");
-    if (process.env.DEBUG === 'true') context.log("🧪 Authorization:", Buffer.from(`${username}:${password}`).toString("base64"));
-    if (process.env.DEBUG === 'true') context.log("🧪 Depth: 1");
-    if (process.env.DEBUG === 'true') context.log("🧪 Content-Type: application/xml");
-    if (process.env.DEBUG === 'true') context.log("🧪 URL:", caldavUrl);
 
     if (!caldavUrl || !username || !password) {
       context.log("⚠️ Missing CalDAV credentials");
@@ -78,8 +69,6 @@ function createAppleClient(context) {
     };
     const startIso = parseDate(startDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
     const endIso = parseDate(endDate).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
-    if (process.env.DEBUG === 'true') context.log("📅 Använder time-range:", { startIso, endIso });
-    if (process.env.DEBUG === 'true') context.log("📆 REPORT-request time range:", { startIso, endIso });
     const xmlBody = `
     <C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"
                       xmlns:D="DAV:">
@@ -97,7 +86,6 @@ function createAppleClient(context) {
     </C:calendar-query>`;
 
     try {
-      if (process.env.DEBUG === 'true') context.log("📡 Initierar CalDAV REPORT-request…");
       const res = await fetch(caldavUrl, {
         method: "REPORT",
         headers: {
@@ -107,8 +95,6 @@ function createAppleClient(context) {
         },
         body: xmlBody
       });
-      debugLog("📡 CalDAV-anrop utfört, statuskod:", res.status);
-      debugLog("📤 Fick raw XML (1000 tecken):", (await res.clone().text()).slice(0, 1000));
 
       const xml = await res.text();
 
@@ -177,7 +163,6 @@ function createAppleClient(context) {
         return aTime - bTime;
       });
 
-      debugLog(`✅ Hittade ${results.length} events totalt`);
 
       const now = DateTime.local().setZone("Europe/Stockholm");
       const upcoming = results.filter(ev => {
@@ -186,8 +171,6 @@ function createAppleClient(context) {
         return dt > now;
       });
 
-      debugLog(`📊 Antal upcoming events: ${upcoming.length}`);
-      debugLog("📦 Slutresultat – upcoming events:", JSON.stringify(upcoming, null, 2));
       return upcoming;
     } catch (err) {
       context.log("❌ Fel i fetchEventsByDateRange try/catch:", err.stack || err.message);

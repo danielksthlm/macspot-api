@@ -1,5 +1,5 @@
 const pool = require("../db/pgPool");
-console.log("🧪 settingsLoader.js laddades");
+
 async function getSettings(context) {
   try {
     const settings = {};
@@ -9,11 +9,8 @@ async function getSettings(context) {
         context.log(msg);
       }
     };
-    debugLog('⚙️ Börjar läsa booking_settings...');
     const settingsRes = await pool.query('SELECT key, value, value_type FROM booking_settings');
-    debugLog(`📦 ${settingsRes.rows.length} inställningar hämtade`);
     for (const row of settingsRes.rows) {
-      debugLog(`🔑 ${row.key} = ${row.value} (${row.value_type})`);
       if (
         row.value_type === 'json' ||
         row.value_type === 'array' ||
@@ -32,7 +29,6 @@ async function getSettings(context) {
         settings[row.key] = row.value;
       }
     }
-    debugLog('✅ Alla inställningar tolkade och klara');
     settings.field_labels = {
       first_name: 'Förnamn',
       last_name: 'Efternamn',

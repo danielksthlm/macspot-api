@@ -34,11 +34,9 @@ function createMsGraphClient() {
         if (err.statusCode === 404) {
           return { location: null, endTime: null, deleted: true };
         }
-        console.error("⚠️ getEvent error (Graph):", err.message);
         return null;
       }
     } catch (err) {
-      console.error("⚠️ getEvent error (Graph):", err.message);
       return null;
     }
   }
@@ -79,7 +77,6 @@ function createMsGraphClient() {
         id: ev.id
       }));
     } catch (err) {
-      console.error("⚠️ listUpcomingEvents error (Graph):", err.message);
       return [];
     }
   }
@@ -132,12 +129,6 @@ function createMsGraphClient() {
         body: created?.body || null
       };
     } catch (err) {
-      console.error("❌ createEvent error (Graph):", err.message || err);
-      if (err.response?.text) {
-        const raw = await err.response.text();
-        console.error("📄 Graph response text:", raw);
-      }
-      console.error("📄 Detaljerat Graph-felobjekt:", JSON.stringify(err, null, 2));
       return null;
     }
   }
@@ -173,7 +164,6 @@ function createMsGraphClient() {
       await client.api(`/users/${senderEmail}/sendMail`).post(message);
       return { status: "sent" };
     } catch (err) {
-      console.error("❌ sendEmailInvite error:", err.message || err);
       return null;
     }
   }

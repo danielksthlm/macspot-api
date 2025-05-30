@@ -1,4 +1,3 @@
-console.log("🧪 slotEngine.js laddades");
 const pool = require('../db/pgPool');
 const { DateTime } = require("luxon");
 const Holidays = require('date-holidays');
@@ -102,7 +101,6 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
     }
 
 
-    if (isDebug) context.log(`📧 resolveOriginAddress använder settings.ms_sender_email (MS) och CALDAV_USER (Apple) – calendarId sätts till 'system' som placeholder`);
     const originInfo = await resolveOriginAddress({
       eventId,
       calendarId: 'system',
@@ -165,9 +163,6 @@ async function generateSlotCandidates({ day, settings, contact, pool, context, g
       slot_part
     };
 
-    if (isDebug) {
-      context.log(`🧪 SLOT TEST: ${slot.slot_iso} part=${slot.slot_part} travel=${slot.travel_time_min}min score=${slot.score}`);
-    }
 
     // --- Score calculation logic ---
     const slotStart = dateObj.getTime();
@@ -326,10 +321,6 @@ async function generateSlotChunks({
     }
     if (isDebug) {
       context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
-      context.log("📋 MS Graph – alla händelser:");
-      for (const ev of msEvents) {
-        context.log(`  • ${ev.subject || '(utan titel)'}: ${ev.start} → ${ev.end}`);
-      }
     }
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
@@ -351,13 +342,9 @@ async function generateSlotChunks({
         // Ensure start and end are cast to numbers explicitly
         const start = Number(new Date(ev.dtstart));
         const end = Number(new Date(ev.dtend));
-        // Log event range inclusion
-        context.log(`📅 AppleEvent start: ${ev.dtstart}, end: ${ev.dtend}, title: ${ev.summary}`);
         if (isNaN(start) || isNaN(end)) continue;
         const date = new Date(ev.dtstart).toISOString().split("T")[0];
         if (!bookingsByDay[date]) bookingsByDay[date] = [];
-        // Log before adding to bookingsByDay
-        context.log(`✅ Lägger till blockering i bookingsByDay: ${date} → ${new Date(start).toISOString()} → ${new Date(end).toISOString()}`);
         bookingsByDay[date].push({ start, end });
         appleAddedCount++;
       } catch (err) {
@@ -366,13 +353,6 @@ async function generateSlotChunks({
     }
     if (isDebug) {
       context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
-      context.log("📋 Apple Calendar – alla händelser:");
-      for (const ev of appleEvents) {
-        context.log(`  • ${ev.summary || '(utan titel)'}: ${ev.dtstart} → ${ev.dtend}`);
-      }
-      if (!Array.isArray(appleEvents)) {
-        context.log("⛔ appleEvents är inte en array – faktiskt värde:", JSON.stringify(appleEvents, null, 2));
-      }
     }
   } catch (err) {
     context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);

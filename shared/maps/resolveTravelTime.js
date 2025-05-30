@@ -1,4 +1,3 @@
-console.log("🧪 travelTimeResolver.js laddades");
 async function resolveTravelTime({ origin, destination, hour, db, accessToken, context }) {
   let travelTimeMin = 20;
   const cacheKey = `${origin}|${destination}|${hour}`;

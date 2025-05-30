@@ -1,13 +1,13 @@
 require('dotenv').config(); // Ladda miljövariabler från .env
 const fetch = require('node-fetch');
 
-console.log("🧪 getMsToken.js laddades");
+// console.log("🧪 getMsToken.js laddades");
 
 module.exports = async function getMsToken(context = { log: console.log }) {
-  context.log("🧪 getMsToken() anropades – initierar tokenhämtning");
-  context.log("🔍 MS365_CLIENT_ID:", process.env.MS365_CLIENT_ID?.slice(0, 8));
-  context.log("🔍 MS365_CLIENT_SECRET:", process.env.MS365_CLIENT_SECRET ? "[satt]" : "[saknas]");
-  context.log("🔍 MS365_TENANT_ID:", process.env.MS365_TENANT_ID?.slice(0, 8));
+  // context.log("🧪 getMsToken() anropades – initierar tokenhämtning");
+  // context.log("🔍 MS365_CLIENT_ID:", process.env.MS365_CLIENT_ID?.slice(0, 8));
+  // context.log("🔍 MS365_CLIENT_SECRET:", process.env.MS365_CLIENT_SECRET ? "[satt]" : "[saknas]");
+  // context.log("🔍 MS365_TENANT_ID:", process.env.MS365_TENANT_ID?.slice(0, 8));
   if (!process.env.MS365_CLIENT_ID || !process.env.MS365_CLIENT_SECRET || !process.env.MS365_TENANT_ID) {
     context.log("❌ En eller flera miljövariabler för MS Graph saknas.");
     return null;
@@ -20,7 +20,7 @@ module.exports = async function getMsToken(context = { log: console.log }) {
     params.append('scope', 'https://graph.microsoft.com/.default');
     params.append('grant_type', 'client_credentials');
 
-    context.log("📡 Försöker hämta token från:", tokenEndpoint);
+    // context.log("📡 Försöker hämta token från:", tokenEndpoint);
 
     const res = await fetch(tokenEndpoint, {
       method: 'POST',
@@ -28,7 +28,7 @@ module.exports = async function getMsToken(context = { log: console.log }) {
       body: params
     });
 
-    context.log(`📬 Response status: ${res.status}`);
+    // context.log(`📬 Response status: ${res.status}`);
 
     if (!res.ok) {
       const errorText = await res.text();
@@ -48,10 +48,10 @@ module.exports = async function getMsToken(context = { log: console.log }) {
 if (require.main === module) {
   (async () => {
     const token = await module.exports();
-    if (token) {
-      console.log("✅ Token hämtad:", token.slice(0, 20) + "...");
-    } else {
-      console.log("❌ Kunde inte hämta token.");
-    }
+    // if (token) {
+    //   console.log("✅ Token hämtad:", token.slice(0, 20) + "...");
+    // } else {
+    //   console.log("❌ Kunde inte hämta token.");
+    // }
   })();
 }
