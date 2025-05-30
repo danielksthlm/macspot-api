@@ -10,13 +10,13 @@ LOCAL_TABLES = [
 ]
 
 REMOTE_TABLES = [
-    "available_slots_cache",
     "bookings",
     "contact",
     "event_log",
     "pending_changes",
     "slot_cache",
     "calendar_origin_cache",
+    "available_slots_cache",
     "travel_time_cache"
 ]
 

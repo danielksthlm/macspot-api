@@ -66,7 +66,12 @@ async function resolveTravelTime({ origin, destination, hour, db, accessToken, c
     }
   }
 
-  return { travelTimeMin, cacheHit, isFallback };
+  return {
+    travelTimeMin,
+    cacheHit,
+    isFallback,
+    source: isFallback ? 'fallback' : 'apple'
+  };
 }
 
 module.exports = { resolveTravelTime };
