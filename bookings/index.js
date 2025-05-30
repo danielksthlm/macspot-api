@@ -88,6 +88,20 @@ module.exports = async function (context, req) {
 
     metadata.meeting_length = meeting_length;
 
+    const bookingFields = {
+      id,
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      meeting_type,
+      metadata: metadata,
+      created_at,
+      updated_at,
+      contact_id: contact_id || null,
+      booking_email: email || null,
+      ip_address: ipAddress,
+      user_agent: userAgent
+    };
+
     let online_link = null;
     if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
       const subject = metadata.subject || settings.default_meeting_subject || 'Möte';
@@ -123,7 +137,7 @@ module.exports = async function (context, req) {
           metadata.body_preview = body;
         }
 
-        fields.synced_to_calendar = true;
+        bookingFields.synced_to_calendar = true;
       } catch (err) {
         debugLog('⚠️ createEvent misslyckades: ' + err.message);
         debugLog("❌ Detaljerat fel från createEvent:", err);
@@ -168,7 +182,7 @@ module.exports = async function (context, req) {
           debugLog('⚠️ Misslyckades skicka e-post för Zoom:', emailErr.message);
         }
 
-        fields.synced_to_calendar = true;
+        bookingFields.synced_to_calendar = true;
       } catch (err) {
         debugLog('⚠️ Zoom createMeeting failed:', err.message);
       }
@@ -225,20 +239,6 @@ module.exports = async function (context, req) {
       }
     }
 
-    const fields = {
-      id,
-      start_time: startTime.toISOString(),
-      end_time: endTime.toISOString(),
-      meeting_type,
-      metadata: metadata,
-      created_at,
-      updated_at,
-      contact_id: contact_id || null,
-      booking_email: email || null,
-      ip_address: ipAddress,
-      user_agent: userAgent
-    };
-
     const query = `
       INSERT INTO bookings (
         id, start_time, end_time, meeting_type,
@@ -251,7 +251,7 @@ module.exports = async function (context, req) {
       )
     `;
 
-    const values = Object.values(fields);
+    const values = Object.values(bookingFields);
     await db.query(query, values);
     // Logga pending change för denna bokning
     await db.query(
