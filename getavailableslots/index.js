@@ -254,6 +254,7 @@ module.exports = async function (context, req) {
     debugLog(`📊 Slot-källor: ${appleCount} med Apple Maps, ${fallbackCount} med fallback`);
 
     // context.log("📤 Response skickas med antal slots:", (chosenSlotsResult?.chosenSlots || []).length);
+    debugLog("⏳ På väg att returnera response...");
     context.res = {
       status: 200,
       body: {
@@ -263,10 +264,12 @@ module.exports = async function (context, req) {
           apple_count: appleCount,
           fallback_count: fallbackCount
         },
-        slots: (chosenSlotsResult?.chosenSlots || []).map(slot => ({
-          ...slot,
-          score: slot.score ?? null
-        }))
+        slots: Array.isArray(chosenSlotsResult?.chosenSlots)
+          ? chosenSlotsResult.chosenSlots.map(slot => ({
+              ...slot,
+              score: slot.score ?? null
+            }))
+          : []
       }
     };
     client.release();
