@@ -61,8 +61,7 @@ module.exports = async function (context, req) {
   let db;
   try {
     db = await pool.connect();
-    const debugHelper = createDebugLogger(context);
-    const debugLog = debugHelper.debugLog;
+    const { debugLog } = createDebugLogger(context);
     debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
     // Läs in booking_settings
     const settings = await getSettings(context);
