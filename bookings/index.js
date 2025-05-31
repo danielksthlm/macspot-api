@@ -75,7 +75,6 @@ module.exports = async function (context, req) {
     debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
     // Läs in booking_settings
     const settings = await getSettings(context);
-    const emailBodyTemplates = settings.email_body_templates || {};
 
     // Kontrollera att alla required_fields finns i metadata eller req.body
     const requiredFieldsConfig = settings.required_fields || {};
@@ -194,24 +193,38 @@ module.exports = async function (context, req) {
         const emailSubject = subjectTemplate
           .replace('{{first_name}}', combinedMetadata.first_name || '')
           .replace('{{company}}', combinedMetadata.company || 'din organisation');
-        const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
-        const emailBody = emailBodyTemplate
-          .replace('{{first_name}}', combinedMetadata.first_name || '')
-          .replace('{{company}}', combinedMetadata.company || '')
-          .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-          .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-          .replace('{{location}}', combinedMetadata.location || '')
-          .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{online_link}}', online_link || '');
+        const emailTemplate = settings.email_invite_template || {};
+        const emailBody =
+          (emailTemplate.body
+            ? emailTemplate.body
+                .replace('{{first_name}}', combinedMetadata.first_name || '')
+                .replace('{{company}}', combinedMetadata.company || '')
+                .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
+            : `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`);
         const emailSignature = settings.email_signature || '';
         const finalEmailBody = emailBody + '\n\n' + emailSignature;
+
+        const bodyTemplates = settings.email_body_templates || {};
+        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+        const emailBodyHtml = rawBody
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || '')
+          .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+          .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+          .replace('{{online_link}}', online_link || '')
+          .replace('{{phone}}', combinedMetadata.phone || '')
+          .replace('{{location}}', combinedMetadata.location || '');
+        const signature = settings.email_signature || '';
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
 
         // Skicka e-post via Graph (placeholder – implementera din mailfunktion)
         try {
           await sendMail({
             to: email,
             subject: emailSubject,
-            body: finalEmailBody,
+            body: finalEmailBodyHtml,
+            contentType: 'HTML',
+            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
           });
           debugLog('✅ Zoominbjudan skickad via e-post');
         } catch (emailErr) {
@@ -233,19 +246,26 @@ module.exports = async function (context, req) {
         combinedMetadata.location = combinedMetadata.location || 'FaceTime';
 
         try {
-          const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
-          const emailBody = emailBodyTemplate
+          const bodyTemplates = settings.email_body_templates || {};
+          const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+          const emailBodyHtml = rawBody
             .replace('{{first_name}}', combinedMetadata.first_name || '')
             .replace('{{company}}', combinedMetadata.company || '')
-            .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-            .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-            .replace('{{location}}', combinedMetadata.location || '')
+            .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+            .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+            .replace('{{online_link}}', online_link || '')
             .replace('{{phone}}', combinedMetadata.phone || '')
-            .replace('{{online_link}}', online_link || '');
-          const emailSignature = settings.email_signature || '';
-          const finalEmailBody = emailBody + '\n\n' + emailSignature;
+            .replace('{{location}}', combinedMetadata.location || '');
+          const signature = settings.email_signature || '';
+          const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
 
-          await sendMail({ to: email, subject: emailSubject, body: finalEmailBody });
+          await sendMail({
+            to: email,
+            subject: emailSubject,
+            body: finalEmailBodyHtml,
+            contentType: 'HTML',
+            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
+          });
           debugLog('✅ FaceTime-inbjudan skickad via e-post');
         } catch (emailErr) {
         }
@@ -261,19 +281,26 @@ module.exports = async function (context, req) {
       combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'Möte hos kund';
 
       try {
-        const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
-        const emailBody = emailBodyTemplate
+        const bodyTemplates = settings.email_body_templates || {};
+        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+        const emailBodyHtml = rawBody
           .replace('{{first_name}}', combinedMetadata.first_name || '')
           .replace('{{company}}', combinedMetadata.company || '')
-          .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-          .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-          .replace('{{location}}', combinedMetadata.location || '')
+          .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+          .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+          .replace('{{online_link}}', online_link || '')
           .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{online_link}}', online_link || '');
-        const emailSignature = settings.email_signature || '';
-        const finalEmailBody = emailBody + '\n\n' + emailSignature;
+          .replace('{{location}}', combinedMetadata.location || '');
+        const signature = settings.email_signature || '';
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
 
-        await sendMail({ to: email, subject: emailSubject, body: finalEmailBody });
+        await sendMail({
+          to: email,
+          subject: emailSubject,
+          body: finalEmailBodyHtml,
+          contentType: 'HTML',
+          trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
+        });
         debugLog('✅ atClient-inbjudan skickad via e-post');
       } catch (emailErr) {
       }
@@ -287,19 +314,26 @@ module.exports = async function (context, req) {
       combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'Möte på kontoret';
 
       try {
-        const emailBodyTemplate = emailBodyTemplates[meeting_type.toLowerCase()] || '';
-        const emailBody = emailBodyTemplate
+        const bodyTemplates = settings.email_body_templates || {};
+        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+        const emailBodyHtml = rawBody
           .replace('{{first_name}}', combinedMetadata.first_name || '')
           .replace('{{company}}', combinedMetadata.company || '')
-          .replace('{{start_time}}', startTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-          .replace('{{end_time}}', endTime.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' }))
-          .replace('{{location}}', combinedMetadata.location || '')
+          .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+          .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+          .replace('{{online_link}}', online_link || '')
           .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{online_link}}', online_link || '');
-        const emailSignature = settings.email_signature || '';
-        const finalEmailBody = emailBody + '\n\n' + emailSignature;
+          .replace('{{location}}', combinedMetadata.location || '');
+        const signature = settings.email_signature || '';
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
 
-        await sendMail({ to: email, subject: emailSubject, body: finalEmailBody });
+        await sendMail({
+          to: email,
+          subject: emailSubject,
+          body: finalEmailBodyHtml,
+          contentType: 'HTML',
+          trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
+        });
         debugLog('✅ atOffice-inbjudan skickad via e-post');
       } catch (emailErr) {
       }
