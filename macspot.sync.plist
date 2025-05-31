@@ -12,6 +12,9 @@
     <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py</string>
   </array>
 
+  <key>WorkingDirectory</key>
+  <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api</string>
+
   <key>StartCalendarInterval</key>
   <array>
     <dict><key>Minute</key><integer>0</integer></dict>

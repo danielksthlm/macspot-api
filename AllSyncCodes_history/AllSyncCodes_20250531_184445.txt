@@ -1,0 +1,1156 @@
+📂 KODTRÄD
+==========
+├── macspot.sync.plist
+├── sync.py
+├── sync_all.py
+├── sync_from_cloud.py
+├── sync_static_tables.py
+├── sync_to_cloud.py
+==========
+
+====================
+📄 Fil: sync_from_cloud.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-15 18:23:27
+📏 Antal rader: 141
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 28
+🧪 TODO/FIXME: 0
+====================
+START: sync_from_cloud.py
+import psycopg2
+import json
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+def apply_change(cur, table, operation, payload):
+    if operation == "INSERT":
+        cols = ", ".join(payload.keys())
+        placeholders = ", ".join(["%s"] * len(payload))
+        sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING"
+        cur.execute(sql, [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()])
+    elif operation == "UPDATE":
+        if table == "contact" and "metadata" in payload:
+            local_meta = payload["metadata"]
+            if isinstance(local_meta, str):
+                local_meta = json.loads(local_meta)
+            cur.execute("SELECT metadata FROM contact WHERE id = %s", (payload["id"],))
+            row = cur.fetchone()
+            if row:
+                remote_meta = row[0]
+                if isinstance(remote_meta, str):
+                    remote_meta = json.loads(remote_meta)
+                if remote_meta == local_meta:
+                    print(f"♻️ Ingen skillnad i metadata för {payload['id']}, hoppar UPDATE och markerar som klar.")
+                    return
+        sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
+        values = [json.dumps(payload[col]) if isinstance(payload[col], dict) else payload[col] for col in payload if col != "id"]
+        values.append(payload["id"])
+        sql = f"UPDATE {table} SET {sets} WHERE id = %s"
+        cur.execute(sql, values)
+        cur.execute("SELECT metadata, updated_at FROM contact WHERE id = %s", [payload["id"]])
+        updated_row = cur.fetchone()
+        if updated_row:
+            try:
+                metadata = updated_row[0]
+                if isinstance(metadata, str):
+                    metadata = json.loads(metadata)
+                address = metadata.get("address", "(ingen adress)")
+            except Exception:
+                address = "(kunde inte tolkas)"
+            print(f"🧾 Efter UPDATE: {payload['id']} → {address} @ {updated_row[1]}")
+        else:
+            print(f"⚠️ UPDATE-verifiering misslyckades: Inget resultat för {payload['id']}")
+    elif operation == "DELETE":
+        sql = f"DELETE FROM {table} WHERE id = %s"
+        cur.execute(sql, [payload["id"]])
+
+def sync():
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+    remote_cur = remote_conn.cursor()
+
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    local_cur = local_conn.cursor()
+
+    remote_cur.execute("""
+        SELECT id, table_name, record_id, operation, payload
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+            FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+              AND table_name IN ('contact', 'bookings')
+        ) sub
+        WHERE rn = 1
+        ORDER BY created_at ASC, id
+    """)
+    rows = remote_cur.fetchall()
+
+    remote_cur.execute("""
+        DELETE FROM pending_changes
+        WHERE id NOT IN (
+            SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                FROM pending_changes
+                WHERE direction = 'out' AND processed = false
+            ) sub
+            WHERE rn = 1
+        ) AND direction = 'out' AND processed = false AND operation = 'UPDATE';
+    """)
+
+    seen_record_ids = set()
+    for row in rows:
+        try:
+            payload_preview = row[4] if isinstance(row[4], dict) else json.loads(row[4])
+            rid = payload_preview.get("id")
+            email = payload_preview.get("booking_email", "okänd e-post")
+            seen_record_ids.add(rid)
+        except Exception as e:
+            pass
+    count = 0
+    for row in rows:
+        change_id, table, record_id, operation, payload_json = row
+        try:
+            payload = payload_json if isinstance(payload_json, dict) else json.loads(payload_json)
+            if not isinstance(payload.get("id"), str) or "your-generated-id" in payload.get("id"):
+                continue
+            apply_change(local_cur, table, operation, payload)
+            if table == "bookings" and operation == "INSERT":
+                local_cur.execute(
+                    """
+                    UPDATE pending_changes
+                    SET booking_id = %s
+                    WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
+                    """,
+                    (record_id, record_id)
+                )
+                local_conn.commit()
+            if table == "contact":
+                email = payload.get("booking_email", "(okänd e-post)")
+                meta = payload.get("metadata")
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except Exception:
+                        meta = {}
+                elif not isinstance(meta, dict):
+                    meta = {}
+                address = meta.get("address", "(okänd adress)")
+                print(f"📥 Importerad kontakt: {email} → {address}")
+            if table == "bookings" and operation == "INSERT":
+                pass  # Notis borttagen
+            local_cur.execute("""
+                INSERT INTO event_log (id, source, event_type, payload, received_at)
+                VALUES (gen_random_uuid(), %s, %s, %s, now())
+            """, ('sync', f"{operation.lower()}_{table}", json.dumps(payload)))
+            remote_cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", [change_id])
+            remote_conn.commit()
+            count += 1
+        except Exception as e:
+            print(f"❌ Fel vid synk för {table} (id={change_id}): {e}")
+            continue
+
+    local_conn.commit()
+    local_cur.close()
+    remote_cur.close()
+    local_conn.close()
+    remote_conn.close()
+
+if __name__ == "__main__":
+    sync()
+END: sync_from_cloud.py
+
+====================
+📄 Fil: sync_to_cloud.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-15 18:23:01
+📏 Antal rader: 211
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 3 – ['import psycopg2', 'import json', 'import traceback']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 41
+🧪 TODO/FIXME: 0
+====================
+START: sync_to_cloud.py
+import psycopg2
+import json
+from datetime import datetime, timezone
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+def fetch_pending_changes(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, table_name, record_id, operation, payload
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                FROM pending_changes
+                WHERE direction = 'out' AND processed = false
+                  AND table_name IN ('contact', 'bookings')
+            ) sub
+            WHERE rn = 1
+            ORDER BY created_at ASC, id
+        """)
+        rows = cur.fetchall()
+
+        # Rensa äldre UPDATE-poster med samma record_id
+        cur.execute("""
+            DELETE FROM pending_changes
+            WHERE id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                    FROM pending_changes
+                    WHERE direction = 'out' AND processed = false
+                ) sub
+                WHERE rn = 1
+            ) AND direction = 'out' AND processed = false AND operation = 'UPDATE';
+        """)
+        return rows
+
+def mark_as_processed(conn, change_id):
+    with conn.cursor() as cur:
+        cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
+        conn.commit()
+
+#
+# 📝 SYNC-BETEENDE: Hantering av metadata
+#
+# Viktigt att förstå skillnaden:
+#
+# 1. Ändring av värde:
+#    - Exempel: "postal_code": "111 11" → "115 32"
+#    - Hanteras som en vanlig UPDATE (om updated_at är nyare)
+#
+# 2. Ändring av nyckel (etikett):
+#    - Exempel: "postal_number" → "postal_code"
+#    - Molnet kommer *inte* ta bort "postal_number" utan force_resync
+#    - Lägg till `"force_resync": true` i metadata för att tvinga full överskrivning
+#
+# Detta minskar risken att data i molnet raderas av misstag.
+
+def apply_change(conn, change, local_conn):
+    table_name, record_id, operation, payload = change[1], change[2], change[3], change[4]
+    with conn.cursor() as cur:
+        data = json.loads(payload) if isinstance(payload, str) else payload
+
+        # Skip contact records with metadata.origin != 'klrab.se'
+        if table_name == 'contact' and 'metadata' in data:
+            meta = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
+            if meta.get('origin') != 'klrab.se':
+                print(f"⚠️ Skickas ej: origin != klrab.se – {data.get('booking_email')}")
+                mark_as_processed(local_conn, change[0])
+                return
+
+        # Ensure all values are serializable to SQL
+        for k, v in data.items():
+            if isinstance(v, dict):
+                data[k] = json.dumps(v)
+
+        if 'updated_at' in data:
+            if isinstance(data['updated_at'], str):
+                # Parse and convert to UTC if it's a string
+                try:
+                    dt = datetime.fromisoformat(data['updated_at'])
+                    data['updated_at'] = dt.astimezone(timezone.utc).isoformat()
+                except Exception as e:
+                    print(f"⚠️ Kunde inte tolka updated_at: {data['updated_at']} ({e})")
+            elif isinstance(data['updated_at'], datetime):
+                data['updated_at'] = data['updated_at'].astimezone(timezone.utc).isoformat()
+
+        if operation == 'INSERT':
+            columns = ', '.join(data.keys())
+            placeholders = ', '.join(['%s'] * len(data))
+            values = list(data.values())
+            cur.execute(
+                f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) "
+                f"ON CONFLICT (id) DO UPDATE SET "
+                f"{', '.join([f'{k} = EXCLUDED.{k}' for k in data.keys() if k != 'id'])}",
+                values
+            )
+            if table_name == 'bookings':
+                with local_conn.cursor() as local_cur:
+                    local_cur.execute(
+                        """
+                        UPDATE pending_changes
+                        SET booking_id = %s
+                        WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
+                        """,
+                        (record_id, record_id)
+                    )
+                    local_conn.commit()
+        if 'metadata' in data and table_name == 'contact':
+            # Merge metadata with existing remote value and ensure JSON string
+            cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))
+            row = cur.fetchone()
+            if row and row[0]:
+                if isinstance(row[0], dict):
+                    existing_metadata = row[0]
+                else:
+                    existing_metadata = json.loads(row[0])
+            else:
+                existing_metadata = {}
+
+            incoming_metadata = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
+            if existing_metadata == incoming_metadata:
+                mark_as_processed(local_conn, change[0])
+                return
+            existing_metadata.update(incoming_metadata)
+            changed_keys = [k for k in incoming_metadata if existing_metadata.get(k) != incoming_metadata[k]]
+            if not changed_keys:
+                mark_as_processed(local_conn, change[0])
+                return
+            data['metadata'] = json.dumps(existing_metadata)
+
+        if operation == 'UPDATE':
+            # Förbättrad hantering av tidsjämförelse för updated_at
+            if 'updated_at' in data:
+                try:
+                    # Säkerställ att local_ts är datetime i UTC
+                    local_ts = data['updated_at']
+                    if isinstance(local_ts, str):
+                        local_ts = datetime.fromisoformat(local_ts)
+                    if local_ts.tzinfo is None:
+                        local_ts = local_ts.replace(tzinfo=timezone.utc)
+                    else:
+                        local_ts = local_ts.astimezone(timezone.utc)
+
+                    cur.execute(f"SELECT updated_at FROM {table_name} WHERE id = %s", (record_id,))
+                    row = cur.fetchone()
+                    if row and row[0] and isinstance(row[0], datetime):
+                        remote_ts = row[0]
+                        if remote_ts.tzinfo is None:
+                            remote_ts = remote_ts.replace(tzinfo=timezone.utc)
+                        else:
+                            remote_ts = remote_ts.astimezone(timezone.utc)
+
+                        if local_ts <= remote_ts:
+                            mark_as_processed(local_conn, change[0])
+                            return
+                except Exception:
+                    pass
+
+            if table_name == "contact" and "metadata" in data:
+                local_meta = data["metadata"]
+                if isinstance(local_meta, str):
+                    local_meta = json.loads(local_meta)
+                cur.execute("SELECT metadata FROM contact WHERE id = %s", (data["id"],))
+                row = cur.fetchone()
+                if row:
+                    remote_meta = row[0]
+                    if isinstance(remote_meta, str):
+                        remote_meta = json.loads(remote_meta)
+                    if remote_meta == local_meta:
+                        mark_as_processed(local_conn, change[0])
+                        return
+
+            columns = ', '.join(data.keys())
+            placeholders = ', '.join(['%s'] * len(data))
+            values = list(data.values())
+            update_keys = [k for k in data.keys() if k != 'id']
+            update_set = ', '.join([f"{k} = %s" for k in update_keys])
+            update_values = [data[k] for k in update_keys]
+            update_values.append(record_id)
+            cur.execute(
+                f"UPDATE {table_name} SET {update_set} WHERE id = %s",
+                update_values
+            )
+            cur.execute("SELECT metadata, updated_at FROM contact WHERE id = %s", [payload["id"]])
+            updated_row = cur.fetchone()
+        elif operation == 'DELETE':
+            cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
+        conn.commit()
+        mark_as_processed(local_conn, change[0])
+
+def sync():
+    import traceback
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+
+    changes = fetch_pending_changes(local_conn)
+    count = 0
+    for change in changes:
+        try:
+            apply_change(remote_conn, change, local_conn)
+            count += 1
+        except Exception as e:
+            print(f"❌ Misslyckades att applicera ändring på {change[1]} (id={change[2]}): {e}")
+            traceback.print_exc()
+    
+    local_conn.close()
+    remote_conn.close()
+
+if __name__ == "__main__":
+    sync()
+END: sync_to_cloud.py
+
+====================
+📄 Fil: sync_static_tables.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-04-24 17:01:52
+📏 Antal rader: 61
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 6
+🧪 TODO/FIXME: 0
+====================
+START: sync_static_tables.py
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+import psycopg2
+import json
+from datetime import datetime
+
+
+TABLES = ["translation", "booking_settings"]
+
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+
+def fetch_all_from_local(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT * FROM {table}")
+        colnames = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
+        return colnames, rows
+
+
+def clear_remote_table(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"DELETE FROM {table}")
+        conn.commit()
+
+
+def insert_to_remote(conn, table, columns, rows):
+    with conn.cursor() as cur:
+        placeholders = ', '.join(['%s'] * len(columns))
+        colnames = ', '.join(columns)
+        for row in rows:
+            # Hantera jsonb-värden som json-strängar
+            formatted_row = []
+            for i, col in enumerate(columns):
+                value = row[i]
+                if table == 'booking_settings' and col == 'value':
+                    formatted_row.append(json.dumps(value))
+                else:
+                    formatted_row.append(value)
+            cur.execute(f"INSERT INTO {table} ({colnames}) VALUES ({placeholders})", formatted_row)
+        conn.commit()
+
+
+def sync_static_tables():
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+
+    for table in TABLES:
+        print(f"\n⏳ Synkar tabell: {table}...")
+        columns, rows = fetch_all_from_local(local_conn, table)
+        clear_remote_table(remote_conn, table)
+        insert_to_remote(remote_conn, table, columns, rows)
+        print(f"✅ Klar med tabell: {table} ({len(rows)} rader)")
+
+    local_conn.close()
+    remote_conn.close()
+
+
+if __name__ == "__main__":
+    sync_static_tables()
+
+END: sync_static_tables.py
+
+====================
+📄 Fil: sync.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-14 15:43:17
+📏 Antal rader: 82
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 10
+🧪 TODO/FIXME: 0
+====================
+START: sync.py
+import psycopg2
+import json
+from datetime import datetime
+from config import LOCAL_DB_CONFIG
+
+# Anslutning till lokal PostgreSQL
+conn = psycopg2.connect(**LOCAL_DB_CONFIG)
+cursor = conn.cursor()
+
+# Rensa äldre UPDATE-rader (endast senaste behövs per record_id)
+cursor.execute("""
+    DELETE FROM pending_changes pc
+    WHERE operation = 'UPDATE'
+      AND processed = false
+      AND direction = 'out'
+      AND id NOT IN (
+        SELECT id FROM (
+          SELECT id,
+                 ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at DESC) AS rn
+          FROM pending_changes
+          WHERE operation = 'UPDATE'
+            AND processed = false
+            AND direction = 'out'
+        ) sub
+        WHERE rn = 1
+      );
+""")
+
+# Hämta EN ändring per kontakt (record_id) – endast senaste per kontakt exporteras med hjälp av ROW_NUMBER()
+cursor.execute("""
+    SELECT id, table_name, record_id, operation, payload, created_at
+    FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at DESC) as rn
+        FROM pending_changes
+        WHERE processed = false AND direction = 'out'
+    ) sub
+    WHERE rn = 1
+""")
+
+rows = cursor.fetchall()
+
+# Filtrera bort poster där metadata är identisk med befintlig kontakt
+filtered_rows = []
+for row in rows:
+    change_id, table, record_id, operation, payload, created_at = row
+    data = json.loads(payload) if isinstance(payload, str) else payload
+    if table == "contact" and operation == "UPDATE":
+        try:
+            cursor.execute("SELECT metadata FROM contact WHERE id = %s", (record_id,))
+            result = cursor.fetchone()
+            if result:
+                current_metadata = result[0] if isinstance(result[0], dict) else json.loads(result[0])
+                incoming_metadata = data.get("metadata")
+                if isinstance(incoming_metadata, str):
+                    incoming_metadata = json.loads(incoming_metadata)
+                if current_metadata == incoming_metadata:
+                    continue
+        except Exception as e:
+            print(f"⚠️ Kunde inte jämföra metadata för {record_id}: {e}")
+    filtered_rows.append(row)
+rows = filtered_rows
+
+# Skapa exportformat
+export = []
+for row in rows:
+    change_id, table, record_id, operation, payload, created_at = row
+    export.append({
+        "change_id": str(change_id),
+        "table": table,
+        "operation": operation,
+        "data": payload
+    })
+
+# Spara till JSON-fil med tidsstämpel
+if export:
+    first_type = export[0]["table"] if export else "unknown"
+    filename = f"sync_outbox/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{first_type}.json"
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(export, f, indent=2, ensure_ascii=False)
+
+cursor.close()
+conn.close()
+
+END: sync.py
+
+====================
+📄 Fil: sync_all.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-05-14 15:49:04
+📏 Antal rader: 148
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 6 – ['import os', 'import subprocess', 'import sys', 'import psycopg2', 'import socket', 'import traceback']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 18
+🧪 TODO/FIXME: 0
+====================
+START: sync_all.py
+BASE = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api"
+
+import os
+import subprocess
+from datetime import datetime
+import sys
+import psycopg2
+
+log_dir = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot"
+log_out = os.path.join(log_dir, "macspot_sync.log")
+log_err = os.path.join(log_dir, "macspot_sync_error.log")
+
+# Se till att loggfilerna existerar
+for path in [log_out, log_err]:
+    if not os.path.exists(path):
+        with open(path, 'w'):
+            pass
+
+# Skriv ut manuell/automatisk körningsinfo till loggen
+is_manual = sys.stdout.isatty()
+sys.stdout = open(log_out, 'a')
+sys.stderr = open(log_err, 'a')
+if is_manual:
+    print(f"🖐️ Manuell körning: {datetime.now().isoformat()}")
+else:
+    print(f"🤖 Automatisk körning via launchd: {datetime.now().isoformat()}")
+
+def run_script(name, script_path):
+    subprocess.run(["python", f"{BASE}/{script_path}"], check=True)
+
+try:
+    start_time = datetime.now()
+    def is_database_online(host, port):
+        import socket
+        try:
+            socket.create_connection((host, port), timeout=2)
+            return True
+        except:
+            return False
+
+    # Kontrollera att båda databaser är online innan sync startar
+    if not is_database_online("localhost", 5433):
+        print("❌ Lokal databas är inte tillgänglig (localhost:5433)")
+        exit(1)
+
+    if not is_database_online("macspotpg.postgres.database.azure.com", 5432):
+        print("❌ Azure-databasen är inte tillgänglig (macspotpg.postgres.database.azure.com:5432)")
+        exit(1)
+
+    print(f"📌 Körning initierad: {datetime.now().isoformat()}")
+
+    print(f"\n🔄 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
+
+    scripts_part1 = [
+        ("🟡 Kör sync.py...", "sync.py"),
+        ("🟢 Kör sync_to_cloud.py...", "sync_to_cloud.py")
+    ]
+
+    for msg, script in scripts_part1:
+        run_script(msg, script)
+
+    scripts_part2 = [
+        ("🔵 Kör sync_from_cloud.py...", "sync_from_cloud.py")
+    ]
+
+    for msg, script in scripts_part2:
+        run_script(msg, script)
+
+    today_prefix = datetime.now().strftime('%Y%m%d')
+    outbox_dir = os.path.join(BASE, 'sync_outbox')
+    files = [f for f in os.listdir(outbox_dir) if f.startswith(today_prefix)]
+    files_with_type = [f for f in files if len(f.split("_")) >= 3]
+    num_changes = len(files_with_type)
+
+    if num_changes == 0:
+        print("ℹ️ Ingen förändring hittades att synka.")
+        print("📭 Inga fler ändringar kvar i pending_changes.")
+    else:
+        print(f"📤 Totalt {num_changes} ändring(ar) skickades till molnet:")
+        files = [f for f in sorted(os.listdir(outbox_dir)) if f.startswith(today_prefix)]
+        summary = {}
+        for f in files:
+            parts = f.split("_")
+            if len(parts) >= 3:
+                typ = parts[2].split(".")[0]
+                summary[typ] = summary.get(typ, 0) + 1
+
+        if summary:
+            print("🧾 Sammanfattning per typ:")
+            for typ, count in summary.items():
+                print(f"   • {typ}: {count} st")
+
+        print("📊 Kontroll av återstående ändringar i pending_changes...")
+
+        # Lokalt
+        local = psycopg2.connect(
+            dbname="macspot",
+            user="postgres",
+            host="localhost",
+            port=5433
+        )
+        cur_local = local.cursor()
+        cur_local.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+        """)
+        out_local = cur_local.fetchone()[0]
+        cur_local.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+            GROUP BY record_id
+        """)
+        print(f"   • Lokalt → molnet: {out_local} ändring(ar) kvar över {cur_local.rowcount} kontakt(er).")
+        cur_local.close()
+        local.close()
+
+        # Molnet
+        cloud = psycopg2.connect(
+            dbname="postgres",
+            user="daniel",
+            host="macspotpg.postgres.database.azure.com",
+            port=5432
+        )
+        cur_cloud = cloud.cursor()
+        cur_cloud.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+        """)
+        out_cloud = cur_cloud.fetchone()[0]
+        cur_cloud.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+            GROUP BY record_id
+        """)
+        cur_cloud.close()
+        cloud.close()
+
+    print(f"\n✅ [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk körd.")
+
+except Exception as e:
+    import traceback
+    print("❌ Ett oväntat fel inträffade under körningen:")
+    print(traceback.format_exc())
+
+finally:
+    print(f"🏁 Körning avslutad: {datetime.now().isoformat()}")
+    duration = datetime.now() - start_time
+    print(f"⏱️ Total körtid: {int(duration.total_seconds())} sekunder")
+END: sync_all.py
+
+====================
+📄 Fil: macspot.sync.plist
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 📄 Okänt format
+📅 Senast ändrad: 2025-05-28 22:59:14
+📏 Antal rader: 39
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: macspot.sync.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.macspot.sync</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/danielkallberg/Documents/KLR_AI/venv/bin/python</string>
+    <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Minute</key><integer>5</integer></dict>
+    <dict><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Minute</key><integer>20</integer></dict>
+    <dict><key>Minute</key><integer>25</integer></dict>
+    <dict><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Minute</key><integer>35</integer></dict>
+    <dict><key>Minute</key><integer>40</integer></dict>
+    <dict><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Minute</key><integer>50</integer></dict>
+    <dict><key>Minute</key><integer>55</integer></dict>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot_sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot_sync_error.log</string>
+</dict>
+</plist>
+END: macspot.sync.plist
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 .funcignore
+   # Exclude dev-only files and folders
+   .git
+   .vscode
+   .env
+   *.log
+   test/
+   tests/
+   
+   # Explicitly include all required files and folders
+   !host.json
+   !package.json
+   !package-lock.json
+   
+   !node_modules/
+   !node_modules/**
+   
+   !shared/
+   !shared/**
+   
+   !bookings/
+   !bookings/**
+   !getavailableslots/
+   !getavailableslots/**
+   !validate_contact/
+   !validate_contact/**
+   !meeting_types/
+   !meeting_types/**
+   !refreshCalendarOrigins/
+   !refreshCalendarOrigins/**
+   !refreshTravelTimes/
+   !refreshTravelTimes/**
+   !booking_settings/
+   !booking_settings/**
+   !test_azurecloud/
+   !test_azurecloud/**
+   !trackingPixel/
+   !trackingPixel/**
+📄 booking_settings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "booking_settings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 bookings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "bookings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 getavailableslots/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "getavailableslots"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 host.json
+   {
+     "version": "2.0",
+     "extensionBundle": {
+       "id": "Microsoft.Azure.Functions.ExtensionBundle",
+       "version": "[4.*, 5.0.0)"
+     },
+     "extensions": {
+       "http": {
+         "cors": {
+           "allowedOrigins": [
+             "https://www.klrab.se"
+           ],
+           "supportCredentials": false
+         }
+       }
+     }
+   }
+📄 meeting_types/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": [ "get" ],
+         "route": "meeting_types"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 package.json
+   {
+     "name": "macspot-api",
+     "version": "1.0.0",
+     "description": "Azure Functions backend för MacSpot CRM/ERP",
+     "scripts": {
+       "start": "func start",
+       "dev": "func start --verbose",
+       "deploy": "func azure functionapp publish macspotbackend",
+       "build": "echo 'Nothing to build'"
+     },
+     "dependencies": {
+       "@azure/functions": "^4.7.0",
+       "@azure/msal-node": "^3.5.1",
+       "@microsoft/microsoft-graph-client": "^3.0.0",
+       "date-holidays": "^3.24.3",
+       "dav": "^1.8.0",
+       "dotenv": "^16.5.0",
+       "isomorphic-fetch": "^3.0.0",
+       "jsonwebtoken": "^9.0.0",
+       "luxon": "^3.4.4",
+       "node-fetch": "^2.7.0",
+       "node-ical": "^0.20.1",
+       "p-limit": "^6.2.0",
+       "pg": "^8.15.6",
+       "uuid": "^9.0.0",
+       "xml2js": "^0.6.2"
+     }
+   }
+
+📄 refreshCalendarOrigins/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 refreshTravelTimes/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 test_azurecloud/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "test_azurecloud"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 validate_contact/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get", "post"],
+         "route": "validate_contact"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 682
+🧩 Totalt antal funktioner: 0
+🧠 Total komplexitetspoäng: 103
+🧪 Antal TODO/FIXME totalt: 0
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+sync_from_cloud.py,141,0,28,0,2
+sync_to_cloud.py,211,0,41,0,3
+sync_static_tables.py,61,0,6,0,2
+sync.py,82,0,10,0,2
+sync_all.py,148,0,18,0,6
+macspot.sync.plist,39,0,0,0,0
+📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: slot_cache
+  • created_at (timestamp without time zone)
+  • slot_day (date)
+  • slots (jsonb)
+  • id (uuid)
+  • meeting_length (integer)
+  • booking_email (text)
+  • meeting_type (text)
+  • slot_part (text)
+  🔑 [p] slot_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: calendar_origin_cache
+  • created_at (timestamp without time zone)
+  • timestamp (timestamp with time zone)
+  • event_date (date)
+  • id (integer)
+  • end_time (timestamp without time zone)
+  • address (text)
+  • source (text)
+  🔑 [c] calendar_origin_cache_source_check: CHECK ((source = ANY (ARRAY['Apple Calendar'::text, 'Microsoft 365'::text])))
+  🔑 [p] calendar_origin_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: available_slots_cache
+  • id (uuid)
+  • travel_time_min (integer)
+  • generated_at (timestamp without time zone)
+  • expires_at (timestamp without time zone)
+  • meeting_length (integer)
+  • slot_day (date)
+  • slot_score (integer)
+  • meeting_type (text)
+  • slot_part (text)
+  • slot_iso (text)
+  🔑 [p] available_slots_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: travel_time_cache
+  • travel_minutes (integer)
+  • updated_at (timestamp with time zone)
+  • is_fallback (boolean)
+  • hour (integer)
+  • created_at (timestamp with time zone)
+  • to_address (text)
+  • from_address (text)
+  🔑 [u] unique_travel_key: UNIQUE (from_address, to_address, hour)
+  🧪 Topp 5 rader:
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=10, travel_minutes=19, created_at=2025-05-30 21:00:01.127523+00:00, updated_at=2025-05-30 21:00:01.127523+00:00, is_fallback=False
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=14, travel_minutes=19, created_at=2025-05-30 21:00:01.927463+00:00, updated_at=2025-05-30 21:00:01.927463+00:00, is_fallback=False
+
+📁 Tabell: event_log
+  • received_at (timestamp with time zone)
+  • record_id (uuid)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  • id (uuid)
+  • payload (jsonb)
+  • action (text)
+  • event_type (text)
+  • source (text)
+  • table_name (text)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+
+📁 Tabell: booking_settings
+  • value (jsonb)
+  • updated_at (timestamp with time zone)
+  • key (text)
+  • value_type (text)
+  🔑 [u] unique_key: UNIQUE (key)
+  🧪 Topp 5 rader:
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=default_meeting_subject, value=Möte med KLRA Ledningsrådgivning, value_type=string, updated_at=2025-05-25 10:37:53.619684+00:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 10:37:53.619684+00:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • meeting_type (text)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
+📁 Tabell: pending_changes
+  • booking_id (uuid)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • payload (jsonb)
+  • id (uuid)
+  • record_id (uuid)
+  • table_name (text)
+  • operation (text)
+  • change_type (text)
+  • direction (text)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  • email (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+

@@ -3,6 +3,17 @@ import json
 from datetime import datetime, timezone
 from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
 
+def safe_json_load(data, default={}):
+    try:
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return default
+
+def metadata_equal(meta1, meta2):
+    m1 = safe_json_load(meta1)
+    m2 = safe_json_load(meta2)
+    return m1 == m2
+
 def connect_db(config):
     return psycopg2.connect(**config)
 
@@ -59,11 +70,11 @@ def mark_as_processed(conn, change_id):
 def apply_change(conn, change, local_conn):
     table_name, record_id, operation, payload = change[1], change[2], change[3], change[4]
     with conn.cursor() as cur:
-        data = json.loads(payload) if isinstance(payload, str) else payload
+        data = safe_json_load(payload)
 
         # Skip contact records with metadata.origin != 'klrab.se'
         if table_name == 'contact' and 'metadata' in data:
-            meta = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
+            meta = safe_json_load(data['metadata'])
             if meta.get('origin') != 'klrab.se':
                 print(f"⚠️ Skickas ej: origin != klrab.se – {data.get('booking_email')}")
                 mark_as_processed(local_conn, change[0])
@@ -106,32 +117,33 @@ def apply_change(conn, change, local_conn):
                         (record_id, record_id)
                     )
                     local_conn.commit()
-        if 'metadata' in data and table_name == 'contact':
-            # Merge metadata with existing remote value and ensure JSON string
-            cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))
-            row = cur.fetchone()
-            if row and row[0]:
-                if isinstance(row[0], dict):
-                    existing_metadata = row[0]
-                else:
-                    existing_metadata = json.loads(row[0])
-            else:
-                existing_metadata = {}
 
-            incoming_metadata = json.loads(data['metadata']) if isinstance(data['metadata'], str) else data['metadata']
-            if existing_metadata == incoming_metadata:
-                mark_as_processed(local_conn, change[0])
-                return
-            existing_metadata.update(incoming_metadata)
-            changed_keys = [k for k in incoming_metadata if existing_metadata.get(k) != incoming_metadata[k]]
-            if not changed_keys:
-                mark_as_processed(local_conn, change[0])
-                return
-            data['metadata'] = json.dumps(existing_metadata)
+        if data.get("force_resync") is True:
+            print(f"🔁 Force resync aktiv – uppdaterar {table_name} {record_id}")
 
         if operation == 'UPDATE':
+            # Merge metadata with existing remote value and ensure JSON string (only for UPDATE)
+            if 'metadata' in data and table_name == 'contact':
+                cur.execute(f"SELECT metadata FROM {table_name} WHERE id = %s", (record_id,))
+                row = cur.fetchone()
+                if row and row[0]:
+                    existing_metadata = safe_json_load(row[0])
+                else:
+                    existing_metadata = {}
+
+                incoming_metadata = safe_json_load(data['metadata'])
+                if metadata_equal(existing_metadata, incoming_metadata):
+                    mark_as_processed(local_conn, change[0])
+                    return
+                existing_metadata.update(incoming_metadata)
+                changed_keys = [k for k in incoming_metadata if existing_metadata.get(k) != incoming_metadata[k]]
+                if not changed_keys:
+                    mark_as_processed(local_conn, change[0])
+                    return
+                data['metadata'] = json.dumps(existing_metadata)
+
             # Förbättrad hantering av tidsjämförelse för updated_at
-            if 'updated_at' in data:
+            if 'updated_at' in data and not data.get("force_resync"):
                 try:
                     # Säkerställ att local_ts är datetime i UTC
                     local_ts = data['updated_at']
@@ -158,15 +170,11 @@ def apply_change(conn, change, local_conn):
                     pass
 
             if table_name == "contact" and "metadata" in data:
-                local_meta = data["metadata"]
-                if isinstance(local_meta, str):
-                    local_meta = json.loads(local_meta)
+                local_meta = safe_json_load(data["metadata"])
                 cur.execute("SELECT metadata FROM contact WHERE id = %s", (data["id"],))
                 row = cur.fetchone()
                 if row:
-                    remote_meta = row[0]
-                    if isinstance(remote_meta, str):
-                        remote_meta = json.loads(remote_meta)
+                    remote_meta = safe_json_load(row[0])
                     if remote_meta == local_meta:
                         mark_as_processed(local_conn, change[0])
                         return
@@ -182,10 +190,12 @@ def apply_change(conn, change, local_conn):
                 f"UPDATE {table_name} SET {update_set} WHERE id = %s",
                 update_values
             )
+            print(f"✅ UPDATE körd för {table_name} {record_id}")
             cur.execute("SELECT metadata, updated_at FROM contact WHERE id = %s", [payload["id"]])
             updated_row = cur.fetchone()
         elif operation == 'DELETE':
             cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
+            print(f"🗑️ Raderade post {record_id} från {table_name}")
         conn.commit()
         mark_as_processed(local_conn, change[0])
 

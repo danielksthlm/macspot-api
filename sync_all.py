@@ -1,10 +1,24 @@
 BASE = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api"
 
+
 import os
 import subprocess
 from datetime import datetime
 import sys
 import psycopg2
+import json
+
+# Delad json- och metadata-funktionalitet som används i flera synkmoduler
+def safe_json_load(data, default={}):
+    try:
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return default
+
+def metadata_equal(meta1, meta2):
+    m1 = safe_json_load(meta1)
+    m2 = safe_json_load(meta2)
+    return m1 == m2
 
 log_dir = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot"
 log_out = os.path.join(log_dir, "macspot_sync.log")
@@ -38,6 +52,12 @@ try:
         except:
             return False
 
+    def run_healthcheck():
+        try:
+            subprocess.run(["python", f"{BASE}/healthcheck_sync.py"], check=True)
+        except Exception as e:
+            print(f"❌ Healthcheck misslyckades: {e}")
+
     # Kontrollera att båda databaser är online innan sync startar
     if not is_database_online("localhost", 5433):
         print("❌ Lokal databas är inte tillgänglig (localhost:5433)")
@@ -48,6 +68,9 @@ try:
         exit(1)
 
     print(f"📌 Körning initierad: {datetime.now().isoformat()}")
+
+    print("🧪 Kör healthcheck_sync.py...")
+    run_healthcheck()
 
     print(f"\n🔄 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
 
@@ -89,6 +112,13 @@ try:
             print("🧾 Sammanfattning per typ:")
             for typ, count in summary.items():
                 print(f"   • {typ}: {count} st")
+
+        # --- Kontrollera och skriv ut äldre JSON-filer i sync_outbox ---
+        old_files = [f for f in os.listdir(outbox_dir) if not f.startswith(today_prefix)]
+        if old_files:
+            print("📂 Äldre JSON-filer som ligger kvar i sync_outbox:")
+            for f in old_files:
+                print(f"   • {f}")
 
         print("📊 Kontroll av återstående ändringar i pending_changes...")
 

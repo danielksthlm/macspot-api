@@ -3,6 +3,17 @@ import json
 from datetime import datetime
 from config import LOCAL_DB_CONFIG
 
+def safe_json_load(data, default={}):
+    try:
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return default
+
+def metadata_equal(meta1, meta2):
+    m1 = safe_json_load(meta1)
+    m2 = safe_json_load(meta2)
+    return m1 == m2
+
 # Anslutning till lokal PostgreSQL
 conn = psycopg2.connect(**LOCAL_DB_CONFIG)
 cursor = conn.cursor()
@@ -49,11 +60,8 @@ for row in rows:
             cursor.execute("SELECT metadata FROM contact WHERE id = %s", (record_id,))
             result = cursor.fetchone()
             if result:
-                current_metadata = result[0] if isinstance(result[0], dict) else json.loads(result[0])
                 incoming_metadata = data.get("metadata")
-                if isinstance(incoming_metadata, str):
-                    incoming_metadata = json.loads(incoming_metadata)
-                if current_metadata == incoming_metadata:
+                if metadata_equal(result[0], incoming_metadata):
                     continue
         except Exception as e:
             print(f"⚠️ Kunde inte jämföra metadata för {record_id}: {e}")
