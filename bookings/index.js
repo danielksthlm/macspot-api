@@ -139,6 +139,7 @@ module.exports = async function (context, req) {
     debugLog("📦 bookingFields inför DB:", bookingFields);
 
     let online_link = null;
+    // TEAMS-flöde
     if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
       const subjectTemplates = settings.email_subject_templates || {};
       const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
@@ -209,7 +210,7 @@ module.exports = async function (context, req) {
         }
       } catch (err) {
         // Skicka endast mail om createEvent misslyckades (eventResult === null)
-        if (!eventResult) {
+        if (eventResult === null) {
           // --- Ny kod för att skicka Teams-inbjudan via e-post som fallback ---
           const bodyTemplates = settings.email_body_templates || {};
           const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
@@ -259,36 +260,12 @@ module.exports = async function (context, req) {
         combinedMetadata.subject = result.topic;
         combinedMetadata.location = 'Online';
         bookingFields.synced_to_calendar = true;
+        // Skicka INTE e-post om Zoom-möte skapades korrekt
         zoomMeetingCreated = true;
-        // Skicka e-post med Zoom-länk även när mötet skapades korrekt
-        if (zoomMeetingCreated && result?.join_url) {
-          const bodyTemplates = settings.email_body_templates || {};
-          const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
-          const emailBodyHtml = rawBody
-            .replace('{{first_name}}', combinedMetadata.first_name || '')
-            .replace('{{company}}', combinedMetadata.company || '')
-            .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
-            .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
-            .replace('{{online_link}}', result.join_url || '')
-            .replace('{{phone}}', combinedMetadata.phone || '')
-            .replace('{{location}}', 'Online')
-            .replace(/\\n/g, '\n')
-            .replace(/\n/g, '<br>');
-
-          const signature = settings.email_signature || '';
-          const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
-
-          await sendMail({
-            to: email,
-            subject: result.topic || combinedMetadata.subject || 'Zoommöte',
-            body: finalEmailBodyHtml,
-            contentType: 'HTML',
-            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
-          });
-
-          debugLog('✅ Zoominbjudan skickad via e-post');
-        }
+        return;
         // Logga till event_log för lyckad kalenderinbjudan (Zoom)
+        // (The following lines will not run due to return above)
+        /*
         await db.query(
           'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
           ['calendar_invite_sent', id, {
@@ -302,6 +279,7 @@ module.exports = async function (context, req) {
           'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
           ['calendar_event_created', id, result]
         );
+        */
       } catch (err) {
         // Fallback: skapa .ics och skicka e-post om Zoom-mötet inte kunde skapas
         const subjectTemplates = settings.email_subject_templates || {};
@@ -773,7 +751,7 @@ END:VCALENDAR
       body: {
         status: 'booked',
         booking_id: id,
-        calendar_invite_sent: !!online_link
+        calendar_invite_sent: bookingFields.synced_to_calendar === true
       }
     };
   } catch (err) {
