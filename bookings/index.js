@@ -146,6 +146,7 @@ module.exports = async function (context, req) {
       const emailSubject = subjectTemplate
         .replace('{{first_name}}', combinedMetadata.first_name || '')
         .replace('{{company}}', combinedMetadata.company || 'din organisation');
+      combinedMetadata.subject = emailSubject;
       const location = combinedMetadata.location || 'Online';
       let eventResult = null;
       try {
@@ -247,9 +248,16 @@ module.exports = async function (context, req) {
       let zoomMeetingCreated = false;
       let icsAttachment = null;
       let result = null;
+      // Bygg subject enligt email_subject_templates.zoom
+      const subjectTemplates = settings.email_subject_templates || {};
+      const subjectTemplate = subjectTemplates['zoom'] || settings.default_meeting_subject || 'Möte';
+      const emailSubject = subjectTemplate
+        .replace('{{first_name}}', combinedMetadata.first_name || '')
+        .replace('{{company}}', combinedMetadata.company || 'din organisation');
+      combinedMetadata.subject = emailSubject;
       try {
         result = await zoomClient.createMeeting({
-          topic: combinedMetadata.subject || settings.default_meeting_subject,
+          topic: emailSubject,
           start: startTime.toISOString(),
           duration: parsedLength
         });
@@ -259,7 +267,7 @@ module.exports = async function (context, req) {
           const eventResult = await graphClient.createEvent({
             start: startTime.toISOString(),
             end: endTime.toISOString(),
-            subject: result.topic || settings.default_meeting_subject || 'Zoommöte',
+            subject: emailSubject,
             location: 'Online',
             attendees: [email],
             meetingType: meeting_type
@@ -293,14 +301,7 @@ module.exports = async function (context, req) {
         online_link = result.join_url;
         combinedMetadata.online_link = online_link;
         combinedMetadata.meeting_id = result.id;
-        // -- Börja: Ändrad subject-templating för Zoom --
-        const subjectTemplates = settings.email_subject_templates || {};
-        const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
-        const emailSubject = subjectTemplate
-          .replace('{{first_name}}', combinedMetadata.first_name || '')
-          .replace('{{company}}', combinedMetadata.company || 'din organisation');
         combinedMetadata.subject = emailSubject;
-        // -- Slut: Ändrad subject-templating för Zoom --
         combinedMetadata.location = 'Online';
         bookingFields.synced_to_calendar = true;
         // Logga till event_log för lyckad kalenderinbjudan (Zoom)
@@ -322,11 +323,6 @@ module.exports = async function (context, req) {
         // return; // Ta bort eller kommentera ut denna rad så att loggningen körs
       } catch (err) {
         // Fallback: skapa .ics och skicka e-post om Zoom-mötet inte kunde skapas
-        const subjectTemplates = settings.email_subject_templates || {};
-        const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
-        const emailSubject = subjectTemplate
-          .replace('{{first_name}}', combinedMetadata.first_name || '')
-          .replace('{{company}}', combinedMetadata.company || 'din organisation');
         const fallbackLocation = combinedMetadata.location || 'Online';
         const fallbackSubject = combinedMetadata.subject || emailSubject || 'Zoommöte';
         // Skapa .ics-fallback
@@ -350,7 +346,8 @@ END:VCALENDAR
         };
         // Skicka fallback-mail med .ics
         const bodyTemplates = settings.email_body_templates || {};
-        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+        // Zoom ska använda email_body_templates.zoom om det finns, annars email_invite_template.body
+        const rawBody = (bodyTemplates['zoom'] || (settings.email_invite_template?.body || ''));
         const emailBodyHtml = rawBody
           .replace('{{first_name}}', combinedMetadata.first_name || '')
           .replace('{{company}}', combinedMetadata.company || '')
@@ -389,7 +386,7 @@ END:VCALENDAR
         const emailSubject = subjectTemplate
           .replace('{{first_name}}', combinedMetadata.first_name || '')
           .replace('{{company}}', combinedMetadata.company || 'din organisation');
-        combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'FaceTime';
+        combinedMetadata.subject = emailSubject;
         combinedMetadata.location = combinedMetadata.location || 'FaceTime';
 
         // Försök skapa kalenderinbjudan via Graph
@@ -523,7 +520,7 @@ END:VCALENDAR
       const emailSubject = subjectTemplate
         .replace('{{first_name}}', combinedMetadata.first_name || '')
         .replace('{{company}}', combinedMetadata.company || 'din organisation');
-      combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'Möte hos kund';
+      combinedMetadata.subject = emailSubject;
 
       // Försök skapa kalenderinbjudan via Graph
       let atClientEventCreated = false;
@@ -633,7 +630,7 @@ END:VCALENDAR
       const emailSubject = subjectTemplate
         .replace('{{first_name}}', combinedMetadata.first_name || '')
         .replace('{{company}}', combinedMetadata.company || 'din organisation');
-      combinedMetadata.subject = combinedMetadata.subject || emailSubject || 'Möte på kontoret';
+      combinedMetadata.subject = emailSubject;
 
       // Försök skapa kalenderinbjudan via Graph
       let atOfficeEventCreated = false;
