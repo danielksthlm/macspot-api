@@ -176,44 +176,46 @@ module.exports = async function (context, req) {
           bookingFields.synced_to_calendar = true;
         }
       } catch (err) {
-        // loggar för misslyckade createEvent tas bort enligt instruktion
-      }
-      // Skicka endast mail om createEvent misslyckades (eventResult === null)
-      if (!eventResult) {
-        // --- Ny kod för att skicka Teams-inbjudan via e-post som fallback ---
-        const bodyTemplates = settings.email_body_templates || {};
-        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
-        const emailBodyHtml = rawBody
-          .replace('{{first_name}}', combinedMetadata.first_name || '')
-          .replace('{{company}}', combinedMetadata.company || '')
-          .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
-          .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
-          .replace('{{online_link}}', online_link || '')
-          .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '')
-          .replace(/\\n/g, '\n') // tolka "\\n" som newline
-          .replace(/\n/g, '<br>');
-        const signature = settings.email_signature || '';
-        const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
+        // Skicka endast mail om createEvent misslyckades (eventResult === null)
+        if (!eventResult) {
+          // --- Ny kod för att skicka Teams-inbjudan via e-post som fallback ---
+          const bodyTemplates = settings.email_body_templates || {};
+          const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+          const emailBodyHtml = rawBody
+            .replace('{{first_name}}', combinedMetadata.first_name || '')
+            .replace('{{company}}', combinedMetadata.company || '')
+            .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+            .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+            .replace('{{online_link}}', online_link || '')
+            .replace('{{phone}}', combinedMetadata.phone || '')
+            .replace('{{location}}', combinedMetadata.location || '')
+            .replace(/\\n/g, '\n') // tolka "\\n" som newline
+            .replace(/\n/g, '<br>');
+          const signature = settings.email_signature || '';
+          const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
 
-        await sendMail({
-          to: email,
-          subject: emailSubject,
-          body: finalEmailBodyHtml,
-          contentType: 'HTML',
-          trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
-        });
-        debugLog('✅ Teams-inbjudan skickad via e-post (fallback)');
-        // Logga fallback-användning till event_log
-        await db.query(
-          'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
-          ['calendar_invite_fallback_email', id, { source: 'fallback_email' }]
-        );
-        // --- Slut på ny kod för Teams-inbjudan fallback ---
+          await sendMail({
+            to: email,
+            subject: emailSubject,
+            body: finalEmailBodyHtml,
+            contentType: 'HTML',
+            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
+          });
+          debugLog('✅ Teams-inbjudan skickad via e-post (fallback)');
+          // Logga fallback-användning till event_log
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            ['calendar_invite_fallback_email', id, { source: 'fallback_email' }]
+          );
+          // --- Slut på ny kod för Teams-inbjudan fallback ---
+        }
       }
     } else if (meeting_type.toLowerCase() === 'zoom') {
+      let zoomMeetingCreated = false;
+      let icsAttachment = null;
+      let result = null;
       try {
-        const result = await zoomClient.createMeeting({
+        result = await zoomClient.createMeeting({
           topic: combinedMetadata.subject || settings.default_meeting_subject,
           start: startTime.toISOString(),
           duration: parsedLength
@@ -223,24 +225,37 @@ module.exports = async function (context, req) {
         combinedMetadata.meeting_id = result.id;
         combinedMetadata.subject = result.topic;
         combinedMetadata.location = 'Online';
-
-        // Generate email subject and body using settings and injected online_link
+        bookingFields.synced_to_calendar = true;
+        zoomMeetingCreated = true;
+      } catch (err) {
+        // Fallback: skapa .ics och skicka e-post om Zoom-mötet inte kunde skapas
         const subjectTemplates = settings.email_subject_templates || {};
         const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
         const emailSubject = subjectTemplate
           .replace('{{first_name}}', combinedMetadata.first_name || '')
           .replace('{{company}}', combinedMetadata.company || 'din organisation');
-        const emailTemplate = settings.email_invite_template || {};
-        const emailBody =
-          (emailTemplate.body
-            ? emailTemplate.body
-                .replace('{{first_name}}', combinedMetadata.first_name || '')
-                .replace('{{company}}', combinedMetadata.company || '')
-                .concat(`\n\n🔗 Zoom-länk: ${online_link}`)
-            : `Hej!\n\nHär kommer Zoom-länken till vårt möte:\n${online_link}`);
-        const emailSignature = settings.email_signature || '';
-        const finalEmailBody = emailBody + '\n\n' + emailSignature;
-
+        const fallbackLocation = combinedMetadata.location || 'Online';
+        const fallbackSubject = combinedMetadata.subject || emailSubject || 'Zoommöte';
+        // Skapa .ics-fallback
+        const icsBody = `
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+SUMMARY:${fallbackSubject}
+DTSTART:${startTime.toISOString().replace(/[-:]/g, '').replace('.000Z', 'Z')}
+DTEND:${endTime.toISOString().replace(/[-:]/g, '').replace('.000Z', 'Z')}
+LOCATION:${fallbackLocation}
+DESCRIPTION:Zoommöte (ingen länk kunde genereras)
+END:VEVENT
+END:VCALENDAR
+`.trim();
+        icsAttachment = {
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          name: 'inbjudan.ics',
+          contentType: 'text/calendar',
+          contentBytes: Buffer.from(icsBody).toString('base64')
+        };
+        // Skicka fallback-mail med .ics
         const bodyTemplates = settings.email_body_templates || {};
         const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
         const emailBodyHtml = rawBody
@@ -248,30 +263,28 @@ module.exports = async function (context, req) {
           .replace('{{company}}', combinedMetadata.company || '')
           .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
           .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
-          .replace('{{online_link}}', online_link || '')
+          .replace('{{online_link}}', '')
           .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '')
-          .replace(/\\n/g, '\n') // tolka "\\n" som newline
+          .replace('{{location}}', fallbackLocation)
+          .replace(/\\n/g, '\n')
           .replace(/\n/g, '<br>');
         const signature = settings.email_signature || '';
         const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
-
-        // Skicka e-post via Graph (placeholder – implementera din mailfunktion)
-        try {
-          await sendMail({
-            to: email,
-            subject: emailSubject,
-            body: finalEmailBodyHtml,
-            contentType: 'HTML',
-            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
-          });
-          debugLog('✅ Zoominbjudan skickad via e-post');
-        } catch (emailErr) {
-        }
-
-        bookingFields.synced_to_calendar = true;
-      } catch (err) {
+        await sendMail({
+          to: email,
+          subject: emailSubject,
+          body: finalEmailBodyHtml,
+          contentType: 'HTML',
+          trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`,
+          attachments: [icsAttachment]
+        });
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+          ['calendar_invite_fallback_ics', id, { source: 'zoom_createMeeting_failed' }]
+        );
+        debugLog('✅ Zoominbjudan skickad via e-post (fallback .ics)');
       }
+      // Skicka INTE mail om Zoom-mötet skapades (zoomMeetingCreated)
     } else if (meeting_type.toLowerCase() === 'facetime') {
       let facetimeEventCreated = false;
       let icsAttachment = null;
@@ -340,6 +353,8 @@ END:VCALENDAR
           };
         }
 
+      // Skicka endast mail om Graph misslyckades (dvs !facetimeEventCreated)
+      if (!facetimeEventCreated && icsAttachment) {
         try {
           const bodyTemplates = settings.email_body_templates || {};
           const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
@@ -355,37 +370,24 @@ END:VCALENDAR
             .replace(/\n/g, '<br>');
           const signature = settings.email_signature || '';
           const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
-
-          // Skicka med .ics som attachment om Graph misslyckades
-          if (!facetimeEventCreated && icsAttachment) {
-            await sendMail({
-              to: email,
-              subject: emailSubject,
-              body: finalEmailBodyHtml,
-              contentType: 'HTML',
-              trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`,
-              attachments: [icsAttachment]
-            });
-            // Logga fallback .ics-användning till event_log
-            if (icsAttachment) {
-              await db.query(
-                'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
-                ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
-              );
-            }
-          } else {
-            await sendMail({
-              to: email,
-              subject: emailSubject,
-              body: finalEmailBodyHtml,
-              contentType: 'HTML',
-              trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
-            });
-          }
-          debugLog('✅ FaceTime-inbjudan skickad via e-post');
+          await sendMail({
+            to: email,
+            subject: emailSubject,
+            body: finalEmailBodyHtml,
+            contentType: 'HTML',
+            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`,
+            attachments: [icsAttachment]
+          });
+          // Logga fallback .ics-användning till event_log
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
+          );
+          debugLog('✅ FaceTime-inbjudan skickad via e-post (fallback .ics)');
         } catch (emailErr) {
           context.log("❌ Kunde inte skicka FaceTime-inbjudan:", emailErr.message);
         }
+      }
       } else {
         context.log("❌ FaceTime-bokning saknar telefonnummer – kan inte skapa länk eller skicka inbjudan.");
       }
@@ -417,7 +419,7 @@ END:VCALENDAR
       }
 
       // Skapa .ics-fallback om Graph misslyckades
-      if (!atClientEventCreated) {
+      if (!atClientEventCreated && icsAttachment == null) {
         const icsBody = `
 BEGIN:VCALENDAR
 VERSION:2.0
@@ -438,24 +440,23 @@ END:VCALENDAR
         };
       }
 
-      try {
-        const bodyTemplates = settings.email_body_templates || {};
-        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
-        const emailBodyHtml = rawBody
-          .replace('{{first_name}}', combinedMetadata.first_name || '')
-          .replace('{{company}}', combinedMetadata.company || '')
-          .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
-          .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
-          .replace('{{online_link}}', online_link || '')
-          .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '')
-          .replace(/\\n/g, '\n') // tolka "\\n" som newline
-          .replace(/\n/g, '<br>');
-        const signature = settings.email_signature || '';
-        const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
-
-        // Skicka med .ics som attachment om Graph misslyckades
-        if (!atClientEventCreated && icsAttachment) {
+      // Skicka endast mail om Graph misslyckades (dvs !atClientEventCreated)
+      if (!atClientEventCreated && icsAttachment) {
+        try {
+          const bodyTemplates = settings.email_body_templates || {};
+          const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+          const emailBodyHtml = rawBody
+            .replace('{{first_name}}', combinedMetadata.first_name || '')
+            .replace('{{company}}', combinedMetadata.company || '')
+            .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+            .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+            .replace('{{online_link}}', online_link || '')
+            .replace('{{phone}}', combinedMetadata.phone || '')
+            .replace('{{location}}', combinedMetadata.location || '')
+            .replace(/\\n/g, '\n') // tolka "\\n" som newline
+            .replace(/\n/g, '<br>');
+          const signature = settings.email_signature || '';
+          const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
           await sendMail({
             to: email,
             subject: emailSubject,
@@ -465,23 +466,13 @@ END:VCALENDAR
             attachments: [icsAttachment]
           });
           // Logga fallback .ics-användning till event_log
-          if (icsAttachment) {
-            await db.query(
-              'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
-              ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
-            );
-          }
-        } else {
-          await sendMail({
-            to: email,
-            subject: emailSubject,
-            body: finalEmailBodyHtml,
-            contentType: 'HTML',
-            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
-          });
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
+          );
+          debugLog('✅ atClient-inbjudan skickad via e-post (fallback .ics)');
+        } catch (emailErr) {
         }
-        debugLog('✅ atClient-inbjudan skickad via e-post');
-      } catch (emailErr) {
       }
     } else if (meeting_type.toLowerCase() === 'atoffice') {
       combinedMetadata.location = combinedMetadata.location || settings.default_office_address || 'Kontoret';
@@ -511,7 +502,7 @@ END:VCALENDAR
       }
 
       // Skapa .ics-fallback om Graph misslyckades
-      if (!atOfficeEventCreated) {
+      if (!atOfficeEventCreated && icsAttachment == null) {
         const icsBody = `
 BEGIN:VCALENDAR
 VERSION:2.0
@@ -532,24 +523,23 @@ END:VCALENDAR
         };
       }
 
-      try {
-        const bodyTemplates = settings.email_body_templates || {};
-        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
-        const emailBodyHtml = rawBody
-          .replace('{{first_name}}', combinedMetadata.first_name || '')
-          .replace('{{company}}', combinedMetadata.company || '')
-          .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
-          .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
-          .replace('{{online_link}}', online_link || '')
-          .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '')
-          .replace(/\\n/g, '\n') // tolka "\\n" som newline
-          .replace(/\n/g, '<br>');
-        const signature = settings.email_signature || '';
-        const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
-
-        // Skicka med .ics som attachment om Graph misslyckades
-        if (!atOfficeEventCreated && icsAttachment) {
+      // Skicka endast mail om Graph misslyckades (dvs !atOfficeEventCreated)
+      if (!atOfficeEventCreated && icsAttachment) {
+        try {
+          const bodyTemplates = settings.email_body_templates || {};
+          const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+          const emailBodyHtml = rawBody
+            .replace('{{first_name}}', combinedMetadata.first_name || '')
+            .replace('{{company}}', combinedMetadata.company || '')
+            .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+            .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+            .replace('{{online_link}}', online_link || '')
+            .replace('{{phone}}', combinedMetadata.phone || '')
+            .replace('{{location}}', combinedMetadata.location || '')
+            .replace(/\\n/g, '\n') // tolka "\\n" som newline
+            .replace(/\n/g, '<br>');
+          const signature = settings.email_signature || '';
+          const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
           await sendMail({
             to: email,
             subject: emailSubject,
@@ -559,23 +549,13 @@ END:VCALENDAR
             attachments: [icsAttachment]
           });
           // Logga fallback .ics-användning till event_log
-          if (icsAttachment) {
-            await db.query(
-              'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
-              ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
-            );
-          }
-        } else {
-          await sendMail({
-            to: email,
-            subject: emailSubject,
-            body: finalEmailBodyHtml,
-            contentType: 'HTML',
-            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
-          });
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
+          );
+          debugLog('✅ atOffice-inbjudan skickad via e-post (fallback .ics)');
+        } catch (emailErr) {
         }
-        debugLog('✅ atOffice-inbjudan skickad via e-post');
-      } catch (emailErr) {
       }
     }
 
