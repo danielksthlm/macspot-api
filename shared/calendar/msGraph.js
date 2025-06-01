@@ -83,7 +83,7 @@ function createMsGraphClient() {
     }
   }
 
-  async function createEvent({ start, end, subject, location, attendees }) {
+  async function createEvent({ start, end, subject, location, attendees, meetingType }) {
     try {
       const calendarId = process.env.MS365_USER_EMAIL;
       if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
@@ -117,8 +117,8 @@ function createMsGraphClient() {
           type: "required"
         })),
         allowNewTimeProposals: true,
-        isOnlineMeeting: true,
-        onlineMeetingProvider: "teamsForBusiness"
+        isOnlineMeeting: meetingType === "teams",
+        onlineMeetingProvider: meetingType === "teams" ? "teamsForBusiness" : null
       };
 
       // Uppdaterat Graph-anrop för att skicka inbjudan direkt till mottagaren
