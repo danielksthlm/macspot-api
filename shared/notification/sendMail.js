@@ -3,6 +3,9 @@ const fetch = require('node-fetch');
 /**
  * Send mail with HTML body (no newline replacements, allows any HTML).
  * Optionally adds a tracking pixel at the end of the body.
+ * Can be used to send Zoom/Teams invitations or in-person meeting details,
+ * based on meeting_type and booking_settings formatting.
+ *
  * @param {Object} param0
  * @param {string} param0.to
  * @param {string} param0.subject
