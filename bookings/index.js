@@ -2,7 +2,6 @@ const { getSettings } = require('../shared/config/settingsLoader');
 const pool = require('../shared/db/pgPool');
 const { v4: uuidv4 } = require('uuid');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
-const graphClient = require('../shared/calendar/msGraph')(context);
 const createZoomClient = require('../shared/calendar/zoomClient');
 const zoomClient = createZoomClient();
 const { sendMail } = require('../shared/notification/sendMail');
@@ -10,6 +9,7 @@ const { sendMail } = require('../shared/notification/sendMail');
 // DebugLog kommer deklareras senare, så vi måste vänta tills vi har context för att använda debugLog.
 
 module.exports = async function (context, req) {
+  const graphClient = require('../shared/calendar/msGraph')(context);
   context.log('📥 bookings/index.js startar');
   const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
   const userAgent = req.headers['user-agent'] || 'unknown';
