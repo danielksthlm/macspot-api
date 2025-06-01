@@ -215,7 +215,7 @@ module.exports = async function (context, req) {
           debugLog('✅ Teams-inbjudan skickad via e-post (fallback)');
           // Logga fallback-användning till event_log
           await db.query(
-            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
             ['calendar_invite_fallback_email', id, { source: 'fallback_email' }]
           );
           // --- Slut på ny kod för Teams-inbjudan fallback ---
@@ -291,7 +291,7 @@ END:VCALENDAR
           attachments: [icsAttachment]
         });
         await db.query(
-          'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+          'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
           ['calendar_invite_fallback_ics', id, { source: 'zoom_createMeeting_failed' }]
         );
         debugLog('✅ Zoominbjudan skickad via e-post (fallback .ics)');
@@ -405,7 +405,7 @@ END:VCALENDAR
           });
           // Logga fallback .ics-användning till event_log
           await db.query(
-            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
             ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
           );
           debugLog('✅ FaceTime-inbjudan skickad via e-post (fallback .ics)');
@@ -501,7 +501,7 @@ END:VCALENDAR
           });
           // Logga fallback .ics-användning till event_log
           await db.query(
-            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
             ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
           );
           debugLog('✅ atClient-inbjudan skickad via e-post (fallback .ics)');
@@ -593,7 +593,7 @@ END:VCALENDAR
           });
           // Logga fallback .ics-användning till event_log
           await db.query(
-            'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
             ['calendar_invite_fallback_ics', id, { source: 'fallback_ics' }]
           );
           debugLog('✅ atOffice-inbjudan skickad via e-post (fallback .ics)');
