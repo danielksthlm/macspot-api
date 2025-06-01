@@ -83,10 +83,11 @@ function createMsGraphClient() {
     }
   }
 
-  async function createEvent({ start, end, subject, location, attendees, meetingType }) {
-    silentLog("🚨 createEvent() start – raw input:", { start, end, subject, location, attendees, meetingType });
-    silentLog("🚦 createEvent() initierad för:", meetingType, "| calendarId:", process.env.MS365_USER_EMAIL);
+  async function createEvent(input) {
     try {
+      silentLog("🚨 createEvent() start – raw input:", input);
+      const { start, end, subject, location, attendees, meetingType } = input;
+      silentLog("🚦 createEvent() initierad för:", meetingType, "| calendarId:", process.env.MS365_USER_EMAIL);
       const calendarId = process.env.MS365_USER_EMAIL;
       if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
 
