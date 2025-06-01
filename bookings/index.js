@@ -260,6 +260,34 @@ module.exports = async function (context, req) {
         combinedMetadata.location = 'Online';
         bookingFields.synced_to_calendar = true;
         zoomMeetingCreated = true;
+        // Skicka e-post med Zoom-länk även när mötet skapades korrekt
+        if (zoomMeetingCreated && result?.join_url) {
+          const bodyTemplates = settings.email_body_templates || {};
+          const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+          const emailBodyHtml = rawBody
+            .replace('{{first_name}}', combinedMetadata.first_name || '')
+            .replace('{{company}}', combinedMetadata.company || '')
+            .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+            .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+            .replace('{{online_link}}', result.join_url || '')
+            .replace('{{phone}}', combinedMetadata.phone || '')
+            .replace('{{location}}', 'Online')
+            .replace(/\\n/g, '\n')
+            .replace(/\n/g, '<br>');
+
+          const signature = settings.email_signature || '';
+          const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
+
+          await sendMail({
+            to: email,
+            subject: result.topic || combinedMetadata.subject || 'Zoommöte',
+            body: finalEmailBodyHtml,
+            contentType: 'HTML',
+            trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
+          });
+
+          debugLog('✅ Zoominbjudan skickad via e-post');
+        }
         // Logga till event_log för lyckad kalenderinbjudan (Zoom)
         await db.query(
           'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
