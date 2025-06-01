@@ -254,18 +254,49 @@ module.exports = async function (context, req) {
           duration: parsedLength
         });
         debugLog("📨 Zoom result:", result);
+        // Skapa även kalenderinbjudan via Graph API så den syns i din kalender
+        try {
+          const eventResult = await graphClient.createEvent({
+            start: startTime.toISOString(),
+            end: endTime.toISOString(),
+            subject: result.topic || settings.default_meeting_subject || 'Zoommöte',
+            location: 'Online',
+            attendees: [email],
+            meetingType: meeting_type
+          });
+          debugLog("📨 Zoommöte även skapat som kalenderinbjudan:", eventResult);
+          if (eventResult?.attendees && Array.isArray(eventResult.attendees)) {
+            const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
+            if (attendeeSelf?.status?.response) {
+              combinedMetadata.calendar_response_status = attendeeSelf.status.response;
+              await db.query(
+                'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+                ['calendar_response_status', id, { response: attendeeSelf.status.response }]
+              );
+            }
+          }
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+            ['calendar_invite_sent', id, {
+              subject: eventResult?.subject || null,
+              location: eventResult?.location || null,
+              webLink: eventResult?.webLink || null
+            }]
+          );
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+            ['calendar_event_created', id, eventResult]
+          );
+        } catch (calendarErr) {
+          debugLog("⚠️ Kunde inte skapa kalenderinbjudan för Zoom-möte:", calendarErr.message);
+        }
         online_link = result.join_url;
         combinedMetadata.online_link = online_link;
         combinedMetadata.meeting_id = result.id;
         combinedMetadata.subject = result.topic;
         combinedMetadata.location = 'Online';
         bookingFields.synced_to_calendar = true;
-        // Skicka INTE e-post om Zoom-möte skapades korrekt
-        zoomMeetingCreated = true;
-        return;
         // Logga till event_log för lyckad kalenderinbjudan (Zoom)
-        // (The following lines will not run due to return above)
-        /*
         await db.query(
           'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
           ['calendar_invite_sent', id, {
@@ -279,7 +310,9 @@ module.exports = async function (context, req) {
           'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
           ['calendar_event_created', id, result]
         );
-        */
+        // Skicka INTE e-post om Zoom-möte skapades korrekt
+        zoomMeetingCreated = true;
+        // return; // Ta bort eller kommentera ut denna rad så att loggningen körs
       } catch (err) {
         // Fallback: skapa .ics och skicka e-post om Zoom-mötet inte kunde skapas
         const subjectTemplates = settings.email_subject_templates || {};
