@@ -150,7 +150,8 @@ module.exports = async function (context, req) {
           end: endTime.toISOString(),
           subject: emailSubject,
           location,
-          attendees: [email]
+          attendees: [email],
+          meetingType: meeting_type
         });
         debugLog("📨 eventResult:", eventResult);
         // Extra loggning enligt instruktion
@@ -318,7 +319,8 @@ END:VCALENDAR
             end: endTime.toISOString(),
             subject: emailSubject,
             location: 'FaceTime',
-            attendees: [email]
+            attendees: [email],
+            meetingType: meeting_type
           });
           debugLog("📨 eventResult:", eventResult);
           // Extra loggning enligt instruktion
@@ -434,7 +436,8 @@ END:VCALENDAR
           end: endTime.toISOString(),
           subject: emailSubject,
           location: combinedMetadata.location,
-          attendees: [email]
+          attendees: [email],
+          meetingType: meeting_type
         });
         debugLog("📨 eventResult:", eventResult);
         // Extra loggning enligt instruktion
@@ -526,7 +529,8 @@ END:VCALENDAR
           end: endTime.toISOString(),
           subject: emailSubject,
           location: combinedMetadata.location,
-          attendees: [email]
+          attendees: [email],
+          meetingType: meeting_type
         });
         debugLog("📨 eventResult:", eventResult);
         // Extra loggning enligt instruktion
