@@ -317,6 +317,7 @@ END:VCALENDAR
 
         // Försök skapa kalenderinbjudan via Graph
         try {
+          debugLog("🧪 före createEvent()");
           const eventResult = await graphClient.createEvent({
             start: startTime.toISOString(),
             end: endTime.toISOString(),
@@ -325,6 +326,7 @@ END:VCALENDAR
             attendees: [email],
             meetingType: meeting_type
           });
+          debugLog("🧪 efter createEvent()");
           debugLog("📨 eventResult:", eventResult);
           // Extra loggning enligt instruktion
           if (eventResult) {
