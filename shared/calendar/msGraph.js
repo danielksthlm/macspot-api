@@ -193,5 +193,4 @@ function createMsGraphClient() {
   return { getEvent, listUpcomingEvents, createEvent, sendEmailInvite };
 }
 
-const client = createMsGraphClient();
-module.exports = () => client;
+module.exports = createMsGraphClient;
