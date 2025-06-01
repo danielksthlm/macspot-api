@@ -135,9 +135,10 @@ function createMsGraphClient() {
         body: created?.body || null
       };
     } catch (err) {
-      silentLog("❌ Graph createEvent error:", err.message);
+      silentLog("❌ Graph createEvent error (full):", err.stack || err.toString());
       if (err.response) {
-        silentLog("📡 Graph response error details:", await err.response.text());
+        const body = await err.response.text();
+        silentLog("📡 Graph response error details:", body);
       }
       return null;
     }
