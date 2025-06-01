@@ -7,6 +7,8 @@ const createZoomClient = require('../shared/calendar/zoomClient');
 const zoomClient = createZoomClient();
 const { sendMail } = require('../shared/notification/sendMail');
 
+// DebugLog kommer deklareras senare, så vi måste vänta tills vi har context för att använda debugLog.
+
 module.exports = async function (context, req) {
   context.log('📥 bookings/index.js startar');
   const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
@@ -72,6 +74,7 @@ module.exports = async function (context, req) {
 
     const debugHelper = createDebugLogger(context);
     const debugLog = debugHelper.debugLog || ((...args) => context.log('[⚠️ fallback log]', ...args));
+  debugLog("🔧 graphClient.createEvent finns:", typeof graphClient.createEvent === "function");
     debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
     debugLog("🧾 Metadata efter sammanslagning:", combinedMetadata);
     // Läs in booking_settings
