@@ -153,6 +153,14 @@ module.exports = async function (context, req) {
           attendees: [email]
         });
         debugLog("📨 eventResult:", eventResult);
+        // Extra loggning enligt instruktion
+        if (eventResult) {
+          debugLog("📄 eventResult.subject:", eventResult.subject);
+          debugLog("📅 eventResult.start:", eventResult.start);
+          debugLog("📅 eventResult.end:", eventResult.end);
+          debugLog("📧 eventResult.attendees:", eventResult.attendees);
+          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+        }
         if (!eventResult) {
           context.log("⚠️ createEvent returnerade null – ingen Teams-länk skapades");
         }
@@ -313,6 +321,14 @@ END:VCALENDAR
             attendees: [email]
           });
           debugLog("📨 eventResult:", eventResult);
+          // Extra loggning enligt instruktion
+          if (eventResult) {
+            debugLog("📄 eventResult.subject:", eventResult.subject);
+            debugLog("📅 eventResult.start:", eventResult.start);
+            debugLog("📅 eventResult.end:", eventResult.end);
+            debugLog("📧 eventResult.attendees:", eventResult.attendees);
+            debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+          }
           if (eventResult?.location) {
             combinedMetadata.location = eventResult.location;
           }
@@ -421,6 +437,14 @@ END:VCALENDAR
           attendees: [email]
         });
         debugLog("📨 eventResult:", eventResult);
+        // Extra loggning enligt instruktion
+        if (eventResult) {
+          debugLog("📄 eventResult.subject:", eventResult.subject);
+          debugLog("📅 eventResult.start:", eventResult.start);
+          debugLog("📅 eventResult.end:", eventResult.end);
+          debugLog("📧 eventResult.attendees:", eventResult.attendees);
+          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+        }
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atClient-event skapat i kalender via Graph');
         atClientEventCreated = true;
@@ -505,6 +529,14 @@ END:VCALENDAR
           attendees: [email]
         });
         debugLog("📨 eventResult:", eventResult);
+        // Extra loggning enligt instruktion
+        if (eventResult) {
+          debugLog("📄 eventResult.subject:", eventResult.subject);
+          debugLog("📅 eventResult.start:", eventResult.start);
+          debugLog("📅 eventResult.end:", eventResult.end);
+          debugLog("📧 eventResult.attendees:", eventResult.attendees);
+          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+        }
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atOffice-event skapat i kalender via Graph');
         atOfficeEventCreated = true;
