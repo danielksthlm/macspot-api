@@ -123,10 +123,12 @@ function createMsGraphClient() {
 
       // Uppdaterat Graph-anrop för att skicka inbjudan direkt till mottagaren
       silentLog("📤 Event som skickas till Graph:", JSON.stringify({ ...event, sendUpdates: 'all' }, null, 2));
+      silentLog("🛠 createEvent() reached – preparing to send to Graph...");
       const created = await client
         .api(`/users/${calendarId}/events`)
         .header('Prefer', 'outlook.timezone="Europe/Stockholm"')
         .post({ ...event, attendees: event.attendees, sendUpdates: 'all' });
+      silentLog("📥 Graph API svar:", created);
 
       return {
         eventId: created?.id || null,
