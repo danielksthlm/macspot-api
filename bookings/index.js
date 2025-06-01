@@ -162,6 +162,10 @@ module.exports = async function (context, req) {
           const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
           if (attendeeSelf?.status?.response) {
             combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+            await db.query(
+              'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+              ['calendar_response_status', id, { response: attendeeSelf.status.response }]
+            );
           }
         }
         if (!eventResult) {
@@ -188,6 +192,15 @@ module.exports = async function (context, req) {
         if (eventResult) {
           // Endast om eventResult finns, markera som synkad
           bookingFields.synced_to_calendar = true;
+          // Logga till event_log för lyckad kalenderinbjudan
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+            ['calendar_invite_sent', id, {
+              subject: eventResult?.subject || null,
+              location: eventResult?.location || null,
+              webLink: eventResult?.webLink || null
+            }]
+          );
         }
       } catch (err) {
         // Skicka endast mail om createEvent misslyckades (eventResult === null)
@@ -242,6 +255,15 @@ module.exports = async function (context, req) {
         combinedMetadata.location = 'Online';
         bookingFields.synced_to_calendar = true;
         zoomMeetingCreated = true;
+        // Logga till event_log för lyckad kalenderinbjudan (Zoom)
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+          ['calendar_invite_sent', id, {
+            subject: result?.topic || null,
+            location: 'Online',
+            webLink: result?.join_url || null
+          }]
+        );
       } catch (err) {
         // Fallback: skapa .ics och skicka e-post om Zoom-mötet inte kunde skapas
         const subjectTemplates = settings.email_subject_templates || {};
@@ -331,6 +353,10 @@ END:VCALENDAR
             const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
             if (attendeeSelf?.status?.response) {
               combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+              await db.query(
+                'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+                ['calendar_response_status', id, { response: attendeeSelf.status.response }]
+              );
             }
           }
         } catch (err) {
@@ -355,6 +381,15 @@ END:VCALENDAR
           debugLog('✅ FaceTime-event skapat i kalender via Graph');
           bookingFields.synced_to_calendar = true;
           facetimeEventCreated = true;
+          // Logga till event_log för lyckad kalenderinbjudan
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+            ['calendar_invite_sent', id, {
+              subject: eventResult?.subject || null,
+              location: eventResult?.location || null,
+              webLink: eventResult?.webLink || null
+            }]
+          );
         } else {
           debugLog('⚠️ FaceTime-event kunde inte skapas via Graph');
         }
@@ -447,11 +482,24 @@ END:VCALENDAR
           const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
           if (attendeeSelf?.status?.response) {
             combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+            await db.query(
+              'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+              ['calendar_response_status', id, { response: attendeeSelf.status.response }]
+            );
           }
         }
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atClient-event skapat i kalender via Graph');
         atClientEventCreated = true;
+        // Logga till event_log för lyckad kalenderinbjudan
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+          ['calendar_invite_sent', id, {
+            subject: eventResult?.subject || null,
+            location: eventResult?.location || null,
+            webLink: eventResult?.webLink || null
+          }]
+        );
       } catch (err) {
         context.log(`⚠️ atClient-kalenderinbjudan via Graph misslyckades: ${err.message}`);
       }
@@ -539,11 +587,24 @@ END:VCALENDAR
           const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
           if (attendeeSelf?.status?.response) {
             combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+            await db.query(
+              'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+              ['calendar_response_status', id, { response: attendeeSelf.status.response }]
+            );
           }
         }
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atOffice-event skapat i kalender via Graph');
         atOfficeEventCreated = true;
+        // Logga till event_log för lyckad kalenderinbjudan
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+          ['calendar_invite_sent', id, {
+            subject: eventResult?.subject || null,
+            location: eventResult?.location || null,
+            webLink: eventResult?.webLink || null
+          }]
+        );
       } catch (err) {
         context.log(`⚠️ atOffice-kalenderinbjudan via Graph misslyckades: ${err.message}`);
       }
