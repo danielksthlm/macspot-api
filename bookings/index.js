@@ -33,7 +33,6 @@ module.exports = async function (context, req) {
     const contactRes = await db.query('SELECT metadata FROM contact WHERE id = $1', [contact_id]);
     const dbMetadata = (contactRes.rows[0] && contactRes.rows[0].metadata) || {};
     const combinedMetadata = { ...dbMetadata, ...metadata };
-    debugLog("🧾 Metadata efter sammanslagning:", combinedMetadata);
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       context.log('❌ Ogiltig eller saknad e-postadress:', email);
@@ -74,6 +73,7 @@ module.exports = async function (context, req) {
     const debugHelper = createDebugLogger(context);
     const debugLog = debugHelper.debugLog || ((...args) => context.log('[⚠️ fallback log]', ...args));
     debugLog("🧠 debugLogger aktiv – DEBUG=" + process.env.DEBUG);
+    debugLog("🧾 Metadata efter sammanslagning:", combinedMetadata);
     // Läs in booking_settings
     const settings = await getSettings(context);
 
