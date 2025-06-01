@@ -1,7 +1,7 @@
 const { Client } = require("@microsoft/microsoft-graph-client");
 require("isomorphic-fetch");
 const DEBUG = process.env.DEBUG === 'true';
-const silentLog = DEBUG ? console.log : () => {};
+const silentLog = console.log;
 const fetch = require("node-fetch");
 const { loadSettings } = require("../config/settingsLoader");
 const getMsToken = require("./getMsToken");
