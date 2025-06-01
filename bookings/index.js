@@ -157,13 +157,12 @@ module.exports = async function (context, req) {
           meetingType: meeting_type
         });
         debugLog("📨 eventResult:", eventResult);
-        // Extra loggning enligt instruktion
-        if (eventResult) {
-          debugLog("📄 eventResult.subject:", eventResult.subject);
-          debugLog("📅 eventResult.start:", eventResult.start);
-          debugLog("📅 eventResult.end:", eventResult.end);
-          debugLog("📧 eventResult.attendees:", eventResult.attendees);
-          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+        // Spara kalenderstatus om den finns (Teams)
+        if (eventResult?.attendees && Array.isArray(eventResult.attendees)) {
+          const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
+          if (attendeeSelf?.status?.response) {
+            combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+          }
         }
         if (!eventResult) {
           context.log("⚠️ createEvent returnerade null – ingen Teams-länk skapades");
@@ -318,7 +317,6 @@ END:VCALENDAR
         // Försök skapa kalenderinbjudan via Graph
         let eventResult = null;
         try {
-          debugLog("🧪 före createEvent()");
           eventResult = await graphClient.createEvent({
             start: startTime.toISOString(),
             end: endTime.toISOString(),
@@ -327,18 +325,16 @@ END:VCALENDAR
             attendees: [email],
             meetingType: meeting_type
           });
+          debugLog("📨 eventResult:", eventResult);
+          // Spara kalenderstatus om den finns (FaceTime)
+          if (eventResult?.attendees && Array.isArray(eventResult.attendees)) {
+            const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
+            if (attendeeSelf?.status?.response) {
+              combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+            }
+          }
         } catch (err) {
           debugLog("💥 createEvent kastade ett fel:", err.stack || err.toString());
-        }
-        debugLog("🧪 efter createEvent()");
-        debugLog("📨 eventResult:", eventResult);
-        // Extra loggning enligt instruktion
-        if (eventResult) {
-          debugLog("📄 eventResult.subject:", eventResult.subject);
-          debugLog("📅 eventResult.start:", eventResult.start);
-          debugLog("📅 eventResult.end:", eventResult.end);
-          debugLog("📧 eventResult.attendees:", eventResult.attendees);
-          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
         }
         if (eventResult?.location) {
           combinedMetadata.location = eventResult.location;
@@ -446,13 +442,12 @@ END:VCALENDAR
           meetingType: meeting_type
         });
         debugLog("📨 eventResult:", eventResult);
-        // Extra loggning enligt instruktion
-        if (eventResult) {
-          debugLog("📄 eventResult.subject:", eventResult.subject);
-          debugLog("📅 eventResult.start:", eventResult.start);
-          debugLog("📅 eventResult.end:", eventResult.end);
-          debugLog("📧 eventResult.attendees:", eventResult.attendees);
-          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+        // Spara kalenderstatus om den finns (atClient)
+        if (eventResult?.attendees && Array.isArray(eventResult.attendees)) {
+          const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
+          if (attendeeSelf?.status?.response) {
+            combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+          }
         }
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atClient-event skapat i kalender via Graph');
@@ -539,13 +534,12 @@ END:VCALENDAR
           meetingType: meeting_type
         });
         debugLog("📨 eventResult:", eventResult);
-        // Extra loggning enligt instruktion
-        if (eventResult) {
-          debugLog("📄 eventResult.subject:", eventResult.subject);
-          debugLog("📅 eventResult.start:", eventResult.start);
-          debugLog("📅 eventResult.end:", eventResult.end);
-          debugLog("📧 eventResult.attendees:", eventResult.attendees);
-          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+        // Spara kalenderstatus om den finns (atOffice)
+        if (eventResult?.attendees && Array.isArray(eventResult.attendees)) {
+          const attendeeSelf = eventResult.attendees.find(a => a.emailAddress?.address === email);
+          if (attendeeSelf?.status?.response) {
+            combinedMetadata.calendar_response_status = attendeeSelf.status.response; // t.ex. 'none', 'accepted', 'declined'
+          }
         }
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atOffice-event skapat i kalender via Graph');

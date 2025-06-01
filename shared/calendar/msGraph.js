@@ -85,19 +85,19 @@ function createMsGraphClient(context) {
   }
 
   async function createEvent(input) {
-    silentLog("🚨 createEvent() start – raw input:", input);
+    // silentLog("🚨 createEvent() start – raw input:", input);
     if (!input || typeof input !== "object") {
       console.log("❌ createEvent() fick ogiltig input:", input);
       return null;
     }
     try {
       const { start, end, subject, location, attendees, meetingType } = input;
-      silentLog("🚦 createEvent() initierad för:", meetingType, "| calendarId:", process.env.MS365_USER_EMAIL);
+      // silentLog("🚦 createEvent() initierad för:", meetingType, "| calendarId:", process.env.MS365_USER_EMAIL);
       const calendarId = process.env.MS365_USER_EMAIL;
       if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
 
       const authToken = await getMsToken({ log: { log: silentLog } });
-      silentLog("🔐 Tokenhämtning gav:", authToken ? authToken.slice(0, 20) + "..." : "null");
+      // silentLog("🔐 Tokenhämtning gav:", authToken ? authToken.slice(0, 20) + "..." : "null");
       if (!authToken) throw new Error("🛑 Tokenhämtning misslyckades");
 
       const client = Client.init({
@@ -134,20 +134,24 @@ function createMsGraphClient(context) {
       }
 
       // Uppdaterat Graph-anrop för att skicka inbjudan direkt till mottagaren (utan sendUpdates)
-      silentLog("📤 Event som skickas till Graph:", JSON.stringify(event, null, 2));
-      silentLog("🛠 createEvent() reached – preparing to send to Graph...");
+      // silentLog("📤 Event som skickas till Graph:", JSON.stringify(event, null, 2));
+      // silentLog("🛠 createEvent() reached – preparing to send to Graph...");
       const created = await client
         .api(`/users/${calendarId}/events`)
         .header('Prefer', 'outlook.timezone="Europe/Stockholm"')
         .post(event);
-      silentLog("📥 Graph API svar:", created);
+      // silentLog("📥 Graph API svar:", created);
 
       return {
         eventId: created?.id || null,
         onlineMeetingUrl: created?.onlineMeeting?.joinUrl || null,
         subject: created?.subject || null,
         location: created?.location?.displayName || null,
-        body: created?.body || null
+        body: created?.body || null,
+        start: created?.start || null,
+        end: created?.end || null,
+        attendees: created?.attendees || null,
+        webLink: created?.webLink || null
       };
     } catch (err) {
       silentLog("❌ Graph createEvent error (full):", err.stack || err.toString());
