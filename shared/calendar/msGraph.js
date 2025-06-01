@@ -14,7 +14,7 @@ function createMsGraphClient() {
         return null;
       }
 
-      const authToken = await getMsToken({ log: silentLog });
+      const authToken = await getMsToken({ log: { log: silentLog } });
       if (!authToken) {
         throw new Error("🛑 Tokenhämtning misslyckades – accessToken saknas. Funktion avbryts.");
       }
@@ -52,7 +52,7 @@ function createMsGraphClient() {
       const calendarId = process.env.MS365_USER_EMAIL;
       if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
 
-      const authToken = await getMsToken({ log: silentLog });
+      const authToken = await getMsToken({ log: { log: silentLog } });
       if (!authToken) {
         throw new Error("🛑 Tokenhämtning misslyckades – accessToken saknas. Funktion avbryts.");
       }
@@ -88,7 +88,7 @@ function createMsGraphClient() {
       const calendarId = process.env.MS365_USER_EMAIL;
       if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
 
-      const authToken = await getMsToken({ log: silentLog });
+      const authToken = await getMsToken({ log: { log: silentLog } });
       if (!authToken) throw new Error("🛑 Tokenhämtning misslyckades");
 
       const client = Client.init({
@@ -150,7 +150,7 @@ function createMsGraphClient() {
   async function sendEmailInvite({ to, subject, body }) {
     try {
       const senderEmail = process.env.MS365_USER_EMAIL;
-      const authToken = await getMsToken({ log: silentLog });
+      const authToken = await getMsToken({ log: { log: silentLog } });
       if (!authToken) throw new Error("❌ Kunde inte hämta Graph-token");
 
       const client = Client.init({
