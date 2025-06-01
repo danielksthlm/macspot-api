@@ -69,6 +69,10 @@ async function sendMail({ to, subject, body, trackingPixelUrl = null }) {
   if (mailRes.ok && process.env.DEBUG_EMAIL === 'true') {
     console.log(`✅ E-post skickad till ${to} via Graph API`);
   }
+  if (mailRes.ok && process.env.DEBUG_EMAIL === 'true') {
+    console.log(`📧 Mailinnehåll skickat till: ${to}`);
+    console.log(`🧾 Ämne: ${subject}`);
+  }
 
   if (process.env.DEBUG_EMAIL === 'true') {
     console.log(`📤 E-post skickas till: ${to}`);
@@ -77,7 +81,8 @@ async function sendMail({ to, subject, body, trackingPixelUrl = null }) {
 
   if (!mailRes.ok) {
     const error = await mailRes.text();
-    throw new Error(`❌ Misslyckades skicka mail: ${error}`);
+    console.error(`❌ Misslyckades skicka mail till ${to} – ämne: ${subject}`);
+    throw new Error(`❌ Fel från Graph API: ${error}`);
   }
 }
 
