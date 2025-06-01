@@ -327,9 +327,14 @@ END:VCALENDAR
             combinedMetadata.body_preview = eventResult.body.content;
           }
 
-          debugLog('✅ FaceTime-event skapat i kalender via Graph');
-          bookingFields.synced_to_calendar = true;
-          facetimeEventCreated = true;
+          // Nytt: kontrollera eventResult och logga enligt instruktion
+          if (eventResult) {
+            debugLog('✅ FaceTime-event skapat i kalender via Graph');
+            bookingFields.synced_to_calendar = true;
+            facetimeEventCreated = true;
+          } else {
+            debugLog('⚠️ FaceTime-event kunde inte skapas via Graph');
+          }
         } catch (err) {
           context.log(`⚠️ FaceTime-kalenderinbjudan via Graph misslyckades: ${err.message}`);
         }
