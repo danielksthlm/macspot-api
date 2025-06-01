@@ -84,8 +84,12 @@ function createMsGraphClient() {
   }
 
   async function createEvent(input) {
+    silentLog("🚨 createEvent() start – raw input:", input);
+    if (!input || typeof input !== "object") {
+      console.log("❌ createEvent() fick ogiltig input:", input);
+      return null;
+    }
     try {
-      silentLog("🚨 createEvent() start – raw input:", input);
       const { start, end, subject, location, attendees, meetingType } = input;
       silentLog("🚦 createEvent() initierad för:", meetingType, "| calendarId:", process.env.MS365_USER_EMAIL);
       const calendarId = process.env.MS365_USER_EMAIL;
