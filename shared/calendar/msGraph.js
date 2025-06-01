@@ -125,10 +125,13 @@ function createMsGraphClient(context) {
           emailAddress: { address: email },
           type: "required"
         })),
-        allowNewTimeProposals: true,
-        isOnlineMeeting: meetingType === "teams",
-        onlineMeetingProvider: meetingType === "teams" ? "teamsForBusiness" : null
+        allowNewTimeProposals: true
       };
+
+      if (meetingType === "teams") {
+        event.isOnlineMeeting = true;
+        event.onlineMeetingProvider = "teamsForBusiness";
+      }
 
       // Uppdaterat Graph-anrop för att skicka inbjudan direkt till mottagaren
       silentLog("📤 Event som skickas till Graph:", JSON.stringify({ ...event, sendUpdates: 'all' }, null, 2));
