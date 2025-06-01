@@ -150,7 +150,7 @@ module.exports = async function (context, req) {
           attendees: [email]
         });
         if (!eventResult) {
-          context.log("⚠️ createEvent returnerade null");
+          context.log("⚠️ createEvent returnerade null – ingen Teams-länk skapades");
         }
         if (eventResult?.onlineMeetingUrl) {
           online_link = eventResult.onlineMeetingUrl;
@@ -169,6 +169,30 @@ module.exports = async function (context, req) {
         if (body && !eventResult?.onlineMeetingUrl) {
           combinedMetadata.body_preview = body;
         }
+
+        // --- Ny kod för att skicka Teams-inbjudan via e-post ---
+        const bodyTemplates = settings.email_body_templates || {};
+        const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
+        const emailBodyHtml = rawBody
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || '')
+          .replace('{{start_time}}', startTime.toLocaleString('sv-SE'))
+          .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
+          .replace('{{online_link}}', online_link || '')
+          .replace('{{phone}}', combinedMetadata.phone || '')
+          .replace('{{location}}', combinedMetadata.location || '');
+        const signature = settings.email_signature || '';
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
+
+        await sendMail({
+          to: email,
+          subject: emailSubject,
+          body: finalEmailBodyHtml,
+          contentType: 'HTML',
+          trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
+        });
+        debugLog('✅ Teams-inbjudan skickad via e-post');
+        // --- Slut på ny kod för Teams-inbjudan ---
 
         bookingFields.synced_to_calendar = true;
       } catch (err) {
@@ -268,8 +292,10 @@ module.exports = async function (context, req) {
           });
           debugLog('✅ FaceTime-inbjudan skickad via e-post');
         } catch (emailErr) {
+          context.log("❌ Kunde inte skicka FaceTime-inbjudan:", emailErr.message);
         }
       } else {
+        context.log("❌ FaceTime-bokning saknar telefonnummer – kan inte skapa länk eller skicka inbjudan.");
       }
     } else if (meeting_type.toLowerCase() === 'atclient') {
       combinedMetadata.location = combinedMetadata.location || combinedMetadata.address || settings.default_home_address || 'Hos kund';

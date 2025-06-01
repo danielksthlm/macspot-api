@@ -2,7 +2,7 @@
 
 import psycopg2
 from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 
 __version__ = "1.0.1"
@@ -19,9 +19,9 @@ def get_pending_count(conn, label):
 
 def check_db_connection(name, config):
     try:
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         conn = psycopg2.connect(**config)
-        latency = (datetime.utcnow() - start).total_seconds()
+        latency = (datetime.now(timezone.utc) - start).total_seconds()
         print(f"✅ Anslutning till {name} OK (latens: {latency:.2f} sek)")
         return conn
     except Exception as e:
@@ -29,7 +29,7 @@ def check_db_connection(name, config):
         return None
 
 def main():
-    print(f"\n📋 Healthcheck MacSpot sync v{__version__} – {datetime.utcnow().isoformat()} UTC\n")
+    print(f"\n📋 Healthcheck MacSpot sync v{__version__} – {datetime.now(timezone.utc).isoformat()} UTC\n")
     errors = 0
 
     local_conn = check_db_connection("Lokal databas", LOCAL_DB_CONFIG)

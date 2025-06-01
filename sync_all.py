@@ -3,7 +3,7 @@ BASE = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api"
 
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 import psycopg2
 import json
@@ -35,15 +35,15 @@ is_manual = sys.stdout.isatty()
 sys.stdout = open(log_out, 'a')
 sys.stderr = open(log_err, 'a')
 if is_manual:
-    print(f"🖐️ Manuell körning: {datetime.now().isoformat()}")
+    print(f"🖐️ Manuell körning: {datetime.now(timezone.utc).isoformat()}")
 else:
-    print(f"🤖 Automatisk körning via launchd: {datetime.now().isoformat()}")
+    print(f"🤖 Automatisk körning via launchd: {datetime.now(timezone.utc).isoformat()}")
 
 def run_script(name, script_path):
     subprocess.run(["python", f"{BASE}/{script_path}"], check=True)
 
 try:
-    start_time = datetime.now()
+    start_time = datetime.now(timezone.utc)
     def is_database_online(host, port):
         import socket
         try:
@@ -67,12 +67,12 @@ try:
         print("❌ Azure-databasen är inte tillgänglig (macspotpg.postgres.database.azure.com:5432)")
         exit(1)
 
-    print(f"📌 Körning initierad: {datetime.now().isoformat()}")
+    print(f"📌 Körning initierad: {datetime.now(timezone.utc).isoformat()}")
 
     print("🧪 Kör healthcheck_sync.py...")
     run_healthcheck()
 
-    print(f"\n🔄 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
+    print(f"\n🔄 [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
 
     scripts_part1 = [
         ("🟡 Kör sync.py...", "sync.py"),
@@ -89,7 +89,7 @@ try:
     for msg, script in scripts_part2:
         run_script(msg, script)
 
-    today_prefix = datetime.now().strftime('%Y%m%d')
+    today_prefix = datetime.now(timezone.utc).strftime('%Y%m%d')
     outbox_dir = os.path.join(BASE, 'sync_outbox')
     files = [f for f in os.listdir(outbox_dir) if f.startswith(today_prefix)]
     files_with_type = [f for f in files if len(f.split("_")) >= 3]
@@ -165,7 +165,7 @@ try:
         cur_cloud.close()
         cloud.close()
 
-    print(f"\n✅ [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk körd.")
+    print(f"\n✅ [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk körd.")
 
 except Exception as e:
     import traceback
@@ -173,6 +173,6 @@ except Exception as e:
     print(traceback.format_exc())
 
 finally:
-    print(f"🏁 Körning avslutad: {datetime.now().isoformat()}")
-    duration = datetime.now() - start_time
+    print(f"🏁 Körning avslutad: {datetime.now(timezone.utc).isoformat()}")
+    duration = datetime.now(timezone.utc) - start_time
     print(f"⏱️ Total körtid: {int(duration.total_seconds())} sekunder")

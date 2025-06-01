@@ -57,6 +57,7 @@ def apply_change(cur, table, operation, payload):
         elif operation == "DELETE":
             cur.execute(f"DELETE FROM {table} WHERE id = %s", [payload["id"]])
             print(f"🗑️ Raderade post {payload['id']} från {table}")
+            print(f"🗑️ Raderade post {payload['id']} från {table}")
 
     except Exception as e:
         print(f"❌ Fel i apply_change för {table} ({operation}): {e}")

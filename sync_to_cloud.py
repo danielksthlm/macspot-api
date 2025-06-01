@@ -196,6 +196,7 @@ def apply_change(conn, change, local_conn):
         elif operation == 'DELETE':
             cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
             print(f"🗑️ Raderade post {record_id} från {table_name}")
+            print(f"🗑️ Raderade post {record_id} från {table_name}")
         conn.commit()
         mark_as_processed(local_conn, change[0])
 
