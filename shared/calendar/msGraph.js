@@ -121,7 +121,11 @@ function createMsGraphClient() {
         onlineMeetingProvider: "teamsForBusiness"
       };
 
-      const created = await client.api(`/users/${calendarId}/events`).post(event);
+      // Uppdaterat Graph-anrop för att skicka inbjudan direkt till mottagaren
+      const created = await client
+        .api(`/users/${calendarId}/events`)
+        .header('Prefer', 'outlook.timezone="Europe/Stockholm"')
+        .post({ ...event, attendees: event.attendees, sendUpdates: 'all' });
 
       return {
         eventId: created?.id || null,

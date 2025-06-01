@@ -141,8 +141,9 @@ module.exports = async function (context, req) {
         .replace('{{first_name}}', combinedMetadata.first_name || '')
         .replace('{{company}}', combinedMetadata.company || 'din organisation');
       const location = combinedMetadata.location || 'Online';
+      let eventResult = null;
       try {
-        const eventResult = await graphClient.createEvent({
+        eventResult = await graphClient.createEvent({
           start: startTime.toISOString(),
           end: endTime.toISOString(),
           subject: emailSubject,
@@ -170,7 +171,16 @@ module.exports = async function (context, req) {
           combinedMetadata.body_preview = body;
         }
 
-        // --- Ny kod för att skicka Teams-inbjudan via e-post ---
+        if (eventResult) {
+          // Endast om eventResult finns, markera som synkad
+          bookingFields.synced_to_calendar = true;
+        }
+      } catch (err) {
+        // loggar för misslyckade createEvent tas bort enligt instruktion
+      }
+      // Skicka endast mail om createEvent misslyckades (eventResult === null)
+      if (!eventResult) {
+        // --- Ny kod för att skicka Teams-inbjudan via e-post som fallback ---
         const bodyTemplates = settings.email_body_templates || {};
         const rawBody = bodyTemplates[meeting_type.toLowerCase()] || (settings.email_invite_template?.body || '');
         const emailBodyHtml = rawBody
@@ -191,12 +201,13 @@ module.exports = async function (context, req) {
           contentType: 'HTML',
           trackingPixelUrl: `https://klrab.se/track.gif?booking_id=${id}`
         });
-        debugLog('✅ Teams-inbjudan skickad via e-post');
-        // --- Slut på ny kod för Teams-inbjudan ---
-
-        bookingFields.synced_to_calendar = true;
-      } catch (err) {
-        // loggar för misslyckade createEvent tas bort enligt instruktion
+        debugLog('✅ Teams-inbjudan skickad via e-post (fallback)');
+        // Logga fallback-användning till event_log
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, metadata) VALUES ($1, $2, $3)',
+          ['calendar_invite_fallback_email', id, { source: 'fallback_email' }]
+        );
+        // --- Slut på ny kod för Teams-inbjudan fallback ---
       }
     } else if (meeting_type.toLowerCase() === 'zoom') {
       try {
