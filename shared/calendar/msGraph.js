@@ -89,6 +89,7 @@ function createMsGraphClient() {
       if (!calendarId) throw new Error("❌ MS365_USER_EMAIL saknas");
 
       const authToken = await getMsToken({ log: { log: silentLog } });
+      silentLog("🔐 Tokenhämtning gav:", authToken ? authToken.slice(0, 20) + "..." : "null");
       if (!authToken) throw new Error("🛑 Tokenhämtning misslyckades");
 
       const client = Client.init({
