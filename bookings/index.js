@@ -33,6 +33,7 @@ module.exports = async function (context, req) {
     const contactRes = await db.query('SELECT metadata FROM contact WHERE id = $1', [contact_id]);
     const dbMetadata = (contactRes.rows[0] && contactRes.rows[0].metadata) || {};
     const combinedMetadata = { ...dbMetadata, ...metadata };
+    debugLog("🧾 Metadata efter sammanslagning:", combinedMetadata);
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       context.log('❌ Ogiltig eller saknad e-postadress:', email);
@@ -132,6 +133,7 @@ module.exports = async function (context, req) {
       contact_id: contact_id || null,
       booking_email: email || null
     };
+    debugLog("📦 bookingFields inför DB:", bookingFields);
 
     let online_link = null;
     if (meeting_type.toLowerCase() === 'teams' && contact_id && email) {
@@ -150,6 +152,7 @@ module.exports = async function (context, req) {
           location,
           attendees: [email]
         });
+        debugLog("📨 eventResult:", eventResult);
         if (!eventResult) {
           context.log("⚠️ createEvent returnerade null – ingen Teams-länk skapades");
         }
@@ -220,6 +223,7 @@ module.exports = async function (context, req) {
           start: startTime.toISOString(),
           duration: parsedLength
         });
+        debugLog("📨 Zoom result:", result);
         online_link = result.join_url;
         combinedMetadata.online_link = online_link;
         combinedMetadata.meeting_id = result.id;
@@ -308,7 +312,7 @@ END:VCALENDAR
             location: 'FaceTime',
             attendees: [email]
           });
-
+          debugLog("📨 eventResult:", eventResult);
           if (eventResult?.location) {
             combinedMetadata.location = eventResult.location;
           }
@@ -411,6 +415,7 @@ END:VCALENDAR
           location: combinedMetadata.location,
           attendees: [email]
         });
+        debugLog("📨 eventResult:", eventResult);
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atClient-event skapat i kalender via Graph');
         atClientEventCreated = true;
@@ -494,6 +499,7 @@ END:VCALENDAR
           location: combinedMetadata.location,
           attendees: [email]
         });
+        debugLog("📨 eventResult:", eventResult);
         bookingFields.synced_to_calendar = true;
         debugLog('✅ atOffice-event skapat i kalender via Graph');
         atOfficeEventCreated = true;
