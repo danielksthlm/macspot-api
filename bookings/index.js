@@ -293,7 +293,14 @@ module.exports = async function (context, req) {
         online_link = result.join_url;
         combinedMetadata.online_link = online_link;
         combinedMetadata.meeting_id = result.id;
-        combinedMetadata.subject = result.topic;
+        // -- Börja: Ändrad subject-templating för Zoom --
+        const subjectTemplates = settings.email_subject_templates || {};
+        const subjectTemplate = subjectTemplates[meeting_type.toLowerCase()] || settings.default_meeting_subject || 'Möte';
+        const emailSubject = subjectTemplate
+          .replace('{{first_name}}', combinedMetadata.first_name || '')
+          .replace('{{company}}', combinedMetadata.company || 'din organisation');
+        combinedMetadata.subject = emailSubject;
+        // -- Slut: Ändrad subject-templating för Zoom --
         combinedMetadata.location = 'Online';
         bookingFields.synced_to_calendar = true;
         // Logga till event_log för lyckad kalenderinbjudan (Zoom)
