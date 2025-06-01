@@ -190,9 +190,11 @@ module.exports = async function (context, req) {
           .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
           .replace('{{online_link}}', online_link || '')
           .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '');
+          .replace('{{location}}', combinedMetadata.location || '')
+          .replace(/\\n/g, '\n') // tolka "\\n" som newline
+          .replace(/\n/g, '<br>');
         const signature = settings.email_signature || '';
-        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
 
         await sendMail({
           to: email,
@@ -248,9 +250,11 @@ module.exports = async function (context, req) {
           .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
           .replace('{{online_link}}', online_link || '')
           .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '');
+          .replace('{{location}}', combinedMetadata.location || '')
+          .replace(/\\n/g, '\n') // tolka "\\n" som newline
+          .replace(/\n/g, '<br>');
         const signature = settings.email_signature || '';
-        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
 
         // Skicka e-post via Graph (placeholder – implementera din mailfunktion)
         try {
@@ -346,9 +350,11 @@ END:VCALENDAR
             .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
             .replace('{{online_link}}', combinedMetadata.online_link || online_link || '')
             .replace('{{phone}}', combinedMetadata.phone || '')
-            .replace('{{location}}', combinedMetadata.location || '');
+            .replace('{{location}}', combinedMetadata.location || '')
+            .replace(/\\n/g, '\n') // tolka "\\n" som newline
+            .replace(/\n/g, '<br>');
           const signature = settings.email_signature || '';
-          const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
+          const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
 
           // Skicka med .ics som attachment om Graph misslyckades
           if (!facetimeEventCreated && icsAttachment) {
@@ -442,9 +448,11 @@ END:VCALENDAR
           .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
           .replace('{{online_link}}', online_link || '')
           .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '');
+          .replace('{{location}}', combinedMetadata.location || '')
+          .replace(/\\n/g, '\n') // tolka "\\n" som newline
+          .replace(/\n/g, '<br>');
         const signature = settings.email_signature || '';
-        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
 
         // Skicka med .ics som attachment om Graph misslyckades
         if (!atClientEventCreated && icsAttachment) {
@@ -534,9 +542,11 @@ END:VCALENDAR
           .replace('{{end_time}}', endTime.toLocaleString('sv-SE'))
           .replace('{{online_link}}', online_link || '')
           .replace('{{phone}}', combinedMetadata.phone || '')
-          .replace('{{location}}', combinedMetadata.location || '');
+          .replace('{{location}}', combinedMetadata.location || '')
+          .replace(/\\n/g, '\n') // tolka "\\n" som newline
+          .replace(/\n/g, '<br>');
         const signature = settings.email_signature || '';
-        const finalEmailBodyHtml = `<html><body>${emailBodyHtml.replace(/\n/g, '<br>')}<br><br>${signature}</body></html>`;
+        const finalEmailBodyHtml = `<html><body>${emailBodyHtml}<br><br>${signature}</body></html>`;
 
         // Skicka med .ics som attachment om Graph misslyckades
         if (!atOfficeEventCreated && icsAttachment) {
