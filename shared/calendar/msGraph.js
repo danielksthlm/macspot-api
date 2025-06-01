@@ -1,12 +1,13 @@
 const { Client } = require("@microsoft/microsoft-graph-client");
 require("isomorphic-fetch");
 const DEBUG = process.env.DEBUG === 'true';
-const silentLog = console.log;
 const fetch = require("node-fetch");
 const { loadSettings } = require("../config/settingsLoader");
 const getMsToken = require("./getMsToken");
 
-function createMsGraphClient() {
+function createMsGraphClient(context) {
+
+  const silentLog = context && context.log ? (...args) => context.log("[📡 Graph]", ...args) : console.log;
 
   async function getEvent(calendarId, eventId) {
     try {
