@@ -68,10 +68,9 @@ async function sendMail({ to, subject, body, trackingPixelUrl = null }) {
 
   if (mailRes.ok && process.env.DEBUG_EMAIL === 'true') {
     console.log(`✅ E-post skickad till ${to} via Graph API`);
-  }
-  if (mailRes.ok && process.env.DEBUG_EMAIL === 'true') {
     console.log(`📧 Mailinnehåll skickat till: ${to}`);
     console.log(`🧾 Ämne: ${subject}`);
+    console.log(`📝 Body (start): ${body.substring(0, 60).replace(/\n/g, ' ')}...`);
   }
 
   if (process.env.DEBUG_EMAIL === 'true') {
