@@ -201,6 +201,11 @@ module.exports = async function (context, req) {
               webLink: eventResult?.webLink || null
             }]
           );
+          // Logga hela eventResult som calendar_event_created
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+            ['calendar_event_created', id, eventResult]
+          );
         }
       } catch (err) {
         // Skicka endast mail om createEvent misslyckades (eventResult === null)
@@ -263,6 +268,11 @@ module.exports = async function (context, req) {
             location: 'Online',
             webLink: result?.join_url || null
           }]
+        );
+        // Logga hela result som calendar_event_created
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+          ['calendar_event_created', id, result]
         );
       } catch (err) {
         // Fallback: skapa .ics och skicka e-post om Zoom-mötet inte kunde skapas
@@ -390,6 +400,11 @@ END:VCALENDAR
               webLink: eventResult?.webLink || null
             }]
           );
+          // Logga hela eventResult som calendar_event_created
+          await db.query(
+            'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+            ['calendar_event_created', id, eventResult]
+          );
         } else {
           debugLog('⚠️ FaceTime-event kunde inte skapas via Graph');
         }
@@ -500,6 +515,11 @@ END:VCALENDAR
             webLink: eventResult?.webLink || null
           }]
         );
+        // Logga hela eventResult som calendar_event_created
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+          ['calendar_event_created', id, eventResult]
+        );
       } catch (err) {
         context.log(`⚠️ atClient-kalenderinbjudan via Graph misslyckades: ${err.message}`);
       }
@@ -604,6 +624,11 @@ END:VCALENDAR
             location: eventResult?.location || null,
             webLink: eventResult?.webLink || null
           }]
+        );
+        // Logga hela eventResult som calendar_event_created
+        await db.query(
+          'INSERT INTO event_log (event_type, booking_id, payload) VALUES ($1, $2, $3)',
+          ['calendar_event_created', id, eventResult]
         );
       } catch (err) {
         context.log(`⚠️ atOffice-kalenderinbjudan via Graph misslyckades: ${err.message}`);
