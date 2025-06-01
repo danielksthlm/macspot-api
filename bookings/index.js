@@ -316,9 +316,10 @@ END:VCALENDAR
         combinedMetadata.location = combinedMetadata.location || 'FaceTime';
 
         // Försök skapa kalenderinbjudan via Graph
+        let eventResult = null;
         try {
           debugLog("🧪 före createEvent()");
-          const eventResult = await graphClient.createEvent({
+          eventResult = await graphClient.createEvent({
             start: startTime.toISOString(),
             end: endTime.toISOString(),
             subject: emailSubject,
@@ -326,40 +327,40 @@ END:VCALENDAR
             attendees: [email],
             meetingType: meeting_type
           });
-          debugLog("🧪 efter createEvent()");
-          debugLog("📨 eventResult:", eventResult);
-          // Extra loggning enligt instruktion
-          if (eventResult) {
-            debugLog("📄 eventResult.subject:", eventResult.subject);
-            debugLog("📅 eventResult.start:", eventResult.start);
-            debugLog("📅 eventResult.end:", eventResult.end);
-            debugLog("📧 eventResult.attendees:", eventResult.attendees);
-            debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
-          }
-          if (eventResult?.location) {
-            combinedMetadata.location = eventResult.location;
-          }
-          if (eventResult?.subject) {
-            combinedMetadata.subject = eventResult.subject;
-          }
-          if (eventResult?.onlineMeetingUrl) {
-            combinedMetadata.online_link = eventResult.onlineMeetingUrl;
-          }
-
-          if (eventResult?.body?.content) {
-            combinedMetadata.body_preview = eventResult.body.content;
-          }
-
-          // Nytt: kontrollera eventResult och logga enligt instruktion
-          if (eventResult) {
-            debugLog('✅ FaceTime-event skapat i kalender via Graph');
-            bookingFields.synced_to_calendar = true;
-            facetimeEventCreated = true;
-          } else {
-            debugLog('⚠️ FaceTime-event kunde inte skapas via Graph');
-          }
         } catch (err) {
-          context.log(`⚠️ FaceTime-kalenderinbjudan via Graph misslyckades: ${err.message}`);
+          debugLog("💥 createEvent kastade ett fel:", err.stack || err.toString());
+        }
+        debugLog("🧪 efter createEvent()");
+        debugLog("📨 eventResult:", eventResult);
+        // Extra loggning enligt instruktion
+        if (eventResult) {
+          debugLog("📄 eventResult.subject:", eventResult.subject);
+          debugLog("📅 eventResult.start:", eventResult.start);
+          debugLog("📅 eventResult.end:", eventResult.end);
+          debugLog("📧 eventResult.attendees:", eventResult.attendees);
+          debugLog("🌐 eventResult.webLink:", eventResult.webLink || eventResult.onlineMeetingUrl);
+        }
+        if (eventResult?.location) {
+          combinedMetadata.location = eventResult.location;
+        }
+        if (eventResult?.subject) {
+          combinedMetadata.subject = eventResult.subject;
+        }
+        if (eventResult?.onlineMeetingUrl) {
+          combinedMetadata.online_link = eventResult.onlineMeetingUrl;
+        }
+
+        if (eventResult?.body?.content) {
+          combinedMetadata.body_preview = eventResult.body.content;
+        }
+
+        // Nytt: kontrollera eventResult och logga enligt instruktion
+        if (eventResult) {
+          debugLog('✅ FaceTime-event skapat i kalender via Graph');
+          bookingFields.synced_to_calendar = true;
+          facetimeEventCreated = true;
+        } else {
+          debugLog('⚠️ FaceTime-event kunde inte skapas via Graph');
         }
 
         // Om kalenderinbjudan via Graph misslyckades, skapa .ics som fallback
