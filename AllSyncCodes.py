@@ -1,3 +1,4 @@
+BASE = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api"
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -19,13 +20,15 @@ filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync.py",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_plist.xml",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_generate_fromcloud_pending.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_generate_pending_from_diff.py",
     "/Users/danielkallberg/Library/LaunchAgents/com.macspot.sync.plist",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/healthcheck_sync.py",
-    "/Users/danielkallberg/macspot-safe/macspot_internal/macspot_launch_proxy.py"
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/healthcheck_sync.py"
 ]
 
 # Slutlig sammanslagen fil
 output_fil = os.path.join("/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/AllSyncCodes_history", f"AllSyncCodes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+output_dir = os.path.dirname(output_fil)
 
 saknade_filer = []
 # Läs och skriv innehåll
@@ -36,6 +39,13 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
     def bygg_träd(paths):
         träd = lambda: defaultdict(träd)
         rot = träd()
+        # Lägg till extra filer med etiketterade namn
+        paths = list(paths)
+        paths += [
+            os.path.join(output_dir, "🧊_azure_temp.txt"),
+            os.path.join(output_dir, "🏠_lokal_temp.txt"),
+            os.path.join(output_dir, "🧮_diff_output.txt")
+        ]
         for path in paths:
             delar = os.path.relpath(path, root_path).split(os.sep)
             curr = rot
@@ -49,9 +59,17 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             utfil.write(f"{prefix}{namn}\n")
             skriv_träd(node[namn], depth + 1)
 
-    root_path = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/"
+    # root_path ska inkludera AllSyncCodes_history också
+    root_path = os.path.commonpath(filnamn_lista + [output_dir])
+    # Inkludera även diffdelen och tempfiler i paths
     filtrerat = [f for f in filnamn_lista if "node_modules" not in f]
-    struktur = bygg_träd(filtrerat)
+    paths_for_tree = list(filtrerat)
+    paths_for_tree += [
+        os.path.join(output_dir, "🧊_azure_temp.txt"),
+        os.path.join(output_dir, "🏠_lokal_temp.txt"),
+        os.path.join(output_dir, "🧮_diff_output.txt")
+    ]
+    struktur = bygg_träd(paths_for_tree)
     utfil.write("📂 KODTRÄD\n==========\n")
     skriv_träd(struktur)
     utfil.write("==========\n\n")
@@ -211,7 +229,7 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
     utfil.write("====================================\n\n")
     config_filer = []
     for filnamn in ["function.json", "host.json", "package.json", ".funcignore"]:
-        config_filer += glob.glob(os.path.join(root_path, "**", filnamn), recursive=True)
+        config_filer += glob.glob(os.path.join(BASE, "**", filnamn), recursive=True)
     config_filer = [f for f in config_filer if "node_modules" not in f]
 
     host_schema = {
@@ -270,20 +288,21 @@ if saknade_filer:
 
 import psycopg2
 
-def generera_databasstruktur(output_path):
-    # Denna funktion ansluter till molndatabasen (Azure) för att hämta struktur och innehåll
+def generera_databasstruktur(output_path, db_config, rubrik, output_dir):
+    # Skriv till temporärfil i output_dir
+    temp_path = os.path.join(output_dir, output_path)
     try:
         conn = psycopg2.connect(
-            dbname=os.environ["REMOTE_DB_NAME"],
-            user=os.environ["REMOTE_DB_USER"],
-            password=os.environ["REMOTE_DB_PASSWORD"],
-            host=os.environ["REMOTE_DB_HOST"],
-            port=os.environ.get("REMOTE_DB_PORT", 5432),
-            sslmode="require"
+            dbname=os.environ[db_config["DB_NAME"]],
+            user=os.environ[db_config["DB_USER"]],
+            password=os.environ[db_config["DB_PASSWORD"]],
+            host=os.environ[db_config["DB_HOST"]],
+            port=os.environ.get(db_config["DB_PORT"], 5432),
+            sslmode=db_config.get("SSLMODE", "disable")
         )
         cur = conn.cursor()
-        with open(output_path, "a", encoding="utf-8") as f:
-            f.write("📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL\n")
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(f"{rubrik}\n")
             f.write("====================================\n\n")
             # Tabeller
             cur.execute("""
@@ -325,4 +344,82 @@ def generera_databasstruktur(output_path):
     except Exception as e:
         print("⚠️ Fel vid hämtning av databasstruktur:", e)
 
-generera_databasstruktur(output_fil)
+import os
+# Skriv till temporära filer i output_dir
+generera_databasstruktur("azure_temp.txt", {
+    "DB_NAME": "REMOTE_DB_NAME",
+    "DB_USER": "REMOTE_DB_USER",
+    "DB_PASSWORD": "REMOTE_DB_PASSWORD",
+    "DB_HOST": "REMOTE_DB_HOST",
+    "DB_PORT": "REMOTE_DB_PORT",
+    "SSLMODE": "require"
+}, "📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL", output_dir)
+
+generera_databasstruktur("lokal_temp.txt", {
+    "DB_NAME": "LOCAL_DB_NAME",
+    "DB_USER": "LOCAL_DB_USER",
+    "DB_PASSWORD": "LOCAL_DB_PASSWORD",
+    "DB_HOST": "LOCAL_DB_HOST",
+    "DB_PORT": "LOCAL_DB_PORT"
+}, "📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL", output_dir)
+
+from difflib import unified_diff
+
+def generera_diffanalys(fil1, fil2, output_path):
+    with open(fil1, "r", encoding="utf-8") as f1, open(fil2, "r", encoding="utf-8") as f2:
+        lines1 = f1.readlines()
+        lines2 = f2.readlines()
+    diff = unified_diff(lines1, lines2, fromfile="Azure", tofile="Lokal", lineterm="")
+    with open(output_path, "a", encoding="utf-8") as f:
+        f.write("📊 DIFFANALYS Azure vs Lokal\n")
+        f.write("====================================\n")
+        for line in diff:
+            f.write(line + "\n")
+
+# HTML diff-funktion
+from difflib import HtmlDiff
+
+def generera_html_diff(fil1, fil2, output_path):
+    with open(fil1, "r", encoding="utf-8") as f1, open(fil2, "r", encoding="utf-8") as f2:
+        lines1 = f1.readlines()
+        lines2 = f2.readlines()
+    differ = HtmlDiff()
+    html = differ.make_file(lines1, lines2, fromdesc="Azure DB", todesc="Lokal DB", context=True, numlines=3)
+    with open(output_path, "w", encoding="utf-8") as out:
+        out.write(html)
+
+# Skriv in temporärfilerna till output_fil före diffen
+with open(output_fil, "a", encoding="utf-8") as f:
+    for temp_fil in ["azure_temp.txt", "lokal_temp.txt"]:
+        temp_path = os.path.join(output_dir, temp_fil)
+        with open(temp_path, "r", encoding="utf-8") as tf:
+            f.write(tf.read())
+
+generera_diffanalys(
+    os.path.join(output_dir, "azure_temp.txt"),
+    os.path.join(output_dir, "lokal_temp.txt"),
+    output_fil
+)
+
+# Anropa HTML-diff direkt efter generera_diffanalys
+generera_html_diff(
+    os.path.join(output_dir, "azure_temp.txt"),
+    os.path.join(output_dir, "lokal_temp.txt"),
+    os.path.join(output_dir, "🧮_diff_output.html")
+)
+
+# Kopiera temporärfiler till etiketterade kopior innan de tas bort
+import shutil
+shutil.copyfile(os.path.join(output_dir, "azure_temp.txt"), os.path.join(output_dir, "🧊_azure_temp.txt"))
+shutil.copyfile(os.path.join(output_dir, "lokal_temp.txt"), os.path.join(output_dir, "🏠_lokal_temp.txt"))
+shutil.copyfile(output_fil, os.path.join(output_dir, "🧮_diff_output.txt"))
+
+# Ta bort temporära filer efter diffanalysen
+
+os.remove(os.path.join(output_dir, "azure_temp.txt"))
+os.remove(os.path.join(output_dir, "lokal_temp.txt"))
+
+# Lägg till klickbar länk till HTML-diff i textfilen
+with open(output_fil, "a", encoding="utf-8") as f:
+    f.write("\n🌐 HTML-diff finns även här:\n")
+    f.write(f"file://{os.path.join(output_dir, '🧮_diff_output.html')}\n")

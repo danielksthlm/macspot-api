@@ -11,9 +11,6 @@ import json
 with open("/tmp/launchd_debug.txt", "a") as f:
     f.write("[sync_all.py] Körning initierad\n")
 
-with open("/tmp/env_debug.txt", "w") as f:
-    f.write("START\n")
-    f.write(str(dict(os.environ)))
 
 # Delad json- och metadata-funktionalitet som används i flera synkmoduler
 def safe_json_load(data, default={}):
@@ -89,13 +86,26 @@ try:
 
     print(f"\n🔄 [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
 
-    scripts_part1 = [
-        ("🟡 Kör sync.py...", "sync.py"),
-        ("🟢 Kör sync_to_cloud.py...", "sync_to_cloud.py")
-    ]
+    # Kör sync.py först
+    run_script("🟡 Kör sync.py...", "sync.py")
 
-    for msg, script in scripts_part1:
-        run_script(msg, script)
+    # Efter sync.py, kontrollera om det finns diffar i event_log
+    # Efter sync.py, kontrollera om det finns diffar i event_log
+    with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM event_log
+                WHERE received_at > now() - interval '5 minutes'
+                  AND event_type IN ('sync_local_diff_contacts', 'sync_local_diff_bookings')
+            """)
+            diff_count = cur.fetchone()[0]
+            if diff_count > 0:
+                print(f"🚦 Det finns {diff_count} diff-loggar från sync.py – överväg att köra sync_to_cloud.py manuellt eller automatiskt.")
+                print("⚙️ Kör sync_generate_pending_from_diff.py för att skapa riktiga pending_changes...")
+                run_script("⚙️ Kör sync_generate_pending_from_diff.py...", "sync_generate_pending_from_diff.py")
+
+    # Kör sync_to_cloud.py efter kontrollen
+    run_script("🟢 Kör sync_to_cloud.py...", "sync_to_cloud.py")
 
     scripts_part2 = [
         ("🔵 Kör sync_from_cloud.py...", "sync_from_cloud.py")
@@ -103,6 +113,19 @@ try:
 
     for msg, script in scripts_part2:
         run_script(msg, script)
+
+    # Kör generate_fromcloud_pending.py om event_log innehåller sync_fromcloud_mismatch
+    with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM event_log
+                WHERE received_at > now() - interval '5 minutes'
+                  AND event_type IN ('sync_mismatch_contact', 'sync_fromcloud_mismatch')
+            """)
+            cloud_diff_count = cur.fetchone()[0]
+            if cloud_diff_count > 0:
+                print(f"🚦 Det finns {cloud_diff_count} moln→lokalt-diffar – kör sync_generate_fromcloud_pending.py...")
+                run_script("⚙️ Kör sync_generate_fromcloud_pending.py...", "sync_generate_fromcloud_pending.py")
 
     today_prefix = datetime.now(timezone.utc).strftime('%Y%m%d')
     outbox_dir = os.path.join(BASE, 'sync_outbox')
@@ -181,6 +204,27 @@ try:
         cloud.close()
 
     print(f"\n✅ [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk körd.")
+
+    # Sammanfatta diff-loggar (senaste 5 poster, med email och tabell-format)
+    with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT received_at, event_type, payload->>'email'
+                FROM event_log
+                WHERE received_at > now() - interval '10 minutes'
+                  AND event_type IN ('sync_local_diff_contacts', 'sync_local_diff_bookings', 'sync_mismatch_contact', 'sync_fromcloud_mismatch')
+                ORDER BY received_at DESC
+                LIMIT 5
+            """)
+            rows = cur.fetchall()
+            if rows:
+                print("📜 Senaste 5 event_log-poster:")
+                print("| tidpunkt            | event_type              | e-post                     |")
+                print("|---------------------|--------------------------|-----------------------------|")
+                for received_at, event_type, email in rows:
+                    print(f"| {received_at.strftime('%Y-%m-%d %H:%M:%S')} | {event_type:<24} | {email or '(okänd)':<27} |")
+            else:
+                print("📜 Inga event_log-poster senaste 10 minuter.")
 
 except Exception as e:
     import traceback

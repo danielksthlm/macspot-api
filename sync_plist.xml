@@ -1,33 +1,26 @@
+cat > ~/Library/LaunchAgents/com.macspot.sync.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
   <string>com.macspot.sync</string>
-
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/zsh</string>
-    <string>-c</string>
-    <string>
-      export LAUNCHD_RUN=true &&
-      /Users/danielkallberg/Documents/KLR_AI/venv/bin/python3 /Users/danielkallberg/macspot-safe/macspot_internal/macspot_launch_proxy.py >> /tmp/launchd_debug.txt 2>&1
-    </string>
+    <string>/Users/danielkallberg/Documents/KLR_AI/venv/bin/python3</string>
+    <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py</string>
   </array>
-
   <key>WorkingDirectory</key>
   <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api</string>
-
   <key>StartInterval</key>
   <integer>300</integer>
-
   <key>RunAtLoad</key>
   <true/>
-
   <key>StandardOutPath</key>
-  <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot_sync.log</string>
+  <string>/tmp/macspot_sync.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot_sync_error.log</string>
+  <string>/tmp/macspot_sync_error.log</string>
 </dict>
 </plist>
+EOF

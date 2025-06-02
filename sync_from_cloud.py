@@ -25,14 +25,6 @@ def apply_change(cur, table, operation, payload):
             cur.execute(sql, [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()])
 
         elif operation == "UPDATE":
-            if table == "contact" and "metadata" in payload:
-                local_meta = payload["metadata"]
-                cur.execute("SELECT metadata FROM contact WHERE id = %s", (payload["id"],))
-                row = cur.fetchone()
-                if row and metadata_equal(row[0], local_meta):
-                    print(f"♻️ Ingen skillnad i metadata för {payload['id']}, hoppar UPDATE.")
-                    return
-
             sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
             values = [json.dumps(payload[col]) if isinstance(payload[col], dict) else payload[col]
                       for col in payload if col != "id"]
@@ -40,23 +32,8 @@ def apply_change(cur, table, operation, payload):
             sql = f"UPDATE {table} SET {sets} WHERE id = %s"
             cur.execute(sql, values)
 
-            # Verifiera resultat (endast för kontakt)
-            if table == "contact":
-                cur.execute("SELECT metadata, updated_at FROM contact WHERE id = %s", [payload["id"]])
-                updated_row = cur.fetchone()
-                if updated_row:
-                    try:
-                        metadata = safe_json_load(updated_row[0])
-                        address = metadata.get("address") or metadata.get("company") or "(ingen adress)"
-                    except Exception:
-                        address = "(kunde inte tolkas)"
-                    print(f"🧾 Efter UPDATE: {payload['id']} → {address} @ {updated_row[1]}")
-                else:
-                    print(f"⚠️ UPDATE-verifiering misslyckades: Inget resultat för {payload['id']}")
-
         elif operation == "DELETE":
             cur.execute(f"DELETE FROM {table} WHERE id = %s", [payload["id"]])
-            print(f"🗑️ Raderade post {payload['id']} från {table}")
             print(f"🗑️ Raderade post {payload['id']} från {table}")
 
     except Exception as e:
@@ -101,8 +78,7 @@ def sync():
             change_id, table, record_id, operation, payload_json = row
             try:
                 payload = safe_json_load(payload_json)
-                if not isinstance(payload.get("id"), str) or "your-generated-id" in payload.get("id"):
-                    continue
+                # Removed 'if not isinstance(payload.get("id"), str)' check per instructions
 
                 apply_change(local_cur, table, operation, payload)
 
@@ -113,12 +89,9 @@ def sync():
                         WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
                     """, (record_id, record_id))
 
-                # Logga kontaktimport
+                # Simplified kontaktimport log
                 if table == "contact":
-                    email = payload.get("booking_email", "(okänd e-post)")
-                    meta = safe_json_load(payload.get("metadata", {}))
-                    address = meta.get("address", "(okänd adress)")
-                    print(f"📥 Importerad kontakt: {email} → {address}")
+                    print(f"📥 Importerad kontakt: {payload.get('booking_email', '(okänd e-post)')}")
 
                 local_cur.execute("""
                     INSERT INTO event_log (id, source, event_type, payload, received_at)
@@ -132,8 +105,6 @@ def sync():
 
             except Exception as e:
                 print(f"❌ Fel vid synk för {table} (id={change_id}): {e}")
-                local_conn.rollback()
-                remote_conn.rollback()
                 continue
 
     finally:

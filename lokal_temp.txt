@@ -1,0 +1,121 @@
+📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: booking_settings
+  • value (jsonb)
+  • updated_at (timestamp with time zone)
+  • key (text)
+  • value_type (text)
+  🔑 [p] booking_settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 22:46:14.058171+02:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 12:37:53.619684+02:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • meeting_type (text)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+  🧪 Topp 5 rader:
+    - start_time=2025-06-02 08:20:00+02:00, end_time=2025-06-02 08:30:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:48167', 'meeting_id': 82144172118, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/82144172118?pwd=zJm2Xe3RjuaM7e7HeDLoeacSdnbaVc.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 22:38:17.398000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=3d09c33e-52c9-4736-975b-61ee3713551c, updated_at=2025-06-01 22:38:17.398000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 10:00:00+02:00, end_time=2025-06-02 10:10:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47716', 'meeting_id': 83811214708, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/83811214708?pwd=uDzaG32s3i87PlV0pOwojrXUzZ7aEg.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 22:50:09.892000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=059ec692-02af-40c7-9501-0679d86b81dd, updated_at=2025-06-01 22:50:09.892000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 10:40:00+02:00, end_time=2025-06-02 11:00:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47708', 'meeting_id': 86400396910, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/86400396910?pwd=z8fdhAA8ibZ5hxJEpmebYHaX57JugC.1', 'meeting_length': 20, 'calendar_response_status': 'none'}, created_at=2025-06-01 22:56:02.371000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=967fa70d-2409-4884-8d5b-f2c036eb1a99, updated_at=2025-06-01 22:56:02.371000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 11:20:00+02:00, end_time=2025-06-02 11:30:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Zoommöte: Per | persson AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:46831', 'meeting_id': 81612591010, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/81612591010?pwd=3Pu0VQxyWyR0pPab7OlpAfKb7CpiWq.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 23:01:27.794000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=1a231d98-2e66-41ae-a718-6048aa624601, updated_at=2025-06-01 23:01:27.794000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 13:20:00+02:00, end_time=2025-06-02 13:30:00+02:00, meeting_type=facetime, metadata={'phone': '070-2656868', 'company': 'Anna AB', 'subject': 'FaceTime-möte: Anna | Anna AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'FaceTime', 'last_name': 'Sahlin', 'first_name': 'Anna', 'ip_address': '81.233.161.165:58650', 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'facetime:070-2656868', 'body_preview': '<html>\r\n<head>\r\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n</head>\r\n<body>\r\nDetta är en inbjudan till möte: FaceTime-möte: Anna | Anna AB &amp; Daniel | Kinnekulle Ledningsrådgivning AB\r\n</body>\r\n</html>\r\n', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 23:14:06.367000+02:00, contact_id=6dedbbd8-661f-4f87-9b54-e302bdd6f61a, id=affd507f-ee62-4ad0-b723-609100422f3b, updated_at=2025-06-01 23:14:06.367000+02:00, booking_email=annapanna79@yahoo.com
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  • email (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - metadata={'phone': '098765432', 'origin': 'klrab.se', 'company': 'Persson AB', 'last_name': 'Johansson', 'first_name': 'Per', 'force_resync': True}, created_at=2025-06-01 22:37:30.699890+02:00, id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, booking_email=daniel.kallberg@mac.com, updated_at=2025-06-02 17:10:00.571594+02:00, email=daniel.kallberg@mac.com
+    - metadata={'phone': '070-2656868', 'origin': 'klrab.se', 'company': 'Anna AB', 'last_name': 'Sahlin', 'first_name': 'Anna-Panna', 'force_resync': True}, created_at=2025-06-01 23:13:46.657884+02:00, id=6dedbbd8-661f-4f87-9b54-e302bdd6f61a, booking_email=annapanna79@yahoo.com, updated_at=2025-06-02 17:10:00.575093+02:00, email=annapanna79@yahoo.com
+
+📁 Tabell: company
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • name (text)
+  • org_number (text)
+  🔑 [p] company_pkey: PRIMARY KEY (id)
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🔑 [u] unique_translation_key: UNIQUE (key)
+  🔑 [p] translation_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: ccrelation
+  • id (uuid)
+  • company_id (uuid)
+  • contact_id (uuid)
+  • main_contact (boolean)
+  • start_date (date)
+  • end_date (date)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • role (text)
+  🔑 [p] ccrelation_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_ccrelation_contact_id: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE
+  🔑 [f] fk_ccrelation_company_id: FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+
+📁 Tabell: pending_changes
+  • booking_id (uuid)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • payload (jsonb)
+  • id (uuid)
+  • record_id (uuid)
+  • table_name (text)
+  • operation (text)
+  • change_type (text)
+  • direction (text)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - id=aece4862-6155-4819-aaa3-a21f5ed522f5, table_name=bookings, record_id=967fa70d-2409-4884-8d5b-f2c036eb1a99, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.750394+02:00, operation=INSERT, payload={'id': '967fa70d-2409-4884-8d5b-f2c036eb1a99', 'end_time': '2025-06-02T11:00:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47708', 'meeting_id': 86400396910, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/86400396910?pwd=z8fdhAA8ibZ5hxJEpmebYHaX57JugC.1', 'meeting_length': 20, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T22:56:02.371+02:00', 'start_time': '2025-06-02T10:40:00+02:00', 'updated_at': '2025-06-01T22:56:02.371+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=967fa70d-2409-4884-8d5b-f2c036eb1a99
+    - id=eadc9857-e839-4eee-be8a-d5ee6ece7ee7, table_name=bookings, record_id=1a231d98-2e66-41ae-a718-6048aa624601, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.822683+02:00, operation=INSERT, payload={'id': '1a231d98-2e66-41ae-a718-6048aa624601', 'end_time': '2025-06-02T11:30:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Zoommöte: Per | persson AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:46831', 'meeting_id': 81612591010, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/81612591010?pwd=3Pu0VQxyWyR0pPab7OlpAfKb7CpiWq.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T23:01:27.794+02:00', 'start_time': '2025-06-02T11:20:00+02:00', 'updated_at': '2025-06-01T23:01:27.794+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=1a231d98-2e66-41ae-a718-6048aa624601
+    - id=c4157273-3c00-4697-adfc-31cb615962c4, table_name=contact, record_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.519546+02:00, operation=INSERT, payload={'id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'last_name': 'Johansson', 'first_name': 'Per'}, 'created_at': '2025-06-01T22:37:30.69989+02:00', 'updated_at': '2025-06-01T22:37:30.69989+02:00', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=None
+    - id=87f2374b-c890-48b4-bafe-8a05db36079f, table_name=bookings, record_id=3d09c33e-52c9-4736-975b-61ee3713551c, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.605879+02:00, operation=INSERT, payload={'id': '3d09c33e-52c9-4736-975b-61ee3713551c', 'end_time': '2025-06-02T08:30:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:48167', 'meeting_id': 82144172118, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/82144172118?pwd=zJm2Xe3RjuaM7e7HeDLoeacSdnbaVc.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T22:38:17.398+02:00', 'start_time': '2025-06-02T08:20:00+02:00', 'updated_at': '2025-06-01T22:38:17.398+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=3d09c33e-52c9-4736-975b-61ee3713551c
+    - id=fbb2164e-4690-4e16-8bd7-225294d9a75a, table_name=bookings, record_id=059ec692-02af-40c7-9501-0679d86b81dd, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.678529+02:00, operation=INSERT, payload={'id': '059ec692-02af-40c7-9501-0679d86b81dd', 'end_time': '2025-06-02T10:10:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47716', 'meeting_id': 83811214708, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/83811214708?pwd=uDzaG32s3i87PlV0pOwojrXUzZ7aEg.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T22:50:09.892+02:00', 'start_time': '2025-06-02T10:00:00+02:00', 'updated_at': '2025-06-01T22:50:09.892+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=059ec692-02af-40c7-9501-0679d86b81dd
+
+📁 Tabell: event_log
+  • record_id (uuid)
+  • received_at (timestamp with time zone)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  • id (uuid)
+  • payload (jsonb)
+  • table_name (text)
+  • event_type (text)
+  • source (text)
+  • action (text)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 08:01:46.519546+02:00, id=276bd979-65e7-45ce-a637-d5b9a5a937db, table_name=contact, record_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, action=INSERT, timestamp=2025-06-02 08:01:46.519546+02:00, booking_id=None
+    - source=sync, event_type=insert_contact, payload={'id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'last_name': 'Johansson', 'first_name': 'Per'}, 'created_at': '2025-06-01T20:37:30.69989+00:00', 'updated_at': '2025-06-01T20:37:30.69989+00:00', 'booking_email': 'daniel.kallberg@mac.com'}, received_at=2025-06-02 08:01:46.519546+02:00, id=40bc4c2c-cecf-4a26-8585-85693f57ae34, table_name=None, record_id=None, action=None, timestamp=2025-06-02 08:01:46.519546+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 08:01:46.605879+02:00, id=ce179f2c-5d73-4924-8bfd-4e6e7944a2d9, table_name=bookings, record_id=3d09c33e-52c9-4736-975b-61ee3713551c, action=INSERT, timestamp=2025-06-02 08:01:46.605879+02:00, booking_id=None
+    - source=sync, event_type=insert_bookings, payload={'id': '3d09c33e-52c9-4736-975b-61ee3713551c', 'end_time': '2025-06-02T06:30:00+00:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:48167', 'meeting_id': 82144172118, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/82144172118?pwd=zJm2Xe3RjuaM7e7HeDLoeacSdnbaVc.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T20:38:17.398+00:00', 'start_time': '2025-06-02T06:20:00+00:00', 'updated_at': '2025-06-01T20:38:17.398+00:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, received_at=2025-06-02 08:01:46.605879+02:00, id=c39ce22a-8d19-459a-9c2b-cf78b6050e03, table_name=None, record_id=None, action=None, timestamp=2025-06-02 08:01:46.605879+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 08:01:46.678529+02:00, id=9ec839f6-4b26-4609-87a0-f6b9b39b9f85, table_name=bookings, record_id=059ec692-02af-40c7-9501-0679d86b81dd, action=INSERT, timestamp=2025-06-02 08:01:46.678529+02:00, booking_id=None
+
