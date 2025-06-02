@@ -8,6 +8,13 @@ import sys
 import psycopg2
 import json
 
+with open("/tmp/launchd_debug.txt", "a") as f:
+    f.write("[sync_all.py] Körning initierad\n")
+
+with open("/tmp/env_debug.txt", "w") as f:
+    f.write("START\n")
+    f.write(str(dict(os.environ)))
+
 # Delad json- och metadata-funktionalitet som används i flera synkmoduler
 def safe_json_load(data, default={}):
     try:
@@ -33,6 +40,11 @@ for path in [log_out, log_err]:
 # Skriv ut manuell/automatisk körningsinfo till loggen
 is_manual = os.environ.get("LAUNCHD_RUN") != "true"
 log_mode = "MANUELL" if is_manual else "AUTOMATISK (launchd)"
+with open("/tmp/env_debug.txt", "a") as f:
+    f.write(f"LAUNCHD_RUN: {os.environ.get('LAUNCHD_RUN')}\n")
+# Debug environment variables to file
+with open("/tmp/env_debug.txt", "w") as f:
+    f.write(str(dict(os.environ)))
 out = open(log_out, 'a')
 err = open(log_err, 'a')
 sys.stdout = out
@@ -40,7 +52,7 @@ sys.stderr = err
 print(f"🚀 Körläge: {log_mode} – {datetime.now(timezone.utc).isoformat()}")
 
 def run_script(name, script_path):
-    subprocess.run(["python", f"{BASE}/{script_path}"], check=True)
+    subprocess.run(["/Users/danielkallberg/Documents/KLR_AI/venv/bin/python", f"{BASE}/{script_path}"], check=True)
 
 try:
     start_time = datetime.now(timezone.utc)
@@ -54,7 +66,10 @@ try:
 
     def run_healthcheck():
         try:
-            subprocess.run(["python", f"{BASE}/healthcheck_sync.py"], check=True)
+            subprocess.run(
+                ["/Users/danielkallberg/Documents/KLR_AI/venv/bin/python", f"{BASE}/healthcheck_sync.py"],
+                check=True
+            )
         except Exception as e:
             print(f"❌ Healthcheck misslyckades: {e}")
 

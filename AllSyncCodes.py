@@ -19,7 +19,9 @@ filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync.py",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_plist.xml",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/healthcheck_sync.py"
+    "/Users/danielkallberg/Library/LaunchAgents/com.macspot.sync.plist",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/healthcheck_sync.py",
+    "/Users/danielkallberg/macspot-safe/macspot_internal/macspot_launch_proxy.py"
 ]
 
 # Slutlig sammanslagen fil

@@ -8,15 +8,13 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/danielkallberg/Documents/KLR_AI/venv/bin/python3</string>
-    <string>/Users/danielkallberg/macspot_internal/macspot_launch_proxy.py</string>
+    <string>/bin/zsh</string>
+    <string>-c</string>
+    <string>
+      export LAUNCHD_RUN=true &&
+      /Users/danielkallberg/Documents/KLR_AI/venv/bin/python3 /Users/danielkallberg/macspot-safe/macspot_internal/macspot_launch_proxy.py >> /tmp/launchd_debug.txt 2>&1
+    </string>
   </array>
-
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>LAUNCHD_RUN</key>
-    <string>true</string>
-  </dict>
 
   <key>WorkingDirectory</key>
   <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api</string>
