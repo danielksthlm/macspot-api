@@ -4,13 +4,14 @@ const createAppleClient = require('../shared/calendar/appleCalendar');
 const { getAppleMapsAccessToken } = require('../shared/maps/appleMaps');
 const { createDebugLogger } = require('../shared/utils/debugLogger');
 const isDebug = process.env.DEBUG === 'true';
+const { getSettings } = require('../shared/config/settingsLoader');
+const verifyBookingSettings = require('../shared/config/verifySettings');
 // console.log("✅ getavailableslots/index.js laddad");
-require('../shared/config/verifySettings');
 
 module.exports = async function (context, req) {
   const debugLog = (msg) => { if (isDebug) context.log(msg); };
   const appleClient = createAppleClient(context);
-  // 🧪 TEST: Logga fetchEventsByDateRange direkt vid start med explicit tidsintervall och robust felhantering
+  // --- Apple-kalenderanropet startas parallellt, men inväntas först senare ---
   const testStart = new Date();
   const testEnd = new Date(Date.now() + 7 * 86400000);
   if (!(testStart instanceof Date) || isNaN(testStart)) {
@@ -19,30 +20,15 @@ module.exports = async function (context, req) {
   if (!(testEnd instanceof Date) || isNaN(testEnd)) {
     debugLog("⛔ TEST Apple – Ogiltigt testEnd:", testEnd);
   }
-  // context.log("🧪 TEST Apple – Start:", testStart.toISOString(), "End:", testEnd.toISOString());
-  try {
-    const testAppleRange = await appleClient.fetchEventsByDateRange(testStart, testEnd);
-    // [BEVIS] Loggning för att visa om Apple CalDAV faktiskt svarar
-    if (!testAppleRange || testAppleRange.length === 0) {
-      debugLog("⛔ [BEVIS] Apple CalDAV returnerade inga events – möjligt problem med API eller filter.");
-    } else {
-      debugLog(`✅ [BEVIS] Apple CalDAV returnerade ${testAppleRange.length} event(s).`);
-      const preview = testAppleRange.slice(0, 3);
-      for (const ev of preview) {
-        debugLog("📆 [BEVIS] Apple Event:", ev);
-      }
-      // (Apple events till bookingsByDay flyttad till efter deklaration)
-    }
-    // context.log("🧪 TEST Apple fetchEventsByDateRange returnerade:", testAppleRange.length);
-    // for (const ev of testAppleRange) {
-    //   context.log("📆 Apple Event:", ev);
-    // }
-    // for (const e of testAppleRange) {
-    //   context.log("🧾 Apple Event UID:", e.uid, "Start:", e.start, "End:", e.end, "Summary:", e.summary);
-    // }
-  } catch (err) {
+  const appleEventsPromise = appleClient.fetchEventsByDateRange(testStart, testEnd).catch(err => {
     debugLog("❌ Apple fetchEventsByDateRange FEL:", err.message);
-  }
+    return [];
+  });
+  // --- Starta parallell laddning av inställningar ---
+  const settingsPromise = getSettings(context).catch(err => {
+    debugLog("❌ getSettings FEL:", err.message);
+    return null;
+  });
   const graphClient = createMsGraphClient();
   // context.log("🧪 Azure Function entrypoint nådd");
   // context.log("🧪 graphClient.getEvent:", typeof graphClient.getEvent === "function");
@@ -66,8 +52,19 @@ module.exports = async function (context, req) {
     let days = [];
     let contact;
     let bookingsByDay = {};
-    // --- BEGIN: Apple events till bookingsByDay ---
-    if (typeof testAppleRange !== "undefined" && Array.isArray(testAppleRange)) {
+
+    // --- Hämta Apple-kalenderdata parallellt och lägg in i bookingsByDay ---
+    const testAppleRange = await appleEventsPromise;
+    if (!testAppleRange || testAppleRange.length === 0) {
+      debugLog("⛔ [BEVIS] Apple CalDAV returnerade inga events – möjligt problem med API eller filter.");
+    } else {
+      debugLog(`✅ [BEVIS] Apple CalDAV returnerade ${testAppleRange.length} event(s).`);
+      const preview = testAppleRange.slice(0, 3);
+      for (const ev of preview) {
+        debugLog("📆 [BEVIS] Apple Event:", ev);
+      }
+    }
+    if (Array.isArray(testAppleRange)) {
       for (const ev of testAppleRange) {
         if (ev.start && ev.end) {
           const dateKey = new Date(ev.start).toISOString().split('T')[0];
@@ -88,7 +85,6 @@ module.exports = async function (context, req) {
         });
       });
     }
-    // --- END: Apple events till bookingsByDay ---
 
     try {
       const contactRes = await client.query("SELECT * FROM contact WHERE id = $1", [contact_id]);
@@ -107,14 +103,11 @@ module.exports = async function (context, req) {
 
     debugLog("✅ Steg 2: Laddar booking_settings...");
 
-    const { getSettings } = require('../shared/config/settingsLoader');
-    const verifyBookingSettings = require('../shared/config/verifySettings');
-
     let settings;
     try {
-      settings = await getSettings(context);
-      debugLog("✅ Steg 2a: Inställningar laddade – nycklar: " + Object.keys(settings).join(', '));
+      settings = await settingsPromise;
       verifyBookingSettings(settings, context);
+      debugLog("✅ Steg 2a: Inställningar laddade – nycklar: " + Object.keys(settings).join(', '));
       debugLog("✅ Steg 2b: Inställningar verifierade");
 
       debugLog("✅ Steg 3: Genererar days[] och laddar bokningar");
