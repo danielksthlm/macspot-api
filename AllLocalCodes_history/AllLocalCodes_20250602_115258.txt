@@ -1,0 +1,926 @@
+📂 KODTRÄD
+==========
+├── shared
+│   ├── slots
+│   │   ├── slotEngine.js
+├── trackingPixel
+│   ├── index.js
+==========
+
+====================
+📄 Fil: shared/slots/slotEngine.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-30 14:06:02
+📏 Antal rader: 495
+🧩 Antal funktioner: 11
+💬 Kommentarstäckning: 51 rader (10.3%)
+📥 Imports: 7 – ["const pool = require('../db/pgPool');", 'const { DateTime } = require("luxon");', "const Holidays = require('date-holidays');", 'const { resolveOriginAddress } = require("../calendar/resolveOrigin");', 'const { resolveTravelTime } = require("../maps/resolveTravelTime");', 'const msGraph = require("../calendar/msGraph");', 'const appleCalendar = require("../calendar/appleCalendar");']
+🔍 Längsta funktion: 14 rader
+🧠 Komplexitetspoäng: 72
+🧪 TODO/FIXME: 0
+====================
+START: slotEngine.js
+const pool = require('../db/pgPool');
+const { DateTime } = require("luxon");
+const Holidays = require('date-holidays');
+const { resolveOriginAddress } = require("../calendar/resolveOrigin");
+const { resolveTravelTime } = require("../maps/resolveTravelTime");
+const msGraph = require("../calendar/msGraph");
+const appleCalendar = require("../calendar/appleCalendar");
+const hd = new Holidays('SE'); // Svenska helgdagar
+const isDebug = process.env.DEBUG === 'true';
+
+async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
+  const timezone = settings.timezone || "Europe/Stockholm";
+  const holidays = settings.block_holidays ? new Holidays('SE') : null;
+  // Generera tidsintervall var 20:e minut i svensk tid mellan öppettid och stängningstid, exkl. lunch
+  const open = DateTime.fromISO(`${day}T${settings.open_time}`, { zone: timezone });
+  const close = DateTime.fromISO(`${day}T${settings.close_time}`, { zone: timezone });
+  const lunchStart = DateTime.fromISO(`${day}T${settings.lunch_start}`, { zone: timezone });
+  const lunchEnd = DateTime.fromISO(`${day}T${settings.lunch_end}`, { zone: timezone });
+
+  const startTimes = [];
+  let current = open;
+  // Använd context.bookingsByDay som källa till befintliga bokningar per dag
+  const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
+  // Vi behöver slotDateIso för denna dag
+  // day är en ISO-sträng för dagen, t.ex. "2024-06-08"
+  const slotDateIso = day;
+  const existing = bookingsByDay[slotDateIso] || [];
+  while (current < close) {
+    const end = current.plus({ minutes: meeting_length });
+    const overlapsLunch = current < lunchEnd && end > lunchStart;
+    if (!overlapsLunch) {
+      const isHoliday = settings.block_holidays && holidays?.isHoliday(new Date(current.toISO()));
+      if (isHoliday) {
+        // if (isDebug) context.log(`⛔ Helgdag – hoppar ${current.toISODate()}`);
+        current = current.plus({ minutes: 20 });
+        continue;
+      }
+      // --- NY KOD: Kontrollera om sloten krockar med event i bookingsByDay (inkl. heldagsevent) ---
+      if (isDebug) {
+        context.log(`📋 Befintliga bokningar för ${slotDateIso}:`);
+        for (const ev of existing) {
+          const start = new Date(ev.start).toISOString();
+          const end = new Date(ev.end).toISOString();
+          context.log(`   📆 ${start} → ${end}`);
+        }
+      }
+      const slotStartMs = current.toMillis();
+      const slotEndMs = end.toMillis();
+      const bufferMsEarly = (settings.buffer_between_meetings || 0) * 60000;
+      if (isDebug) {
+        context.log(`🔍 Kontroll av konflikt för slot: ${current.toISO()} → ${end.toISO()}`);
+        for (const ev of existing) {
+          const evStart = new Date(ev.start).toISOString();
+          const evEnd = new Date(ev.end).toISOString();
+          context.log(`   📆 Event: ${evStart} → ${evEnd}`);
+          context.log(`     ↪︎ Jämförelse: ev.start < slotEndMs + bufferMsEarly = ${ev.start} < ${slotEndMs + bufferMsEarly}`);
+          context.log(`     ↪︎ Jämförelse: ev.end > slotStartMs - bufferMsEarly = ${ev.end} > ${slotStartMs - bufferMsEarly}`);
+        }
+      }
+      const slotConflictsWithEvent = existing.some(ev => {
+        return (
+          ev.start < slotEndMs + bufferMsEarly &&
+          ev.end > slotStartMs - bufferMsEarly
+        );
+      });
+      if (slotConflictsWithEvent) {
+        // if (isDebug) context.log(`⛔ Slot krockar med event i bookingsByDay – hoppar ${current.toISO()}`);
+        current = current.plus({ minutes: 20 });
+        continue;
+      }
+      // --- SLUT NY KOD ---
+      startTimes.push(current.toUTC());
+    }
+    current = current.plus({ minutes: 20 });
+  }
+  const slots = [];
+  // Beräkna dagens start och slut
+  const fullDayStart = DateTime.fromISO(`${slotDateIso}T${settings.open_time}`, { zone: timezone }).toMillis();
+  const fullDayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toMillis();
+  const dayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toJSDate();
+  const fullDayBlock = existing.some(ev => {
+    const evStart = Number(ev.start);
+    const evEnd = Number(ev.end);
+    const coveredDuration = evEnd - evStart;
+    const fullDayDuration = fullDayEnd - fullDayStart;
+    return (
+      evStart <= fullDayStart + 30 * 60 * 1000 &&
+      evEnd >= fullDayEnd - 30 * 60 * 1000 &&
+      coveredDuration >= fullDayDuration * 0.95
+    );
+  });
+  if (fullDayBlock) {
+    // context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
+    return [];
+  }
+
+  for (const utcStart of startTimes) {
+    const eventId = utcStart.toISO();
+    const dateObj = utcStart.toJSDate();
+    const weekday = dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
+    const slot_part = utcStart.hour < 12 ? "fm" : "em";
+    const slotHourStr = utcStart.setZone(timezone).toFormat('HH:mm');
+    if (slotHourStr >= settings.lunch_start && slotHourStr < settings.lunch_end) {
+      // if (isDebug) context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
+      continue;
+    }
+    const isWeekend = ["saturday", "sunday"].includes(weekday);
+    if (settings.block_weekends && isWeekend) {
+      // if (isDebug) context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
+      continue;
+    }
+    if (meeting_type === 'atclient' && Array.isArray(settings.allowed_atclient_meeting_days)) {
+      if (!settings.allowed_atclient_meeting_days.includes(weekday)) {
+        // if (isDebug) context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
+        continue;
+      }
+    }
+
+    // Konvertera dateObj till rätt tidszon för helgdagskontroll
+    const localDate = DateTime.fromJSDate(dateObj).setZone(timezone).toJSDate();
+    const isHoliday = hd.isHoliday(localDate);
+    if (settings.block_holidays && isHoliday) {
+      if (isDebug) context.log(`🎌 Helgdag ${isHoliday[0]?.name} – hoppar ${eventId}`);
+      continue;
+    }
+
+
+    const originInfo = await resolveOriginAddress({
+      eventId,
+      calendarId: 'system',
+      pool,
+      context,
+      graphClient,
+      appleClient,
+      fallbackOrigin: settings.default_home_address,
+      settings,
+      eventCache
+    });
+
+    if (!originInfo?.origin) {
+      // context.log(`⚠️ Kunde inte fastställa origin för ${eventId}`);
+      continue;
+    }
+
+    const destination = settings.default_office_address;
+    const travelTimeResult = await resolveTravelTime({
+      origin: originInfo.origin,
+      destination,
+      hour: utcStart.hour,
+      db: pool,
+      accessToken: context.accessToken || null,
+      context
+    });
+    const travelTimeMin = travelTimeResult?.travelTimeMin;
+    const travelSource = travelTimeResult?.source || 'fallback';
+
+    if (!travelTimeMin || typeof travelTimeMin !== "number") {
+      // context.log.warn(`⚠️ Ogiltig restid, hoppar slot: ${eventId}`);
+      continue;
+    }
+
+    const endTime = new Date(dateObj.getTime() + meeting_length * 60000);
+    // dayStart och dayEnd redan definierade ovan
+    if (endTime > dayEnd) {
+      // context.log(`⛔ Slot ${eventId} går utanför öppettid (${settings.close_time}) – hoppar`);
+      continue;
+    }
+
+    // Skip slots that are too soon to reach based on travel time and current time
+    const now = Date.now();
+    if (dateObj.getTime() - now < travelTimeMin * 60 * 1000) {
+      // context.log(`⛔ Slot ${eventId} är för nära i tid – restid ${travelTimeMin} min, nu=${new Date(now).toISOString()} – hoppar`);
+      continue;
+    }
+
+    // Build slot object
+    const slot = {
+      slot_iso: eventId,
+      slot_local: DateTime.fromJSDate(dateObj).setZone(timezone).toISO(),
+      travel_time_min: travelTimeMin,
+      origin: originInfo.origin,
+      originEndTime: originInfo.originEndTime,
+      source: travelSource,
+      require_approval: settings.require_approval,
+      meeting_length,
+      weekday,
+      slot_part
+    };
+
+
+    // --- Score calculation logic ---
+    const slotStart = dateObj.getTime();
+    const slotEnd = slotStart + meeting_length * 60000;
+    // existing redan definierad ovan
+    let gapBefore = null;
+    let gapAfter = null;
+
+    for (const b of existing) {
+      const bStart = b.start;
+      const bEnd = b.end;
+      if (bEnd <= slotStart) {
+        gapBefore = slotStart - bEnd;
+      } else if (bStart >= slotEnd && gapAfter === null) {
+        gapAfter = bStart - slotEnd;
+      }
+    }
+
+    const bufferMs = (settings.buffer_between_meetings || 0) * 60000;
+    const hasConflict = existing.some(b => {
+      return (
+        b.start < slotEnd + bufferMs &&
+        b.end > slotStart - bufferMs
+      );
+    });
+    if (hasConflict) {
+      // context.log(`⛔ Slot ${eventId} krockar med möte inom buffer (${settings.buffer_between_meetings || 0} min) – hoppar`);
+      // existing.forEach(b => {
+      //   const bStartStr = new Date(b.start).toISOString();
+      //   const bEndStr = new Date(b.end).toISOString();
+      //   if (
+      //     b.start < slotEnd + bufferMs &&
+      //     b.end > slotStart - bufferMs
+      //   ) {
+      //     context.log(`   ⚠️  Konflikt med: ${bStartStr} → ${bEndStr}`);
+      //   }
+      // });
+      continue;
+    }
+    // Blockera även om sloten börjar exakt när ett event börjar, eller slutar exakt när ett event slutar
+    const hardMatchConflict = existing.some(b => {
+      return (
+        b.start === slotStart || b.end === slotEnd
+      );
+    });
+    if (hardMatchConflict) {
+      // context.log(`⛔ Slot ${eventId} börjar eller slutar exakt när ett event börjar/slutar – hoppar`);
+      continue;
+    }
+
+
+    // Standardpoäng är 10. Dra av poäng för stor lucka före eller efter.
+    let fragmentationPenalty = 0;
+    if ((gapBefore && gapBefore > 45 * 60000) || (gapAfter && gapAfter > 45 * 60000)) {
+      fragmentationPenalty = 1;
+    }
+
+    slot.score = 10 - fragmentationPenalty;
+
+    slots.push(slot);
+    // if (isDebug && travelSource === 'fallback') {
+    //   context.log(`⚠️ Slot ${eventId} använder fallback för restid (ingen accessToken)`);
+    // }
+  }
+
+  // Separera förmiddag och eftermiddag
+  const fmSlots = slots.filter(slot => slot.slot_part === 'fm');
+  const emSlots = slots.filter(slot => slot.slot_part === 'em');
+
+  // Sorteringsfunktion: högst poäng först, därefter kortast restid, därefter tidigast tid
+  const sortSlots = (a, b) =>
+    b.score - a.score ||
+    a.travel_time_min - b.travel_time_min ||
+    new Date(a.slot_iso) - new Date(b.slot_iso);
+
+  // Sortera båda grupper
+  fmSlots.sort(sortSlots);
+  emSlots.sort(sortSlots);
+
+  // Välj bästa fm och em (om de finns)
+  const bestFm = fmSlots[0];
+  const bestEm = emSlots.find(em => !bestFm || em.slot_iso !== bestFm.slot_iso);
+
+  // Returnera endast de två bästa
+  const topSlots = [bestFm, bestEm].filter(Boolean);
+  const allSlots = [...fmSlots, ...emSlots];
+  // === LOG SELECTED TOP SLOTS ===
+  if (isDebug) {
+    if (topSlots.length > 0) {
+      context.log(`✅ Slot-kandidater valda för ${slotDateIso}:`);
+      topSlots.forEach(slot => {
+        const icon = slot.slot_part === 'fm' ? '☀️' : '🌙';
+        const t = DateTime.fromISO(slot.slot_iso).setZone(timezone).toFormat("yyyy-MM-dd HH:mm");
+        context.log(`   ${icon} ${slot.slot_part.toUpperCase()} ${t} (${slot.score}/10, ${slot.travel_time_min} min restid)`);
+      });
+    } else {
+      context.log(`⛔ Inga valda slot-kandidater för ${slotDateIso}`);
+    }
+  }
+  // === BLOCK: Slot-summering/debug innan slots loggas ===
+  if (isDebug) {
+    const blockedSummary = [];
+    if (startTimes.length === 0) {
+      blockedSummary.push("⛔ Inga starttider genererades p.g.a. heldagsevent, helgdag eller block");
+    }
+    if (fullDayBlock) {
+      blockedSummary.push("⛔ Dagen blockeras helt p.g.a. heldagsevent");
+    }
+    if (startTimes.length > 0 && allSlots.length === 0) {
+      blockedSummary.push("⛔ Alla slots filtrerades bort av regler: t.ex. restid, konflikt, öppettid, veckokvot, m.m.");
+    }
+    if (blockedSummary.length > 0) {
+      context.log(`🧾 Slot-summering ${slotDateIso}:`);
+      for (const line of blockedSummary) context.log("   " + line);
+    }
+  }
+  allSlots.forEach(s => {
+    const icon = s.slot_part === 'fm' ? '☀️' : '🌙';
+    if (isDebug) context.log(`${icon} ${s.slot_part.toUpperCase()}: ${s.slot_iso} – score: ${s.score}`);
+  });
+  return topSlots;
+}
+
+
+async function generateSlotChunks({
+  days,
+  context,
+  contact,
+  contact_id,
+  meeting_type,
+  meeting_length,
+  bookingsByDay,
+  weeklyMinutesByType,
+  settings,
+  graphClient,
+  appleClient,
+  travelCache,
+  accessToken,
+  timezone,
+  debugHelper
+}) {
+  const { debugLog, skipReasons } = debugHelper || {};
+  const chosen = [];
+
+  if (days.length === 0) {
+    const fallbackDate = new Date().toISOString().split('T')[0];
+    const { rows } = await pool.query(
+      'SELECT slots FROM slot_cache WHERE slot_day = $1 LIMIT 1',
+      [fallbackDate]
+    );
+    if (rows.length > 0) {
+      context.log(`✅ Använder slot_cache som fallback (${fallbackDate})`);
+      return {
+        chosenSlots: rows[0].slots || [],
+        slotMapResult: {},
+        slotLogSummary: { 'fallback_used': 1 }
+      };
+    }
+  }
+
+  let startIso, endIso;
+  try {
+    startIso = days[0] instanceof Date ? days[0].toISOString() : new Date(days[0]).toISOString();
+    endIso = new Date((days[days.length - 1] instanceof Date ? days[days.length - 1] : new Date(days[days.length - 1])).getTime() + 86400000).toISOString();
+  } catch (err) {
+    context.log("⛔ Fel vid toISOString på days[] – ersätter med dagens datum");
+    const today = new Date();
+    startIso = today.toISOString();
+    endIso = new Date(today.getTime() + 7 * 86400000).toISOString(); // +7 dagar fallback
+  }
+
+  // === LÄGG TILL EXTERNA BOKNINGAR (MS + Apple) I bookingsByDay ===
+
+  // Microsoft Graph
+  try {
+    const msEvents = await graphClient.listUpcomingEvents?.(days.length + 1) || [];
+    let msAddedCount = 0;
+    for (const ev of msEvents) {
+      const start = new Date(ev.start).getTime();
+      const end = new Date(ev.end).getTime();
+      if (isNaN(start) || isNaN(end)) continue;
+      const date = new Date(ev.start).toISOString().split("T")[0];
+      if (!bookingsByDay[date]) bookingsByDay[date] = [];
+      bookingsByDay[date].push({ start, end });
+      msAddedCount++;
+    }
+    if (isDebug) {
+      context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
+    }
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
+  }
+
+  // Apple Calendar
+  try {
+    const startDate = days[0] instanceof Date ? days[0] : new Date(days[0]);
+    const endDate = days[days.length - 1] instanceof Date
+      ? new Date(days[days.length - 1].getTime() + 86400000)
+      : new Date(new Date(days[days.length - 1]).getTime() + 86400000);
+    if (isNaN(startDate) || isNaN(endDate)) {
+      context.log("⛔ Ogiltiga datum skickas till Apple i slotEngine:", { startDate, endDate });
+    }
+    const appleEvents = await appleClient.fetchEventsByDateRange?.(startDate, endDate) || [];
+    let appleAddedCount = 0;
+    for (const ev of appleEvents) {
+      try {
+        // Ensure start and end are cast to numbers explicitly
+        const start = Number(new Date(ev.dtstart));
+        const end = Number(new Date(ev.dtend));
+        if (isNaN(start) || isNaN(end)) continue;
+        const date = new Date(ev.dtstart).toISOString().split("T")[0];
+        if (!bookingsByDay[date]) bookingsByDay[date] = [];
+        bookingsByDay[date].push({ start, end });
+        appleAddedCount++;
+      } catch (err) {
+        context.log(`⚠️ Apple event parsing error: ${err.message}`);
+      }
+    }
+    if (isDebug) {
+      context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
+    }
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);
+  }
+
+  context.bookingsByDay = bookingsByDay;
+
+  const slotCandidatePromises = days.map(day => {
+    const dayStr = day.toISOString().split("T")[0];
+    return generateSlotCandidates({
+      day: dayStr,
+      settings,
+      contact,
+      pool: context.client || pool,
+      context,
+      graphClient,
+      appleClient,
+      meeting_length,
+      meeting_type,
+      eventCache: context.eventCache instanceof Map ? context.eventCache : new Map()
+    });
+  });
+
+  const slotCandidatesPerDay = await Promise.all(slotCandidatePromises);
+
+  const slotMap = {};
+  days.forEach((day, index) => {
+    const dayStr = day.toISOString().split("T")[0];
+    const slotCandidates = slotCandidatesPerDay[index];
+    for (const slot of slotCandidates) {
+      const key = `${dayStr}_${slot.slot_part}`;
+      if (!slotMap[key]) slotMap[key] = [];
+      slotMap[key].push(slot);
+    }
+  });
+
+  const bestPerGroup = {};
+  for (const [key, slots] of Object.entries(slotMap)) {
+    if (slots.length === 0) continue;
+    const [datePart, part] = key.split('_');
+    if (!bestPerGroup[datePart]) bestPerGroup[datePart] = {};
+    if (!bestPerGroup[datePart][part]) {
+      bestPerGroup[datePart][part] = slots
+        .sort((a, b) => {
+          if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+          return new Date(a.slot_iso) - new Date(b.slot_iso);
+        })[0];
+    }
+  }
+
+  for (const day in bestPerGroup) {
+    for (const part in bestPerGroup[day]) {
+      const slot = bestPerGroup[day][part];
+      const weekKeyStr = day;
+      const usedMinutes = (weeklyMinutesByType[meeting_type]?.[weekKeyStr] || 0);
+      if (usedMinutes + slot.meeting_length <= settings.max_weekly_booking_minutes) {
+        chosen.push(slot);
+      } else {
+        debugLog?.(`⛔ Överskrider veckokvot (${usedMinutes + slot.meeting_length} > ${settings.max_weekly_booking_minutes}) – hoppar ${day}_${part}`);
+      }
+    }
+  }
+
+  if (isDebug) {
+    for (const day in bestPerGroup) {
+      for (const part in bestPerGroup[day]) {
+        const slot = bestPerGroup[day][part];
+        context.log(`📆 Slot: ${slot.slot_iso} score=${slot.score}`);
+      }
+    }
+  }
+
+  const durationMs = Date.now() - context.startTime;
+  if (isDebug) context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
+  if (isDebug) context.log(`📤 Response skickas med antal slots: ${chosen.length}`);
+  return {
+    chosenSlots: chosen.sort((a, b) => new Date(a.slot_iso) - new Date(b.slot_iso)),
+    slotMapResult: slotMap,
+    slotLogSummary: skipReasons
+  };
+}
+
+module.exports = {
+  generateSlotCandidates,
+  generateSlotChunks
+};
+END: slotEngine.js
+
+====================
+📄 Fil: trackingPixel/index.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-31 18:24:20
+📏 Antal rader: 31
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 1 rader (3.2%)
+📥 Imports: 2 – ["const { v4: uuidv4 } = require('uuid');", "const pool = require('../shared/db/pgPool');"]
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: index.js
+const { v4: uuidv4 } = require('uuid');
+const pool = require('../shared/db/pgPool');
+
+module.exports = async function (context, req) {
+    const bookingId = req.query.booking_id || 'unknown';
+    const ip = req.headers['x-forwarded-for'] || req.headers['x-client-ip'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const now = new Date().toISOString();
+  
+    try {
+      await pool.query(
+        `INSERT INTO event_log (id, booking_id, event_type, source, timestamp)
+         VALUES ($1, $2, 'email_open', 'tracking_pixel', $3)`,
+        [uuidv4(), bookingId, new Date()]
+      );
+    } catch (err) {
+      context.log('⚠️ Kunde inte logga email_open:', err.message);
+    }
+  
+    // Logga till databasen eller event_log (kan du välja själv senare)
+    context.log(`📩 TrackingPixel öppnad | booking_id=${bookingId} | ip=${ip} | ua=${userAgent} | tid=${now}`);
+  
+    context.res = {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/gif',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      },
+      body: Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64') // 1x1 transparent GIF
+    };
+  };
+END: index.js
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 .funcignore
+   # Exclude dev-only files and folders
+   .git
+   .vscode
+   .env
+   *.log
+   test/
+   tests/
+   
+   # Explicitly include all required files and folders
+   !host.json
+   !package.json
+   !package-lock.json
+   
+   !node_modules/
+   !node_modules/**
+   
+   !shared/
+   !shared/**
+   
+   !bookings/
+   !bookings/**
+   !getavailableslots/
+   !getavailableslots/**
+   !validate_contact/
+   !validate_contact/**
+   !meeting_types/
+   !meeting_types/**
+   !refreshCalendarOrigins/
+   !refreshCalendarOrigins/**
+   !refreshTravelTimes/
+   !refreshTravelTimes/**
+   !booking_settings/
+   !booking_settings/**
+   !test_azurecloud/
+   !test_azurecloud/**
+   !trackingPixel/
+   !trackingPixel/**
+📄 booking_settings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "booking_settings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 bookings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "bookings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 getavailableslots/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "getavailableslots"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 host.json
+   {
+     "version": "2.0",
+     "extensionBundle": {
+       "id": "Microsoft.Azure.Functions.ExtensionBundle",
+       "version": "[4.*, 5.0.0)"
+     },
+     "extensions": {
+       "http": {
+         "cors": {
+           "allowedOrigins": [
+             "https://www.klrab.se"
+           ],
+           "supportCredentials": false
+         }
+       }
+     }
+   }
+📄 meeting_types/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": [ "get" ],
+         "route": "meeting_types"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 package.json
+   {
+     "name": "macspot-api",
+     "version": "1.0.0",
+     "description": "Azure Functions backend för MacSpot CRM/ERP",
+     "scripts": {
+       "start": "func start",
+       "dev": "func start --verbose",
+       "deploy": "func azure functionapp publish macspotbackend",
+       "build": "echo 'Nothing to build'"
+     },
+     "dependencies": {
+       "@azure/functions": "^4.7.0",
+       "@azure/msal-node": "^3.5.1",
+       "@microsoft/microsoft-graph-client": "^3.0.0",
+       "date-holidays": "^3.24.3",
+       "dav": "^1.8.0",
+       "dotenv": "^16.5.0",
+       "isomorphic-fetch": "^3.0.0",
+       "jsonwebtoken": "^9.0.0",
+       "luxon": "^3.4.4",
+       "node-fetch": "^2.7.0",
+       "node-ical": "^0.20.1",
+       "p-limit": "^6.2.0",
+       "pg": "^8.15.6",
+       "uuid": "^9.0.0",
+       "xml2js": "^0.6.2"
+     }
+   }
+
+📄 refreshCalendarOrigins/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 refreshTravelTimes/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 test_azurecloud/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "test_azurecloud"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 validate_contact/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get", "post"],
+         "route": "validate_contact"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 526
+🧩 Totalt antal funktioner: 11
+🧠 Total komplexitetspoäng: 73
+🧪 Antal TODO/FIXME totalt: 0
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+slotEngine.js,495,11,72,51,7
+index.js,31,0,1,1,2
+📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: booking_settings
+  • value (jsonb)
+  • updated_at (timestamp with time zone)
+  • key (text)
+  • value_type (text)
+  🔑 [p] booking_settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 22:46:14.058171+02:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 12:37:53.619684+02:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • meeting_type (text)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+  🧪 Topp 5 rader:
+    - start_time=2025-06-02 08:20:00+02:00, end_time=2025-06-02 08:30:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:48167', 'meeting_id': 82144172118, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/82144172118?pwd=zJm2Xe3RjuaM7e7HeDLoeacSdnbaVc.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 22:38:17.398000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=3d09c33e-52c9-4736-975b-61ee3713551c, updated_at=2025-06-01 22:38:17.398000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 10:00:00+02:00, end_time=2025-06-02 10:10:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47716', 'meeting_id': 83811214708, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/83811214708?pwd=uDzaG32s3i87PlV0pOwojrXUzZ7aEg.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 22:50:09.892000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=059ec692-02af-40c7-9501-0679d86b81dd, updated_at=2025-06-01 22:50:09.892000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 10:40:00+02:00, end_time=2025-06-02 11:00:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47708', 'meeting_id': 86400396910, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/86400396910?pwd=z8fdhAA8ibZ5hxJEpmebYHaX57JugC.1', 'meeting_length': 20, 'calendar_response_status': 'none'}, created_at=2025-06-01 22:56:02.371000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=967fa70d-2409-4884-8d5b-f2c036eb1a99, updated_at=2025-06-01 22:56:02.371000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 11:20:00+02:00, end_time=2025-06-02 11:30:00+02:00, meeting_type=zoom, metadata={'phone': '098765432', 'company': 'persson AB', 'subject': 'Zoommöte: Per | persson AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:46831', 'meeting_id': 81612591010, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/81612591010?pwd=3Pu0VQxyWyR0pPab7OlpAfKb7CpiWq.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 23:01:27.794000+02:00, contact_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, id=1a231d98-2e66-41ae-a718-6048aa624601, updated_at=2025-06-01 23:01:27.794000+02:00, booking_email=daniel.kallberg@mac.com
+    - start_time=2025-06-02 13:20:00+02:00, end_time=2025-06-02 13:30:00+02:00, meeting_type=facetime, metadata={'phone': '070-2656868', 'company': 'Anna AB', 'subject': 'FaceTime-möte: Anna | Anna AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'FaceTime', 'last_name': 'Sahlin', 'first_name': 'Anna', 'ip_address': '81.233.161.165:58650', 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'facetime:070-2656868', 'body_preview': '<html>\r\n<head>\r\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n</head>\r\n<body>\r\nDetta är en inbjudan till möte: FaceTime-möte: Anna | Anna AB &amp; Daniel | Kinnekulle Ledningsrådgivning AB\r\n</body>\r\n</html>\r\n', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-01 23:14:06.367000+02:00, contact_id=6dedbbd8-661f-4f87-9b54-e302bdd6f61a, id=affd507f-ee62-4ad0-b723-609100422f3b, updated_at=2025-06-01 23:14:06.367000+02:00, booking_email=annapanna79@yahoo.com
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  • email (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - metadata={'phone': '070-2656868', 'origin': 'klrab.se', 'company': 'Anna AB', 'last_name': 'Sahlin', 'first_name': 'Anna'}, created_at=2025-06-01 23:13:46.657884+02:00, id=6dedbbd8-661f-4f87-9b54-e302bdd6f61a, booking_email=annapanna79@yahoo.com, updated_at=2025-06-02 08:13:40.632229+02:00, email=annapanna79@yahoo.com
+    - metadata={'phone': '098765432', 'origin': 'klrab.se', 'company': 'Persson AB', 'last_name': 'Johansson', 'first_name': 'Per'}, created_at=2025-06-01 22:37:30.699890+02:00, id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, booking_email=daniel.kallberg@mac.com, updated_at=2025-06-02 08:13:40.632229+02:00, email=daniel.kallberg@mac.com
+
+📁 Tabell: company
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • name (text)
+  • org_number (text)
+  🔑 [p] company_pkey: PRIMARY KEY (id)
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🔑 [u] unique_translation_key: UNIQUE (key)
+  🔑 [p] translation_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: ccrelation
+  • id (uuid)
+  • company_id (uuid)
+  • contact_id (uuid)
+  • main_contact (boolean)
+  • start_date (date)
+  • end_date (date)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • role (text)
+  🔑 [p] ccrelation_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_ccrelation_contact_id: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE
+  🔑 [f] fk_ccrelation_company_id: FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+
+📁 Tabell: pending_changes
+  • booking_id (uuid)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • payload (jsonb)
+  • id (uuid)
+  • record_id (uuid)
+  • table_name (text)
+  • operation (text)
+  • change_type (text)
+  • direction (text)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - id=aece4862-6155-4819-aaa3-a21f5ed522f5, table_name=bookings, record_id=967fa70d-2409-4884-8d5b-f2c036eb1a99, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.750394+02:00, operation=INSERT, payload={'id': '967fa70d-2409-4884-8d5b-f2c036eb1a99', 'end_time': '2025-06-02T11:00:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47708', 'meeting_id': 86400396910, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/86400396910?pwd=z8fdhAA8ibZ5hxJEpmebYHaX57JugC.1', 'meeting_length': 20, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T22:56:02.371+02:00', 'start_time': '2025-06-02T10:40:00+02:00', 'updated_at': '2025-06-01T22:56:02.371+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=967fa70d-2409-4884-8d5b-f2c036eb1a99
+    - id=eadc9857-e839-4eee-be8a-d5ee6ece7ee7, table_name=bookings, record_id=1a231d98-2e66-41ae-a718-6048aa624601, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.822683+02:00, operation=INSERT, payload={'id': '1a231d98-2e66-41ae-a718-6048aa624601', 'end_time': '2025-06-02T11:30:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Zoommöte: Per | persson AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:46831', 'meeting_id': 81612591010, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/81612591010?pwd=3Pu0VQxyWyR0pPab7OlpAfKb7CpiWq.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T23:01:27.794+02:00', 'start_time': '2025-06-02T11:20:00+02:00', 'updated_at': '2025-06-01T23:01:27.794+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=1a231d98-2e66-41ae-a718-6048aa624601
+    - id=c4157273-3c00-4697-adfc-31cb615962c4, table_name=contact, record_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.519546+02:00, operation=INSERT, payload={'id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'last_name': 'Johansson', 'first_name': 'Per'}, 'created_at': '2025-06-01T22:37:30.69989+02:00', 'updated_at': '2025-06-01T22:37:30.69989+02:00', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=None
+    - id=87f2374b-c890-48b4-bafe-8a05db36079f, table_name=bookings, record_id=3d09c33e-52c9-4736-975b-61ee3713551c, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.605879+02:00, operation=INSERT, payload={'id': '3d09c33e-52c9-4736-975b-61ee3713551c', 'end_time': '2025-06-02T08:30:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:48167', 'meeting_id': 82144172118, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/82144172118?pwd=zJm2Xe3RjuaM7e7HeDLoeacSdnbaVc.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T22:38:17.398+02:00', 'start_time': '2025-06-02T08:20:00+02:00', 'updated_at': '2025-06-01T22:38:17.398+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=3d09c33e-52c9-4736-975b-61ee3713551c
+    - id=fbb2164e-4690-4e16-8bd7-225294d9a75a, table_name=bookings, record_id=059ec692-02af-40c7-9501-0679d86b81dd, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 08:01:46.678529+02:00, operation=INSERT, payload={'id': '059ec692-02af-40c7-9501-0679d86b81dd', 'end_time': '2025-06-02T10:10:00+02:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:47716', 'meeting_id': 83811214708, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/83811214708?pwd=uDzaG32s3i87PlV0pOwojrXUzZ7aEg.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T22:50:09.892+02:00', 'start_time': '2025-06-02T10:00:00+02:00', 'updated_at': '2025-06-01T22:50:09.892+02:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=059ec692-02af-40c7-9501-0679d86b81dd
+
+📁 Tabell: event_log
+  • record_id (uuid)
+  • received_at (timestamp with time zone)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  • id (uuid)
+  • payload (jsonb)
+  • table_name (text)
+  • event_type (text)
+  • source (text)
+  • action (text)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 08:01:46.519546+02:00, id=276bd979-65e7-45ce-a637-d5b9a5a937db, table_name=contact, record_id=4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31, action=INSERT, timestamp=2025-06-02 08:01:46.519546+02:00, booking_id=None
+    - source=sync, event_type=insert_contact, payload={'id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'last_name': 'Johansson', 'first_name': 'Per'}, 'created_at': '2025-06-01T20:37:30.69989+00:00', 'updated_at': '2025-06-01T20:37:30.69989+00:00', 'booking_email': 'daniel.kallberg@mac.com'}, received_at=2025-06-02 08:01:46.519546+02:00, id=40bc4c2c-cecf-4a26-8585-85693f57ae34, table_name=None, record_id=None, action=None, timestamp=2025-06-02 08:01:46.519546+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 08:01:46.605879+02:00, id=ce179f2c-5d73-4924-8bfd-4e6e7944a2d9, table_name=bookings, record_id=3d09c33e-52c9-4736-975b-61ee3713551c, action=INSERT, timestamp=2025-06-02 08:01:46.605879+02:00, booking_id=None
+    - source=sync, event_type=insert_bookings, payload={'id': '3d09c33e-52c9-4736-975b-61ee3713551c', 'end_time': '2025-06-02T06:30:00+00:00', 'metadata': {'phone': '098765432', 'company': 'persson AB', 'subject': 'Möte med KLRA Ledningsrådgivning', 'location': 'Online', 'last_name': 'Johansson', 'first_name': 'Per', 'ip_address': '172.226.49.45:48167', 'meeting_id': 82144172118, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'https://us05web.zoom.us/j/82144172118?pwd=zJm2Xe3RjuaM7e7HeDLoeacSdnbaVc.1', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31', 'created_at': '2025-06-01T20:38:17.398+00:00', 'start_time': '2025-06-02T06:20:00+00:00', 'updated_at': '2025-06-01T20:38:17.398+00:00', 'meeting_type': 'zoom', 'booking_email': 'daniel.kallberg@mac.com'}, received_at=2025-06-02 08:01:46.605879+02:00, id=c39ce22a-8d19-459a-9c2b-cf78b6050e03, table_name=None, record_id=None, action=None, timestamp=2025-06-02 08:01:46.605879+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 08:01:46.678529+02:00, id=9ec839f6-4b26-4609-87a0-f6b9b39b9f85, table_name=bookings, record_id=059ec692-02af-40c7-9501-0679d86b81dd, action=INSERT, timestamp=2025-06-02 08:01:46.678529+02:00, booking_id=None
+

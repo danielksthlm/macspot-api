@@ -6,8 +6,11 @@
   <key>Label</key>
   <string>com.macspot.sync</string>
 
-  <key>Program</key>
-  <string>/Users/danielkallberg/macspot_internal/macspot_launch_proxy.py</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/danielkallberg/Documents/KLR_AI/venv/bin/python3</string>
+    <string>/Users/danielkallberg/macspot_internal/macspot_launch_proxy.py</string>
+  </array>
 
   <key>EnvironmentVariables</key>
   <dict>
