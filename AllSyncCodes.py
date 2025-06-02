@@ -18,7 +18,7 @@ filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_static_tables.py",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync.py",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/macspot.sync.plist",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_plist.xml",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/healthcheck_sync.py"
 ]
 

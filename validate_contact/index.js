@@ -61,6 +61,7 @@ module.exports = async function (context, req) {
         }
       }
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
+        metadataFromClient.origin = 'klrab.se';
         const newId = uuidv4();
         await pool.query(
           `INSERT INTO contact (id, email, booking_email, metadata, created_at) VALUES ($1, $2, $2, $3, NOW())`,

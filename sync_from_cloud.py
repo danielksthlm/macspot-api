@@ -47,7 +47,7 @@ def apply_change(cur, table, operation, payload):
                 if updated_row:
                     try:
                         metadata = safe_json_load(updated_row[0])
-                        address = metadata.get("address", "(ingen adress)")
+                        address = metadata.get("address") or metadata.get("company") or "(ingen adress)"
                     except Exception:
                         address = "(kunde inte tolkas)"
                     print(f"🧾 Efter UPDATE: {payload['id']} → {address} @ {updated_row[1]}")

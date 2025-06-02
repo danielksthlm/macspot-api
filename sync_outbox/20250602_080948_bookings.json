@@ -1,0 +1,147 @@
+[
+  {
+    "change_id": "88017fdc-324d-4a70-9117-49cbaa64fa6a",
+    "table": "bookings",
+    "operation": "UPDATE",
+    "data": {
+      "id": "059ec692-02af-40c7-9501-0679d86b81dd",
+      "end_time": "2025-06-02T10:10:00+02:00",
+      "metadata": {
+        "phone": "098765432",
+        "company": "persson AB",
+        "subject": "Möte med KLRA Ledningsrådgivning",
+        "location": "Online",
+        "last_name": "Johansson",
+        "first_name": "Per",
+        "ip_address": "172.226.49.45:47716",
+        "meeting_id": 83811214708,
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+        "online_link": "https://us05web.zoom.us/j/83811214708?pwd=uDzaG32s3i87PlV0pOwojrXUzZ7aEg.1",
+        "meeting_length": 10,
+        "calendar_response_status": "none"
+      },
+      "contact_id": "4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31",
+      "created_at": "2025-06-01T22:50:09.892+02:00",
+      "start_time": "2025-06-02T10:00:00+02:00",
+      "updated_at": "2025-06-01T22:50:09.892+02:00",
+      "meeting_type": "zoom",
+      "booking_email": "daniel.kallberg@mac.com"
+    }
+  },
+  {
+    "change_id": "80a077b3-bc51-4c98-8bc8-8a6ad6d85e49",
+    "table": "bookings",
+    "operation": "UPDATE",
+    "data": {
+      "id": "1a231d98-2e66-41ae-a718-6048aa624601",
+      "end_time": "2025-06-02T11:30:00+02:00",
+      "metadata": {
+        "phone": "098765432",
+        "company": "persson AB",
+        "subject": "Zoommöte: Per | persson AB & Daniel | Kinnekulle Ledningsrådgivning AB",
+        "location": "Online",
+        "last_name": "Johansson",
+        "first_name": "Per",
+        "ip_address": "172.226.49.45:46831",
+        "meeting_id": 81612591010,
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+        "online_link": "https://us05web.zoom.us/j/81612591010?pwd=3Pu0VQxyWyR0pPab7OlpAfKb7CpiWq.1",
+        "meeting_length": 10,
+        "calendar_response_status": "none"
+      },
+      "contact_id": "4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31",
+      "created_at": "2025-06-01T23:01:27.794+02:00",
+      "start_time": "2025-06-02T11:20:00+02:00",
+      "updated_at": "2025-06-01T23:01:27.794+02:00",
+      "meeting_type": "zoom",
+      "booking_email": "daniel.kallberg@mac.com"
+    }
+  },
+  {
+    "change_id": "8dce2eb3-b5a7-4a56-acb0-92df6e7c750f",
+    "table": "bookings",
+    "operation": "UPDATE",
+    "data": {
+      "id": "3d09c33e-52c9-4736-975b-61ee3713551c",
+      "end_time": "2025-06-02T08:30:00+02:00",
+      "metadata": {
+        "phone": "098765432",
+        "company": "persson AB",
+        "subject": "Möte med KLRA Ledningsrådgivning",
+        "location": "Online",
+        "last_name": "Johansson",
+        "first_name": "Per",
+        "ip_address": "172.226.49.45:48167",
+        "meeting_id": 82144172118,
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+        "online_link": "https://us05web.zoom.us/j/82144172118?pwd=zJm2Xe3RjuaM7e7HeDLoeacSdnbaVc.1",
+        "meeting_length": 10,
+        "calendar_response_status": "none"
+      },
+      "contact_id": "4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31",
+      "created_at": "2025-06-01T22:38:17.398+02:00",
+      "start_time": "2025-06-02T08:20:00+02:00",
+      "updated_at": "2025-06-01T22:38:17.398+02:00",
+      "meeting_type": "zoom",
+      "booking_email": "daniel.kallberg@mac.com"
+    }
+  },
+  {
+    "change_id": "807bc5ec-a704-4ad5-a22c-7f2ef9ef0a54",
+    "table": "bookings",
+    "operation": "UPDATE",
+    "data": {
+      "id": "967fa70d-2409-4884-8d5b-f2c036eb1a99",
+      "end_time": "2025-06-02T11:00:00+02:00",
+      "metadata": {
+        "phone": "098765432",
+        "company": "persson AB",
+        "subject": "Möte med KLRA Ledningsrådgivning",
+        "location": "Online",
+        "last_name": "Johansson",
+        "first_name": "Per",
+        "ip_address": "172.226.49.45:47708",
+        "meeting_id": 86400396910,
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+        "online_link": "https://us05web.zoom.us/j/86400396910?pwd=z8fdhAA8ibZ5hxJEpmebYHaX57JugC.1",
+        "meeting_length": 20,
+        "calendar_response_status": "none"
+      },
+      "contact_id": "4ce9fc3f-d44f-40ca-aa9d-13e4db7f0f31",
+      "created_at": "2025-06-01T22:56:02.371+02:00",
+      "start_time": "2025-06-02T10:40:00+02:00",
+      "updated_at": "2025-06-01T22:56:02.371+02:00",
+      "meeting_type": "zoom",
+      "booking_email": "daniel.kallberg@mac.com"
+    }
+  },
+  {
+    "change_id": "5575e4e8-a493-4c39-9ac8-d950e24c4733",
+    "table": "bookings",
+    "operation": "UPDATE",
+    "data": {
+      "id": "affd507f-ee62-4ad0-b723-609100422f3b",
+      "end_time": "2025-06-02T13:30:00+02:00",
+      "metadata": {
+        "phone": "070-2656868",
+        "company": "Anna AB",
+        "subject": "FaceTime-möte: Anna | Anna AB & Daniel | Kinnekulle Ledningsrådgivning AB",
+        "location": "FaceTime",
+        "last_name": "Sahlin",
+        "first_name": "Anna",
+        "ip_address": "81.233.161.165:58650",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+        "online_link": "facetime:070-2656868",
+        "body_preview": "<html>\r\n<head>\r\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\r\n</head>\r\n<body>\r\nDetta är en inbjudan till möte: FaceTime-möte: Anna | Anna AB &amp; Daniel | Kinnekulle Ledningsrådgivning AB\r\n</body>\r\n</html>\r\n",
+        "meeting_length": 10,
+        "calendar_response_status": "none"
+      },
+      "contact_id": "6dedbbd8-661f-4f87-9b54-e302bdd6f61a",
+      "created_at": "2025-06-01T23:14:06.367+02:00",
+      "start_time": "2025-06-02T13:20:00+02:00",
+      "updated_at": "2025-06-01T23:14:06.367+02:00",
+      "meeting_type": "facetime",
+      "booking_email": "annapanna79@yahoo.com"
+    }
+  }
+]
