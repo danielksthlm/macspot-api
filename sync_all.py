@@ -31,13 +31,13 @@ for path in [log_out, log_err]:
             pass
 
 # Skriv ut manuell/automatisk körningsinfo till loggen
-is_manual = sys.stdout.isatty()
-sys.stdout = open(log_out, 'a')
-sys.stderr = open(log_err, 'a')
-if is_manual:
-    print(f"🖐️ Manuell körning: {datetime.now(timezone.utc).isoformat()}")
-else:
-    print(f"🤖 Automatisk körning via launchd: {datetime.now(timezone.utc).isoformat()}")
+is_manual = os.environ.get("LAUNCHD_RUN") != "true"
+log_mode = "MANUELL" if is_manual else "AUTOMATISK (launchd)"
+out = open(log_out, 'a')
+err = open(log_err, 'a')
+sys.stdout = out
+sys.stderr = err
+print(f"🚀 Körläge: {log_mode} – {datetime.now(timezone.utc).isoformat()}")
 
 def run_script(name, script_path):
     subprocess.run(["python", f"{BASE}/{script_path}"], check=True)
@@ -176,3 +176,5 @@ finally:
     print(f"🏁 Körning avslutad: {datetime.now(timezone.utc).isoformat()}")
     duration = datetime.now(timezone.utc) - start_time
     print(f"⏱️ Total körtid: {int(duration.total_seconds())} sekunder")
+    out.close()
+    err.close()
