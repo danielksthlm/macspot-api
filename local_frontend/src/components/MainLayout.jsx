@@ -1,20 +1,18 @@
-import React, { useState } from "react";
-import ContactSidebar from "./ContactSidebar";
-import ContactPanel from "./ContactPanel";
+import React from "react";
 
-export default function MainLayout({ children }) {
-  const [selectedContact, setSelectedContact] = useState(null);
-
+export default function ContactList({ contacts, selectedContact, setSelectedContact }) {
   return (
-    <div className="flex min-h-screen bg-[#f9f9f9] text-gray-900">
-      <ContactSidebar />
-      <main className="flex-1 flex">
-        {React.cloneElement(children, {
-          selectedContact,
-          setSelectedContact
-        })}
-        <ContactPanel contact={selectedContact} />
-      </main>
+    <div className="p-4">
+      {contacts.map((contact) => (
+        <div
+          key={contact.id}
+          className={`mac-card cursor-pointer hover:bg-gray-50 ${selectedContact?.id === contact.id ? "bg-gray-100" : ""}`}
+          onClick={() => setSelectedContact(contact)}
+        >
+          <h2 className="text-lg font-bold mb-1 hover:font-medium">{contact.firstName} {contact.lastName}</h2>
+          <p className="text-sm text-gray-600">{contact.email}</p>
+        </div>
+      ))}
     </div>
   );
 }

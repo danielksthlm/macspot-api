@@ -20,20 +20,25 @@ export default function ContactList({ selectedContact, setSelectedContact }) {
           <h1 className="text-2xl font-bold">Kontakter</h1>
         </div>
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-          {contacts.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => setSelectedContact(c)}
-              className={`mac-card cursor-pointer ${
-                selectedContact && selectedContact.id === c.id ? "border-blue-500" : ""
-              }`}
-            >
-              <h2 className="text-lg font-bold mb-1">{c.first_name} {c.last_name}</h2>
-              <p className="text-sm text-gray-600">{c.email}</p>
-              <p className="text-sm text-gray-700">Företag: {c.company}</p>
-              <p className="text-sm text-gray-700">Bokningar: {c.booking_count}</p>
-            </div>
-          ))}
+          {contacts.map((c) => {
+            const initials = `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase();
+
+            return (
+              <div
+                key={c.id}
+                onClick={() => setSelectedContact(c)}
+                className={`mac-card cursor-pointer ${
+                  selectedContact && selectedContact.id === c.id ? "border-blue-500" : ""
+                }`}
+              >
+                <div className="mac-avatar mb-3">{initials}</div>
+                <h2 className="text-lg font-bold mb-1">{c.first_name} {c.last_name}</h2>
+                <p className="text-sm text-gray-600">{c.email}</p>
+                <p className="text-sm text-gray-700">Företag: {c.company}</p>
+                <p className="text-sm text-gray-700">Bokningar: {c.booking_count}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -7,6 +7,9 @@ export default function ContactPanel({ contact }) {
         <p className="text-gray-400">Välj en kontakt för att visa detaljer.</p>
       ) : (
         <>
+          <div className="mac-avatar mb-4 text-lg">
+            {(contact.first_name?.[0] + contact.last_name?.[0]).toUpperCase()}
+          </div>
           <h2 className="text-xl font-bold mb-2">
             {contact.first_name} {contact.last_name}
           </h2>

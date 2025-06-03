@@ -1,33 +1,88 @@
-
-
-
-.mac-card {
+/* === Apple-liknande inputfält === */
+.input-mac {
+  border: 1px solid #d1d5db;
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+}
+.input-mac:focus {
+  outline: none;
+  border-color: #007aff;
   background: white;
-  border-radius: 12px;
-  padding: 1.25rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+/* === MacSpot Basstil === */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f9f9f9;
+  color: #1e1e1e;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  margin-bottom: 0.5rem;
+}
+
+p {
+  line-height: 1.6;
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+  color: #333;
+}
+
+/* === Kontaktkort === */
+.mac-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
-  border: 1px solid #e2e2e2;
+  border: 1px solid #ececec;
 }
 .mac-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
+/* === Panel === */
 .mac-panel {
-  background: white;
-  border-left: 1px solid #e2e2e2;
-  padding: 2rem;
+  background: #ffffff;
+  padding: 2rem 2.5rem;
+  border-radius: 0 0 0 0;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.04);
 }
 
+/* === Avatar / Initialbubbla === */
+.mac-avatar {
+  width: 48px;
+  height: 48px;
+  background: #d4d4d8;
+  color: #1e1e1e;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  user-select: none;
+}
+
+/* === Knapp === */
 .mac-btn {
-  padding: 0.4rem 1rem;
+  padding: 0.45rem 1rem;
   background: #007aff;
   color: white;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.875rem;
   transition: background 0.2s ease;
   border: none;
 }
 .mac-btn:hover {
-  background: #005fcc;
+  background: #0062d2;
 }
