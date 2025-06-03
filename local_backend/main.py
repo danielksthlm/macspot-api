@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 from local_backend.modules.crm.routes import router as crm_router
+from local_backend.modules.accounting.routes import router as accounting_router
 
 app = FastAPI()
 
@@ -16,3 +17,4 @@ app.add_middleware(
 )
 
 app.include_router(crm_router)
+app.include_router(accounting_router)
