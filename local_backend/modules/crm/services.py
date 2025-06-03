@@ -13,7 +13,7 @@ def fix_encoding(text):
     return text
 
 async def get_all_contacts():
-    db_url = os.environ["LOCAL_DATABASE_URL"]
+    db_url = os.environ["LOCAL_DB_URL"]
     conn = await asyncpg.connect(dsn=db_url)
     rows = await conn.fetch("""
         SELECT 
@@ -58,7 +58,7 @@ async def get_all_contacts():
     return contacts
 
 async def get_contact_by_id(contact_id: str):
-    db_url = os.environ["LOCAL_DATABASE_URL"]
+    db_url = os.environ["LOCAL_DB_URL"]
     conn = await asyncpg.connect(dsn=db_url)
     row = await conn.fetchrow("SELECT * FROM contact WHERE id = $1", contact_id)
     await conn.close()

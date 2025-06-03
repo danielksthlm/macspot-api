@@ -1,0 +1,33 @@
+
+
+
+.mac-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  border: 1px solid #e2e2e2;
+}
+.mac-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.mac-panel {
+  background: white;
+  border-left: 1px solid #e2e2e2;
+  padding: 2rem;
+}
+
+.mac-btn {
+  padding: 0.4rem 1rem;
+  background: #007aff;
+  color: white;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: background 0.2s ease;
+  border: none;
+}
+.mac-btn:hover {
+  background: #005fcc;
+}
