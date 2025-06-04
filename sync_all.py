@@ -12,6 +12,10 @@ from sync_from_cloud import sync as sync_from_cloud
 with open("/tmp/launchd_debug.txt", "a") as f:
     f.write("[sync_all.py] Körning initierad\n")
 
+# Logga varje körning till /tmp/debug_sync.txt för att bekräfta att launchd triggar scriptet
+with open("/tmp/debug_sync.txt", "a") as f:
+    f.write(f"[{datetime.now()}] sync_all.py kördes\n")
+
 
 # Delad json- och metadata-funktionalitet som används i flera synkmoduler
 def safe_json_load(data, default={}):
@@ -47,7 +51,6 @@ out = open(log_out, 'a')
 err = open(log_err, 'a')
 sys.stdout = out
 sys.stderr = err
-print(f"🚀 Körläge: {log_mode} – {datetime.now(timezone.utc).isoformat()}")
 
 def run_script(name, script_path):
     subprocess.run(["/Users/danielkallberg/Documents/KLR_AI/venv/bin/python", f"{BASE}/{script_path}"], check=True)
@@ -68,33 +71,27 @@ try:
         try:
             subprocess.run(
                 ["/Users/danielkallberg/Documents/KLR_AI/venv/bin/python", f"{BASE}/healthcheck_sync.py"],
+                stdout=out,
+                stderr=err,
                 check=True
             )
-        except Exception as e:
-            print(f"❌ Healthcheck misslyckades: {e}")
+        except subprocess.CalledProcessError as e:
+            print(f"[{datetime.now()}] ❌ Healthcheck misslyckades: {e}")
 
     # Kontrollera att båda databaser är online innan sync startar
     if not is_database_online("localhost", 5433):
-        print("❌ Lokal databas är inte tillgänglig (localhost:5433)")
         local_db_ok = False
         exit(1)
 
     if not is_database_online("macspotpg.postgres.database.azure.com", 5432):
-        print("❌ Azure-databasen är inte tillgänglig (macspotpg.postgres.database.azure.com:5432)")
         cloud_db_ok = False
         exit(1)
 
-    print(f"📌 Körning initierad: {datetime.now(timezone.utc).isoformat()}")
-
-    print("🧪 Kör healthcheck_sync.py...")
     run_healthcheck()
-
-    print(f"\n🔄 [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Startar fullständig synk...")
 
     # Kör sync.py först
     run_script("🟡 Kör sync.py...", "sync.py")
 
-    # Efter sync.py, kontrollera om det finns diffar i event_log
     # Efter sync.py, kontrollera om det finns diffar i event_log
     with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
         with conn.cursor() as cur:
@@ -105,8 +102,6 @@ try:
             """)
             diff_count = cur.fetchone()[0]
             if diff_count > 0:
-                print(f"🚦 Det finns {diff_count} diff-loggar från sync.py – överväg att köra sync_to_cloud.py manuellt eller automatiskt.")
-                print("⚙️ Kör sync_generate_pending_from_diff.py för att skapa riktiga pending_changes...")
                 run_script("⚙️ Kör sync_generate_pending_from_diff.py...", "sync_generate_pending_from_diff.py")
 
     # Kör sync_to_cloud.py efter kontrollen
@@ -123,7 +118,6 @@ try:
             """)
             cloud_diff_count = cur.fetchone()[0]
             if cloud_diff_count > 0:
-                print(f"🚦 Det finns {cloud_diff_count} moln→lokalt-diffar – kör sync_generate_fromcloud_pending.py...")
                 run_script("⚙️ Kör sync_generate_fromcloud_pending.py...", "sync_generate_fromcloud_pending.py")
 
     today_prefix = datetime.now(timezone.utc).strftime('%Y%m%d')
@@ -132,11 +126,7 @@ try:
     files_with_type = [f for f in files if len(f.split("_")) >= 3]
     num_changes = len(files_with_type)
 
-    if num_changes == 0:
-        print("ℹ️ Ingen förändring hittades att synka.")
-        print("📭 Inga fler ändringar kvar i pending_changes.")
-    else:
-        print(f"📤 Totalt {num_changes} ändring(ar) skickades till molnet:")
+    if num_changes != 0:
         files = [f for f in sorted(os.listdir(outbox_dir)) if f.startswith(today_prefix)]
         summary = {}
         for f in files:
@@ -145,21 +135,10 @@ try:
                 typ = parts[2].split(".")[0]
                 summary[typ] = summary.get(typ, 0) + 1
 
-        if summary:
-            print("🧾 Sammanfattning per typ:")
-            for typ, count in summary.items():
-                print(f"   • {typ}: {count} st")
-
-        # --- Kontrollera och skriv ut äldre JSON-filer i sync_outbox ---
+        # Kontrollera och skriv ut äldre JSON-filer i sync_outbox
         old_files = [f for f in os.listdir(outbox_dir) if not f.startswith(today_prefix)]
-        if old_files:
-            print("📂 Äldre JSON-filer som ligger kvar i sync_outbox:")
-            for f in old_files:
-                print(f"   • {f}")
 
-        print("📊 Kontroll av återstående ändringar i pending_changes...")
-
-        # Lokalt
+        # Kontroll av återstående ändringar i pending_changes
         local = psycopg2.connect(
             dbname="macspot",
             user="postgres",
@@ -177,11 +156,9 @@ try:
             WHERE direction = 'out' AND processed = false
             GROUP BY record_id
         """)
-        print(f"   • Lokalt → molnet: {out_local} ändring(ar) kvar över {cur_local.rowcount} kontakt(er).")
         cur_local.close()
         local.close()
 
-        # Molnet
         cloud = psycopg2.connect(
             dbname="postgres",
             user="daniel",
@@ -204,44 +181,17 @@ try:
 
     out_cloud, tracking_count = sync_from_cloud()
 
-    print(f"\n✅ [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk körd.")
-
-    # Sammanfatta diff-loggar (senaste 5 poster, med email och tabell-format)
-    with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT received_at, event_type, payload->>'email'
-                FROM event_log
-                WHERE received_at > now() - interval '10 minutes'
-                  AND event_type IN ('sync_local_diff_contacts', 'sync_local_diff_bookings', 'sync_mismatch_contact', 'sync_fromcloud_mismatch')
-                ORDER BY received_at DESC
-                LIMIT 5
-            """)
-            rows = cur.fetchall()
-            if rows:
-                print("📜 Senaste 5 event_log-poster:")
-                print("| tidpunkt            | event_type              | e-post                     |")
-                print("|---------------------|--------------------------|-----------------------------|")
-                for received_at, event_type, email in rows:
-                    print(f"| {received_at.strftime('%Y-%m-%d %H:%M:%S')} | {event_type:<24} | {email or '(okänd)':<27} |")
-            else:
-                print("📜 Inga event_log-poster senaste 10 minuter.")
-
 except Exception as e:
     import traceback
-    print("❌ Ett oväntat fel inträffade under körningen:")
-    print(traceback.format_exc())
 
 finally:
     print(f"🏁 Körning avslutad: {datetime.now(timezone.utc).isoformat()}")
     duration = datetime.now(timezone.utc) - start_time
 
-    # Räkna antal lyckade synkar och tracking_event
     synced_out = out_local if 'out_local' in locals() else 0
     synced_in = out_cloud if 'out_cloud' in locals() else 0
 
     print(f"⏱️ Total körtid: {int(duration.total_seconds())} sekunder")
-    # Visa macOS-notis om synken är färdig (endast på Mac)
     import subprocess
     try:
         if not local_db_ok or not cloud_db_ok:
@@ -251,8 +201,9 @@ finally:
             if not cloud_db_ok:
                 status_msg += "moln-DB nere. "
         else:
-            status_msg = f"Synk klar: {synced_out} ut, {synced_in} in, {tracking_count} tracking-events"
+            status_msg = f"✅ Synk klar: {synced_out} ut, {synced_in} in, {tracking_count} tracking-events"
 
+        # Alltid visa notis
         subprocess.run([
             "/opt/homebrew/bin/terminal-notifier",
             "-title", "MacSpot Sync",
@@ -262,5 +213,6 @@ finally:
         ])
     except Exception as e:
         print(f"⚠️ Kunde inte visa notis med terminal-notifier: {e}")
+    print(f"🧭 Kördes via: {log_mode}")
     out.close()
     err.close()

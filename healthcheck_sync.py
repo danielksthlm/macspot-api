@@ -6,6 +6,12 @@ from datetime import datetime, timezone
 import sys
 
 __version__ = "1.0.1"
+SILENT_IF_OK = True
+output_buffer = []
+def log(msg):
+    output_buffer.append(msg)
+    if not SILENT_IF_OK:
+        print(msg)
 
 def get_pending_count(conn, label):
     with conn.cursor() as cur:
@@ -14,7 +20,7 @@ def get_pending_count(conn, label):
             WHERE direction = 'out' AND processed = false
         """)
         count = cur.fetchone()[0]
-        print(f"🔍 {label}: {count} osynkade förändringar")
+        log(f"🔍 {label}: {count} osynkade förändringar")
         return count
 
 def check_db_connection(name, config):
@@ -22,14 +28,14 @@ def check_db_connection(name, config):
         start = datetime.now(timezone.utc)
         conn = psycopg2.connect(**config)
         latency = (datetime.now(timezone.utc) - start).total_seconds()
-        print(f"✅ Anslutning till {name} OK (latens: {latency:.2f} sek)")
+        log(f"✅ Anslutning till {name} OK (latens: {latency:.2f} sek)")
         return conn
     except Exception as e:
         print(f"❌ Fel vid anslutning till {name}: {e}")
         return None
 
 def main():
-    print(f"\n📋 Healthcheck MacSpot sync v{__version__} – {datetime.now(timezone.utc).isoformat()} UTC\n")
+    log(f"\n📋 Healthcheck MacSpot sync v{__version__} – {datetime.now(timezone.utc).isoformat()} UTC\n")
     errors = 0
 
     local_conn = check_db_connection("Lokal databas", LOCAL_DB_CONFIG)
@@ -44,7 +50,7 @@ def main():
         get_pending_count(remote_conn, "Moln → lokal")
         # --- Kontaktjämförelse mellan lokal och moln ---
         try:
-            print("\n🔍 Jämför kontaktposter mellan lokal och moln...")
+            log("\n🔍 Jämför kontaktposter mellan lokal och moln...")
             with psycopg2.connect(**LOCAL_DB_CONFIG) as local_conn, psycopg2.connect(**REMOTE_DB_CONFIG) as remote_conn:
                 with local_conn.cursor() as local_cur, remote_conn.cursor() as remote_cur:
                     local_cur.execute("SELECT id, metadata FROM contact")
@@ -57,22 +63,22 @@ def main():
                     for contact_id, local_meta in local_contacts.items():
                         remote_meta = remote_contacts.get(contact_id)
                         if remote_meta is None:
-                            print(f"⚠️ Kontakt {contact_id} finns inte i molnet.")
+                            log(f"⚠️ Kontakt {contact_id} finns inte i molnet.")
                             mismatch_count += 1
                         elif local_meta != remote_meta:
                             if {k: v for k, v in local_meta.items() if k != 'updated_at'} != {k: v for k, v in remote_meta.items() if k != 'updated_at'}:
-                                print(f"⚠️ Kontakt {contact_id} skiljer sig mellan lokal och moln (förutom updated_at).")
+                                log(f"⚠️ Kontakt {contact_id} skiljer sig mellan lokal och moln (förutom updated_at).")
                                 mismatch_count += 1
 
                     for contact_id in remote_contacts:
                         if contact_id not in local_contacts:
-                            print(f"⚠️ Kontakt {contact_id} finns i molnet men saknas lokalt.")
+                            log(f"⚠️ Kontakt {contact_id} finns i molnet men saknas lokalt.")
                             mismatch_count += 1
 
                     if mismatch_count == 0:
-                        print("✅ Alla kontakter matchar mellan lokal och moln.")
+                        log("✅ Alla kontakter matchar mellan lokal och moln.")
                     else:
-                        print(f"❗ Totalt {mismatch_count} avvikelse(r) i kontaktmetadata.")
+                        log(f"❗ Totalt {mismatch_count} avvikelse(r) i kontaktmetadata.")
         except Exception as e:
             print(f"⚠️ Fel vid jämförelse av kontakter: {e}")
         remote_conn.close()
@@ -95,11 +101,11 @@ def main():
                 """)
                 rows = cur.fetchall()
                 if rows:
-                    print("\n🚨 Senaste synkavvikelser:")
+                    log("\n🚨 Senaste synkavvikelser:")
                     for event_type, email, diff, timestamp in rows:
-                        print(f"• {event_type}: {email} – {diff} @ {timestamp}")
+                        log(f"• {event_type}: {email} – {diff} @ {timestamp}")
                 else:
-                    print("\n✅ Inga mismatch-loggar i event_log senaste 10 minuterna.")
+                    log("\n✅ Inga mismatch-loggar i event_log senaste 10 minuterna.")
     except Exception as e:
         print(f"⚠️ Kunde inte läsa mismatch-loggar: {e}")
 
@@ -114,9 +120,9 @@ def main():
                     ORDER BY table_name
                 """)
                 tables = [row[0] for row in cur.fetchall()]
-                print(f"\n📋 Tabeller i {label}:")
+                log(f"\n📋 Tabeller i {label}:")
                 for t in tables:
-                    print(f"• {t}")
+                    log(f"• {t}")
         except Exception as e:
             print(f"⚠️ Kunde inte hämta tabeller från {label}: {e}")
 
@@ -131,11 +137,11 @@ def main():
                 """)
                 rows = cur.fetchall()
                 if rows:
-                    print(f"\n📌 Triggers i {label}:")
+                    log(f"\n📌 Triggers i {label}:")
                     for table, trigger, timing, event in rows:
-                        print(f"• {table} – {trigger} ({timing} {event})")
+                        log(f"• {table} – {trigger} ({timing} {event})")
                 else:
-                    print(f"\nℹ️ Inga triggers i {label}.")
+                    log(f"\nℹ️ Inga triggers i {label}.")
         except Exception as e:
             print(f"⚠️ Kunde inte hämta triggers från {label}: {e}")
 
@@ -149,11 +155,11 @@ def main():
                 """, (table_name,))
                 rows = cur.fetchall()
                 if rows:
-                    print(f"\n🔍 Triggers för tabell '{table_name}' i {label}:")
+                    log(f"\n🔍 Triggers för tabell '{table_name}' i {label}:")
                     for trigger_name, timing, event, stmt in rows:
-                        print(f"• {trigger_name} – {timing} {event}: {stmt}")
+                        log(f"• {trigger_name} – {timing} {event}: {stmt}")
                 else:
-                    print(f"\nℹ️ Inga triggers för tabell '{table_name}' i {label}.")
+                    log(f"\nℹ️ Inga triggers för tabell '{table_name}' i {label}.")
         except Exception as e:
             print(f"⚠️ Fel vid analys av triggers i {label}: {e}")
 
@@ -167,9 +173,9 @@ def main():
                     ORDER BY ordinal_position
                 """, (table_name,))
                 rows = cur.fetchall()
-                print(f"\n📑 Kolumner för '{table_name}' i {label}:")
+                log(f"\n📑 Kolumner för '{table_name}' i {label}:")
                 for name, dtype in rows:
-                    print(f"• {name} ({dtype})")
+                    log(f"• {name} ({dtype})")
         except Exception as e:
             print(f"⚠️ Fel vid kolumnhämtning i {label} för tabell '{table_name}': {e}")
 
@@ -208,7 +214,7 @@ def main():
         remote_conn.close()
 
     def verify_trigger_connections():
-        print("\n📎 Verifierar att triggers är kopplade till rätt funktioner...")
+        log("\n📎 Verifierar att triggers är kopplade till rätt funktioner...")
         for label, config in [("lokal databas", LOCAL_DB_CONFIG), ("molndatabas", REMOTE_DB_CONFIG)]:
             try:
                 with psycopg2.connect(**config) as conn:
@@ -225,16 +231,16 @@ def main():
                             row = cur.fetchone()
                             if row:
                                 if function in row[1]:
-                                    print(f"✅ {label}: {trigger} på '{table}' kör {function}()")
+                                    log(f"✅ {label}: {trigger} på '{table}' kör {function}()")
                                 else:
-                                    print(f"❌ {label}: {trigger} hittades men pekar inte på {function}()")
+                                    log(f"❌ {label}: {trigger} hittades men pekar inte på {function}()")
                             else:
-                                print(f"❌ {label}: Trigger '{trigger}' på tabell '{table}' saknas")
+                                log(f"❌ {label}: Trigger '{trigger}' på tabell '{table}' saknas")
             except Exception as e:
                 print(f"⚠️ Kunde inte verifiera triggers i {label}: {e}")
 
     def verify_trigger_cloud():
-        print("\n🌩️ Verifierar triggerfunktioner i molndatabasen separat...")
+        log("\n🌩️ Verifierar triggerfunktioner i molndatabasen separat...")
         try:
             with psycopg2.connect(**REMOTE_DB_CONFIG) as conn:
                 with conn.cursor() as cur:
@@ -250,11 +256,11 @@ def main():
                         row = cur.fetchone()
                         if row:
                             if expected_func in row[1]:
-                                print(f"✅ Molndatabas: {trigger} på '{table}' kör {expected_func}()")
+                                log(f"✅ Molndatabas: {trigger} på '{table}' kör {expected_func}()")
                             else:
-                                print(f"❌ Molndatabas: {trigger} pekar INTE på {expected_func}()")
+                                log(f"❌ Molndatabas: {trigger} pekar INTE på {expected_func}()")
                         else:
-                            print(f"❌ Molndatabas: Trigger '{trigger}' saknas på tabell '{table}'")
+                            log(f"❌ Molndatabas: Trigger '{trigger}' saknas på tabell '{table}'")
         except Exception as e:
             print(f"⚠️ Kunde inte verifiera molntriggers: {e}")
 
@@ -274,21 +280,23 @@ def main():
                 """)
                 rows = cur.fetchall()
                 if rows:
-                    print("\n📜 Senaste 5 event_log-poster:")
-                    print(f"| {'tidpunkt':<20} | {'event_type':<25} | {'e-post':<30} | {'diff_summary':<40} |")
-                    print("|" + "-"*22 + "|" + "-"*27 + "|" + "-"*32 + "|" + "-"*42 + "|")
+                    log("\n📜 Senaste 5 event_log-poster:")
+                    log(f"| {'tidpunkt':<20} | {'event_type':<25} | {'e-post':<30} | {'diff_summary':<40} |")
+                    log("|" + "-"*22 + "|" + "-"*27 + "|" + "-"*32 + "|" + "-"*42 + "|")
                     for t, e, m, d in rows:
-                        print(f"| {t.strftime('%Y-%m-%d %H:%M:%S')} | {e:<25} | {m:<30} | {d or '':<40} |")
+                        log(f"| {t.strftime('%Y-%m-%d %H:%M:%S')} | {e:<25} | {m:<30} | {d or '':<40} |")
                 else:
-                    print("ℹ️ Inga loggposter hittades.")
+                    log("ℹ️ Inga loggposter hittades.")
     except Exception as e:
         print(f"⚠️ Kunde inte hämta senaste event_log-poster: {e}")
 
     if errors > 0:
+        for line in output_buffer:
+            print(line)
         print(f"\n❌ Healthcheck avslutades med {errors} fel.\n")
         sys.exit(1)
     else:
-        print(f"\n✅ Healthcheck genomförd utan fel.\n")
+        print(f"✅ Healthcheck OK – {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
 if __name__ == "__main__":
     main()
