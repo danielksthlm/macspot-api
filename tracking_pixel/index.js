@@ -1,5 +1,3 @@
-
-
 const { pool } = require('../shared/db/pgPool');
 
 module.exports = async function (context, req) {
