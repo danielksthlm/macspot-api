@@ -208,7 +208,7 @@ finally:
             "/opt/homebrew/bin/terminal-notifier",
             "-title", "MacSpot Sync",
             "-message", status_msg,
-            "-appIcon", "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/klrab.icns",
+            "-sender", "se.klrab.macspot",
             "-open", "file:///Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot_sync.log"
         ])
     except Exception as e:
