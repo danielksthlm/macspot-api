@@ -1,5 +1,5 @@
 // Tracking-logik för insamling av event
-const { pool } = require('../shared/db/pgPool');
+const pool = require('../shared/db/pgPool');
 
 // Detta är tracking-logik
 module.exports = async function (context, req) {
