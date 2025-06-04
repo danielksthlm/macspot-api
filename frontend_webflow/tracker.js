@@ -1,5 +1,5 @@
 (function () {
-  const API_URL = 'https://klrab.se/api/track'; // Ändra till rätt endpoint om annan
+  const API_URL = 'https://klrab.se/api/tracking'; // Ändra till rätt endpoint om annan
 
   // Hämta eller skapa unikt besöks-ID
   let visitorId = localStorage.getItem('visitor_id');
