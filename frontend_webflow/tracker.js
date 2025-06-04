@@ -1,6 +1,6 @@
 <script>
 (function () {
-  const API_URL = 'https://klrab.se/api/tracking';
+  const API_URL = 'https://macspotbackend.azurewebsites.net/api/tracking';
 
   let visitorId = localStorage.getItem('visitor_id');
   if (!visitorId) {
@@ -26,7 +26,11 @@
       metadata,
     };
 
-    navigator.sendBeacon(API_URL, JSON.stringify(payload));
+    try {
+      navigator.sendBeacon(API_URL, JSON.stringify(payload));
+    } catch (err) {
+      console.error('[tracking] beacon error:', err);
+    }
   }
 
   sendEvent('page_view');
@@ -52,4 +56,31 @@
 
   window.MacSpotUtils = { trackEvent: sendEvent };
 })();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.querySelector("form");
+
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      const emailInput = document.getElementById("email");
+      const nameInput = document.getElementById("name");
+
+      const email = emailInput ? emailInput.value.trim() : null;
+      const name = nameInput ? nameInput.value.trim() : null;
+
+      if (window.MacSpotUtils && email) {
+        window.MacSpotUtils.trackEvent("form_submit", {
+          email: email,
+          name: name,
+          form_name: form.getAttribute("name") || "webflow_form",
+          form_action: form.getAttribute("action") || window.location.pathname,
+          page_title: document.title
+        });
+        console.log("[tracking] Skickade form_submit:", email, name);
+      }
+    });
+  }
+});
 </script>

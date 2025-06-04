@@ -11,7 +11,21 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const body = req.body;
+  let body = req.body;
+  context.log('[tracking] Rå inkommande body:', body);
+
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (err) {
+      context.log.error('[tracking] Kunde inte parsa JSON:', err.message);
+      context.res = {
+        status: 400,
+        body: 'Malformed JSON',
+      };
+      return;
+    }
+  }
 
   if (!body || !body.visitor_id || !body.event_type) {
     context.res = {
@@ -46,6 +60,13 @@ module.exports = async function (context, req) {
   };
 
   try {
+    context.log('[tracking] Sparar event:', {
+      visitor_id,
+      event_type,
+      timestamp: timestamp || new Date().toISOString(),
+      metadata: finalMetadata,
+    });
+
     await pool.query(
       `INSERT INTO tracking_event (
         visitor_id, event_type, timestamp, metadata
