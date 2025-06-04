@@ -1,6 +1,8 @@
 // Tracking-logik för insamling av event
 const pool = require('../shared/db/pgPool');
 
+const allowedEvents = ['page_view', 'click', 'scroll_50', 'form_submit', 'session_end', 'page_unload'];
+
 // Detta är tracking-logik
 module.exports = async function (context, req) {
   if (req.method !== 'POST') {
@@ -47,9 +49,24 @@ module.exports = async function (context, req) {
     metadata,
   } = body;
 
+  const eventTimestamp = timestamp || new Date().toISOString();
+  const safeMetadata = (typeof metadata === 'object' && metadata !== null) ? metadata : {};
+
+  // Tillåtna event_type
+  if (!allowedEvents.includes(event_type)) {
+    context.log.warn('[tracking] ⚠️ Okänt event_type:', event_type);
+  }
+
+  // Blockera vissa user_agents
+  if (!safeMetadata.user_agent || safeMetadata.user_agent === '' || safeMetadata.user_agent.includes('curl') || safeMetadata.user_agent.includes('bot')) {
+    context.log.warn('[tracking] 🔒 Blockerat pga user_agent:', safeMetadata.user_agent);
+    context.res = { status: 204 };
+    return;
+  }
+
   // Slå ihop metadata + kontext till en sammanhängande JSONB
   const finalMetadata = {
-    ...metadata,
+    ...safeMetadata,
     url,
     referrer,
     utm: {
@@ -59,11 +76,32 @@ module.exports = async function (context, req) {
     },
   };
 
+  const ip = safeMetadata?.ip_address;
+
+  if (ip) {
+    try {
+      const res = await fetch(`https://ipapi.co/${ip}/json/`);
+      if (res.ok) {
+        const geo = await res.json();
+        finalMetadata.geo = {
+          country: geo.country_name,
+          country_code: geo.country_code,
+          city: geo.city,
+          region: geo.region,
+          latitude: geo.latitude,
+          longitude: geo.longitude
+        };
+      }
+    } catch (err) {
+      context.log.warn('[geoip] Kunde inte hämta plats för IP:', ip, err.message);
+    }
+  }
+
   try {
     context.log('[tracking] Sparar event:', {
       visitor_id,
       event_type,
-      timestamp: timestamp || new Date().toISOString(),
+      timestamp: eventTimestamp,
       metadata: finalMetadata,
     });
 
@@ -74,7 +112,7 @@ module.exports = async function (context, req) {
       [
         visitor_id,
         event_type,
-        timestamp || new Date().toISOString(),
+        eventTimestamp,
         finalMetadata,
       ]
     );
