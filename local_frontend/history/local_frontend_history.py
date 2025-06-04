@@ -279,7 +279,11 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             utfil.write(f"📅 Senast ändrad: {senast_andrad}\n")
             utfil.write(f"📏 Antal rader: {antal_rader}\n")
             utfil.write(f"🧩 Antal funktioner: {funktion_count}\n")
-            utfil.write(f"💬 Kommentarstäckning: {kommentar_rader} rader ({(kommentar_rader / antal_rader * 100):.1f}%) – {inline_kommentarer} inline, {block_kommentarer} block\n")
+            if antal_rader > 0:
+                procent = (kommentar_rader / antal_rader) * 100
+            else:
+                procent = 0.0
+            utfil.write(f"💬 Kommentarstäckning: {kommentar_rader} rader ({procent:.1f}%) – {inline_kommentarer} inline, {block_kommentarer} block\n")
             utfil.write(f"📥 Imports: {import_count} – {imports if imports else 'Inga'}\n")
             utfil.write(f"🔍 Längsta funktion: {longest_func} rader\n")
             utfil.write(f"🧠 Komplexitetspoäng: {komplex_count}\n")

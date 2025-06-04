@@ -4,7 +4,7 @@ from .services import get_all_contacts, get_contact_by_id
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
-@router.get("/")
+@router.get("")
 async def list_contacts():
     data = await get_all_contacts()
     return JSONResponse(content=data, media_type="application/json; charset=utf-8")
