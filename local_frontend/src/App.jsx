@@ -1,6 +1,6 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import PageWrapper from "./components/layout/PageWrapper.jsx";
+import PageWrapper from "./components/layout/PageWrapper";
 
 import Dashboard from "./routes/Dashboard";
 import Contacts from "./routes/Contacts";
@@ -9,6 +9,7 @@ import Settings from "./routes/Settings";
 import NotFound from "./routes/NotFound";
 
 export default function App() {
+  console.log("✅ App.jsx är igång");
   return (
     <Router>
       <PageWrapper>

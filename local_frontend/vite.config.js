@@ -9,6 +9,7 @@ export default defineConfig({
     port: parseInt(process.env.VITE_PORT || "5173", 10),
     strictPort: true
   },
+  logLevel: 'info',
   define: {
     'import.meta.env.VITE_API_BASE': JSON.stringify(process.env.VITE_API_BASE),
   }

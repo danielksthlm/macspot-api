@@ -1,3 +1,417 @@
+📂 KODTRÄD
+==========
+├── local_frontend
+│   ├── index.html
+│   ├── inspect_frontend.py
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.cjs
+│   ├── src
+│   │   ├── App.jsx
+│   │   ├── components
+│   │   │   ├── contacts
+│   │   │   │   ├── ContactDetail.jsx
+│   │   │   │   ├── ContactList.jsx
+│   │   │   │   ├── ContactPanel.jsx
+│   │   │   │   ├── ContactSidebar.jsx
+│   │   │   ├── layout
+│   │   │   │   ├── Header.jsx
+│   │   │   │   ├── PageWrapper.jsx
+│   │   │   │   ├── Sidebar.jsx
+│   │   ├── index.css
+│   │   ├── macStyle.css
+│   │   ├── main.jsx
+│   │   ├── routes
+│   │   │   ├── Accounting.jsx
+│   │   │   ├── Bookings.jsx
+│   │   │   ├── Contacts.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── NotFound.jsx
+│   │   │   ├── Settings.jsx
+│   ├── tailwind.config.js
+│   ├── vite.config.js
+==========
+
+🎨 CSS-klasser: bg-gray-100, text-gray-900
+====================
+📄 Fil: index.html
+📂 Kodtyp: 🧱 HTML-rot
+🗂 Filtyp: 🌐 HTML
+📅 Senast ändrad: 2025-06-03 08:25:58
+📏 Antal rader: 12
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: index.html
+<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MacSpot CRM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body class="bg-gray-100 text-gray-900">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+END: index.html
+
+====================
+📄 Fil: tailwind.config.js
+📂 Kodtyp: 📁 
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-06-03 09:31:01
+📏 Antal rader: 7
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: tailwind.config.js
+export default {
+  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+END: tailwind.config.js
+
+====================
+📄 Fil: postcss.config.cjs
+📂 Kodtyp: 📁 
+🗂 Filtyp: 📁 Annan filtyp (.cjs)
+📅 Senast ändrad: 2025-06-03 09:46:39
+📏 Antal rader: 6
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: postcss.config.cjs
+module.exports = {
+  plugins: {
+    '@tailwindcss/postcss': {},
+    autoprefixer: {},
+  },
+};
+END: postcss.config.cjs
+
+📦 Externa moduler: @vitejs/plugin-react";, dotenv";, vite";
+====================
+📄 Fil: vite.config.js
+📂 Kodtyp: ⚙️ Vite-konfiguration
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-06-03 10:27:28
+📏 Antal rader: 15
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 3 – ['import dotenv from "dotenv";', 'import { defineConfig } from "vite";', 'import react from "@vitejs/plugin-react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: vite.config.js
+import dotenv from "dotenv";
+dotenv.config({ path: "../.env" });
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: parseInt(process.env.VITE_PORT || "5173", 10),
+    strictPort: true
+  },
+  define: {
+    'import.meta.env.VITE_API_BASE': JSON.stringify(process.env.VITE_API_BASE),
+  }
+});
+END: vite.config.js
+
+====================
+📄 Fil: inspect_frontend.py
+📂 Kodtyp: 📁 
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 11:23:05
+📏 Antal rader: 244
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 2 inline, 0 block
+📥 Imports: 4 – ['import time', 'import json', 'import zipfile', 'import shutil']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 41
+🧪 TODO/FIXME: 0
+====================
+START: inspect_frontend.py
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.common.by import By
+import time
+import json
+from datetime import datetime
+from pathlib import Path
+import zipfile
+import shutil
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+prefix = f"macspot_{timestamp}_"
+
+export_dir = Path(__file__).parent / "ui_exports" / timestamp
+export_dir.mkdir(parents=True, exist_ok=True)
+
+# Rensa gamla exports (äldre än 7 dagar)
+cutoff_time = time.time() - 7 * 86400
+ui_exports_dir = Path(__file__).parent / "ui_exports"
+for path in ui_exports_dir.iterdir():
+    if path.is_dir():
+        ts = path.name
+        try:
+            folder_time = datetime.strptime(ts, "%Y%m%d_%H%M").timestamp()
+            if folder_time < cutoff_time:
+                shutil.rmtree(path)
+                print(f"🗑️ Rensade gammal mapp: {path}")
+        except ValueError:
+            pass  # hoppa över mappar med annan namnstruktur
+
+# Setup
+options = Options()
+options.add_argument("--headless")
+driver = webdriver.Firefox(options=options)
+
+# 1. Öppna sidan
+driver.get("http://localhost:5173")
+time.sleep(2)
+
+# 2. Ta skärmdump
+driver.save_screenshot(str(export_dir / f"{prefix}frontend_snapshot.png"))
+print(f"📸 Skärmdump sparad som '{prefix}frontend_snapshot.png'.")
+
+# 3. DOM-elementbeskrivning
+elements = driver.find_elements(By.CSS_SELECTOR, "*")
+snapshot = []
+
+for el in elements[:50]:
+    try:
+        snapshot.append({
+            "tag": el.tag_name,
+            "classes": el.get_attribute("class"),
+            "text": el.text[:50],
+            "bbox": el.rect
+        })
+    except Exception:
+        pass
+
+with open(export_dir / f"{prefix}dom_snapshot.json", "w") as f:
+    json.dump(snapshot, f, indent=2, ensure_ascii=False)
+print(f"📄 DOM-snapshot sparad i '{prefix}dom_snapshot.json'.")
+
+# Export full HTML
+with open(export_dir / f"{prefix}frontend_snapshot.html", "w", encoding="utf-8") as f:
+    f.write(driver.page_source)
+print(f"🧾 Fullständig HTML sparad som '{prefix}frontend_snapshot.html'.")
+
+# Extract styles for multiple mac-* classes
+classes_to_check = ["mac-card", "mac-panel", "mac-btn"]
+for cls in classes_to_check:
+    try:
+        el = driver.find_element(By.CLASS_NAME, cls)
+        styles = driver.execute_script("""
+          var s = window.getComputedStyle(arguments[0]);
+          return Object.fromEntries([...s].map(k => [k, s.getPropertyValue(k)]));
+        """, el)
+        with open(export_dir / f"{prefix}{cls}_styles.json", "w") as f:
+            json.dump(styles, f, indent=2)
+        print(f"🎨 CSS-stil sparad i '{prefix}{cls}_styles.json'.")
+    except:
+        print(f"⚠️ Kunde inte hämta stil för .{cls}")
+
+print("\n✅ Inspektionskörning färdig. Filer genererade:")
+print(f" - {prefix}frontend_snapshot.png")
+print(f" - {prefix}dom_snapshot.json")
+print(f" - {prefix}frontend_snapshot.html")
+for cls in classes_to_check:
+    print(f" - {prefix}{cls}_styles.json")
+
+# 7. Generera HTML-baserad stilrapport
+report = [f"<html><head><title>MacSpot UI-stilrapport</title><style>body{{font-family:-apple-system;}}table{{border-collapse:collapse;margin-bottom:2rem;}}td,th{{border:1px solid #ccc;padding:4px 8px;}}th{{background:#eee}}</style></head><body>"]
+report.append("<h1>🧪 Stilrapport: MacSpot</h1>")
+report.append(f"<p><a href='{prefix}frontend_snapshot.png' target='_blank'>📸 Visa skärmdump</a> | <a href='{prefix}frontend_snapshot.html' target='_blank'>🧾 Visa HTML</a></p>")
+
+# Sammanställ alla stilar i en tabell
+merged_keys = set()
+style_data = {}
+for cls in classes_to_check:
+    path = export_dir / f"{prefix}{cls}_styles.json"
+    if path.exists():
+        data = json.loads(path.read_text())
+        style_data[cls] = data
+        merged_keys.update(data.keys())
+
+report.append("<h2>📊 Jämförelsetabell</h2>")
+report.append("<table><tr><th>Egenskap</th>" + "".join(f"<th>{cls}</th>" for cls in classes_to_check) + "</tr>")
+for key in sorted(merged_keys):
+    report.append("<tr><td>{}</td>".format(key))
+    # För att markera avvikelser, samla alla värden för denna key
+    cell_values = [style_data.get(cls, {}).get(key, "") for cls in classes_to_check]
+    unique_values = set(cell_values)
+    for idx, cls in enumerate(classes_to_check):
+        value = cell_values[idx]
+        css = ""
+        if not value.strip():
+            css = " style='background:#f0f0f0;color:#888'"
+        elif len({style_data.get(cls2, {}).get(key, "") for cls2 in classes_to_check if cls2 in style_data}) > 1:
+            css = " style='background:#fff2cc'"
+        report.append(f"<td{css}>{value}</td>")
+    report.append("</tr>")
+report.append("</table>")
+
+for cls in classes_to_check:
+    path = export_dir / f"{prefix}{cls}_styles.json"
+    if path.exists():
+        data = json.loads(path.read_text())
+        # Lägg till semantisk struktur för framtida utökning
+        report.append(f"<section>")
+        report.append(f"<h2>{cls}</h2>")
+        report.append("<!-- Gruppindelning av CSS-egenskaper för ökad överskådlighet -->")
+        # Gruppindelning av CSS-egenskaper
+        layout_keys = [
+            "display", "position", "top", "right", "bottom", "left", "z-index", "float", "clear",
+            "box-sizing", "width", "height", "min-width", "min-height", "max-width", "max-height", "margin", "padding", "overflow"
+        ]
+        text_keys = [
+            "font", "font-family", "font-size", "font-weight", "line-height", "letter-spacing",
+            "text-align", "text-transform", "white-space", "word-break", "color"
+        ]
+        color_keys = [
+            "background", "background-color", "border", "border-color", "box-shadow"
+        ]
+        # Övriga keys samlas här
+        other_keys = [k for k in sorted(data.keys()) if k not in layout_keys + text_keys + color_keys]
+        grouped = [
+            ("🧱 Layout", layout_keys),
+            ("🔤 Typografi", text_keys),
+            ("🎨 Färg & bakgrund", color_keys),
+            ("🧩 Övrigt", other_keys)
+        ]
+        for label, keys in grouped:
+            report.append(f"<h3>{label}</h3>")
+            report.append("<table><tr><th>CSS-egenskap</th><th>Värde</th></tr>")
+            for key in keys:
+                if key in data and data[key].strip():
+                    report.append(f"<tr><td>{key}</td><td>{data[key]}</td></tr>")
+            report.append("</table>")
+        report.append("</section>")
+    else:
+        report.append(f"<p style='color:red;'>⚠️ Filen <code>{prefix}{cls}_styles.json</code> hittades inte.</p>")
+
+# 8. Generera mac_base.css med gemensamma stilar
+common_props = {}
+for key in sorted(merged_keys):
+    values = [style_data.get(cls, {}).get(key, "") for cls in classes_to_check]
+    if all(v == values[0] and v.strip() for v in values):
+        common_props[key] = values[0]
+
+report.append("<h2>🚦 Avvikelser från .mac-base</h2>")
+for cls in classes_to_check:
+    path = export_dir / f"{prefix}{cls}_styles.json"
+    if path.exists():
+        data = json.loads(path.read_text())
+        diff = {k: v for k, v in data.items() if k in common_props and v != common_props[k]}
+        if diff:
+            report.append(f"<h3>{cls}</h3>")
+            report.append("<table><tr><th>CSS-egenskap</th><th>mac-base</th><th>Avvikelse</th></tr>")
+            for k in sorted(diff):
+                report.append(f"<tr><td>{k}</td><td>{common_props.get(k, '')}</td><td>{diff[k]}</td></tr>")
+            report.append("</table>")
+        else:
+            report.append(f"<p><strong>{cls}</strong> har inga avvikelser från <code>.mac-base</code>.</p>")
+report.append("</body></html>")
+(export_dir / f"{prefix}style_report.html").write_text("\n".join(report), encoding="utf-8")
+print(f"📊 Stilrapport sparad som '{prefix}style_report.html'")
+
+base_css = [".mac-base {"]
+for k, v in common_props.items():
+    base_css.append(f"  {k}: {v};")
+base_css.append("}")
+
+(export_dir / f"{prefix}mac_base.css").write_text("\n".join(base_css), encoding="utf-8")
+print(f"🧱 Föreslagen gemensam stil sparad som '{prefix}mac_base.css'")
+
+# 9. Skapa mac-unified.css där varje klass bygger på .mac-base
+unified = [".mac-base {"]
+for k, v in common_props.items():
+    unified.append(f"  {k}: {v};")
+unified.append("}\n")
+
+for cls in classes_to_check:
+    path = export_dir / f"{prefix}{cls}_styles.json"
+    if path.exists():
+        data = json.loads(path.read_text())
+        unified.append(f".{cls} {{")
+        for k, v in data.items():
+            if k not in common_props and v.strip():
+                unified.append(f"  {k}: {v};")
+        unified.append("}\n")
+
+(export_dir / f"{prefix}mac_unified.css").write_text("\n".join(unified), encoding="utf-8")
+print(f"📦 Komplett stil sparad som '{prefix}mac_unified.css'")
+
+# 10. Skapa dokumentation för mac-klasser
+doc = [
+    "<html><head><title>MacSpot UI-dokumentation</title>",
+    f"<link rel='stylesheet' href='{prefix}mac_base.css'>",
+    f"<link rel='stylesheet' href='{prefix}mac_unified.css'>",
+    "<style>body{font-family:-apple-system;}section{margin:2rem 0;}h2{margin-top:1rem;}div.sample{border:1px solid #ccc;padding:1rem;border-radius:8px;margin-top:0.5rem;width:fit-content;}</style></head><body>"
+]
+doc.append("<h1>📚 MacSpot UI-komponenter</h1>")
+for cls in classes_to_check:
+    doc.append(f"<section><h2>.{cls}</h2>")
+    doc.append(f"<div class='sample {cls}'>Exempel på .{cls}</div></section>")
+doc.append("</body></html>")
+(export_dir / f"{prefix}mac_documentation.html").write_text("\n".join(doc), encoding="utf-8")
+print(f"📘 Dokumentation sparad som '{prefix}mac_documentation.html'")
+
+# 11. Ta skärmdump av dokumentationssidan
+try:
+    doc_options = Options()
+    doc_options.add_argument("--headless")
+    doc_driver = webdriver.Firefox(options=doc_options)
+    doc_driver.get("file://" + str((export_dir / f"{prefix}mac_documentation.html").resolve()))
+    time.sleep(2)
+    doc_driver.save_screenshot(str(export_dir / f"{prefix}mac_documentation.png"))
+    print(f"📸 Dokumentationsskärmdump sparad som '{prefix}mac_documentation.png'")
+    doc_driver.quit()
+except Exception as e:
+    print(f"⚠️ Kunde inte skapa skärmdump av dokumentationen: {e}")
+
+
+
+driver.quit()
+END: inspect_frontend.py
+
+====================
+📄 Fil: package-lock.json
+📂 Kodtyp: 📁 
+🗂 Filtyp: 🧾 JSON
+📅 Senast ändrad: 2025-06-04 15:01:36
+📏 Antal rader: 2418
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 194 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: package-lock.json
 {
   "name": "local_frontend",
   "version": "1.0.0",
@@ -65,9 +479,9 @@
       }
     },
     "node_modules/@babel/compat-data": {
-      "version": "7.27.5",
-      "resolved": "https://registry.npmjs.org/@babel/compat-data/-/compat-data-7.27.5.tgz",
-      "integrity": "sha512-KiRAp/VoJaWkkte84TvUd9qjdbZAdiqyvMxrGl1N6vzFogKmaLgoM3L1kgtLicp2HP5fBJS8JrZKLVIZGVJAVg==",
+      "version": "7.27.3",
+      "resolved": "https://registry.npmjs.org/@babel/compat-data/-/compat-data-7.27.3.tgz",
+      "integrity": "sha512-V42wFfx1ymFte+ecf6iXghnnP8kWTO+ZLXIyZq+1LAXHHvTZdVxicn4yiVYdYMGaCO3tmqub11AorKkv+iodqw==",
       "dev": true,
       "license": "MIT",
       "engines": {
@@ -106,13 +520,13 @@
       }
     },
     "node_modules/@babel/generator": {
-      "version": "7.27.5",
-      "resolved": "https://registry.npmjs.org/@babel/generator/-/generator-7.27.5.tgz",
-      "integrity": "sha512-ZGhA37l0e/g2s1Cnzdix0O3aLYm66eF8aufiVteOgnwxgnRP8GoyMj7VWsgWnQbVKXyge7hqrFh2K2TQM6t1Hw==",
+      "version": "7.27.3",
+      "resolved": "https://registry.npmjs.org/@babel/generator/-/generator-7.27.3.tgz",
+      "integrity": "sha512-xnlJYj5zepml8NXtjkG0WquFUv8RskFqyFcVgTBp5k+NaA/8uw/K+OSVf8AMGw5e9HKP2ETd5xpK5MLZQD6b4Q==",
       "dev": true,
       "license": "MIT",
       "dependencies": {
-        "@babel/parser": "^7.27.5",
+        "@babel/parser": "^7.27.3",
         "@babel/types": "^7.27.3",
         "@jridgewell/gen-mapping": "^0.3.5",
         "@jridgewell/trace-mapping": "^0.3.25",
@@ -226,9 +640,9 @@
       }
     },
     "node_modules/@babel/parser": {
-      "version": "7.27.5",
-      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.27.5.tgz",
-      "integrity": "sha512-OsQd175SxWkGlzbny8J3K8TnnDD0N3lrIUtB92xwyRpzaenGZhxDvxN/JgU00U3CDZNj9tPuDJ5H0WS4Nt3vKg==",
+      "version": "7.27.4",
+      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.27.4.tgz",
+      "integrity": "sha512-BRmLHGwpUqLFR2jzx9orBuX/ABDkj2jLKOXrHDTN2aOKL+jFDDKaRNo9nyYsIl9h/UE/7lMKdDjKQQyxKKDZ7g==",
       "dev": true,
       "license": "MIT",
       "dependencies": {
@@ -1483,9 +1897,9 @@
       }
     },
     "node_modules/caniuse-lite": {
-      "version": "1.0.30001721",
-      "resolved": "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001721.tgz",
-      "integrity": "sha512-cOuvmUVtKrtEaoKiO0rSc29jcjwMwX5tOHDy4MgVFEWiUXj4uBMJkwI8MDySkgXidpMiHUcviogAvFi4pA2hDQ==",
+      "version": "1.0.30001720",
+      "resolved": "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001720.tgz",
+      "integrity": "sha512-Ec/2yV2nNPwb4DnTANEV99ZWwm3ZWfdlfkQbWSDDt+PsXEVYwlhPH8tdMaPunYTKKmz7AnHi2oNEi1GcmKCD8g==",
       "dev": true,
       "funding": [
         {
@@ -1549,9 +1963,9 @@
       }
     },
     "node_modules/electron-to-chromium": {
-      "version": "1.5.165",
-      "resolved": "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.165.tgz",
-      "integrity": "sha512-naiMx1Z6Nb2TxPU6fiFrUrDTjyPMLdTtaOd2oLmG8zVSg2hCWGkhPyxwk+qRmZ1ytwVqUv0u7ZcDA5+ALhaUtw==",
+      "version": "1.5.162",
+      "resolved": "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.162.tgz",
+      "integrity": "sha512-hQA+Zb5QQwoSaXJWEAGEw1zhk//O7qDzib05Z4qTqZfNju/FAkrm5ZInp0JbTp4Z18A6bilopdZWEYrFSsfllA==",
       "dev": true,
       "license": "ISC"
     },
@@ -2416,3 +2830,745 @@
     }
   }
 }
+
+END: package-lock.json
+
+====================
+📄 Fil: package.json
+📂 Kodtyp: 📁 
+🗂 Filtyp: 🧾 JSON
+📅 Senast ändrad: 2025-06-04 15:01:36
+📏 Antal rader: 28
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: package.json
+{
+  "name": "local_frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "vite.config.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^6.30.1",
+    "vite": "^6.3.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.8",
+    "@vitejs/plugin-react": "^4.5.1",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.4",
+    "tailwindcss": "^4.1.8"
+  },
+  "description": ""
+}
+
+END: package.json
+
+====================
+📄 Fil: src/index.css
+📂 Kodtyp: 🎨 Stilmall
+🗂 Filtyp: 🎨 CSS
+📅 Senast ändrad: 2025-06-03 11:41:12
+📏 Antal rader: 3
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: index.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+END: index.css
+
+📦 Externa moduler: react";
+🎨 CSS-klasser: bg-white, flex, font-semibold, h-16, items-center, justify-between, mac-btn, px-6, shadow-sm, text-xl
+====================
+📄 Fil: src/components/layout/Header.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:29:50
+📏 Antal rader: 12
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 1 – ['import React from "react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Header.jsx
+import React from "react";
+
+export default function Header({ onNewContact }) {
+  return (
+    <header className="h-16 px-6 flex items-center justify-between bg-white shadow-sm">
+      <h1 className="text-xl font-semibold">Kontakter</h1>
+      <button className="mac-btn" onClick={onNewContact}>
+        + Ny kontakt
+      </button>
+    </header>
+  );
+}
+
+END: Header.jsx
+
+📦 Externa moduler: react";
+📁 Lokala imports: ./Header";, ./Sidebar";
+🎨 CSS-klasser: bg-gray-100, flex, flex-1, flex-col, h-screen, overflow-auto, text-gray-900
+====================
+📄 Fil: src/components/layout/PageWrapper.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 15:50:58
+📏 Antal rader: 15
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 3 – ['import React from "react";', 'import Header from "./Header";', 'import Sidebar from "./Sidebar";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: PageWrapper.jsx
+import React from "react";
+import Header from "./Header";
+import Sidebar from "./Sidebar";
+
+export default function PageWrapper({ children }) {
+  return (
+    <div className="flex h-screen bg-gray-100 text-gray-900">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <Header />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
+    </div>
+  );
+}
+END: PageWrapper.jsx
+
+📦 Externa moduler: react";
+🎨 CSS-klasser: sidebar
+====================
+📄 Fil: src/components/layout/Sidebar.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:29:51
+📏 Antal rader: 9
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 1 – ['import React from "react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Sidebar.jsx
+import React from "react";
+
+export default function Sidebar() {
+  return (
+    <div className="sidebar">
+      {/* Sidebar content goes here */}
+    </div>
+  );
+}
+
+END: Sidebar.jsx
+
+📦 Externa moduler: react";
+🎨 CSS-klasser: mac-panel, mb-1, rounded-xl
+====================
+📄 Fil: src/components/contacts/ContactDetail.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:29:51
+📏 Antal rader: 13
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 1 – ['import React from "react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: ContactDetail.jsx
+import React from "react";
+
+export default function ContactDetail({ contact }) {
+  if (!contact) return null;
+
+  return (
+    <div className="mac-panel rounded-xl">
+      <p className="mb-1"><strong>Email:</strong> {contact.email}</p>
+      <p className="mb-1"><strong>Phone:</strong> {contact.phone}</p>
+      <p className="mb-1"><strong>Address:</strong> {contact.address}</p>
+    </div>
+  );
+}
+END: ContactDetail.jsx
+
+📦 Externa moduler: react";
+🎨 CSS-klasser: font-bold, gap-4, grid, grid-cols-1, mac-avatar, mb-1, mb-3, md:grid-cols-2, text-gray-400, text-gray-600, text-gray-700, text-lg, text-sm
+====================
+📄 Fil: src/components/contacts/ContactList.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 16:09:45
+📏 Antal rader: 31
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 1 – ['import React from "react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: ContactList.jsx
+import React from "react";
+
+export default function ContactList({ contacts = [], selectedContact, setSelectedContact }) {
+  if (!contacts.length) {
+    return <p className="text-gray-400">Inga kontakter att visa.</p>;
+  }
+
+  return (
+    <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+      {contacts.map((c) => {
+        const initials = `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase();
+
+        return (
+          <div
+            key={c.id}
+            onClick={() => setSelectedContact?.(c)}
+            className={`mac-card cursor-pointer ${
+              selectedContact?.id === c.id ? "border-blue-500" : ""
+            }`}
+          >
+            <div className="mac-avatar mb-3">{initials}</div>
+            <h2 className="text-lg font-bold mb-1">{c.first_name} {c.last_name}</h2>
+            <p className="text-sm text-gray-600">{c.email}</p>
+            <p className="text-sm text-gray-700">Företag: {c.company}</p>
+            <p className="text-sm text-gray-700">Bokningar: {c.booking_count}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+END: ContactList.jsx
+
+📦 Externa moduler: react";
+🎨 CSS-klasser: font-bold, hidden, lg:block, mac-avatar, mac-panel, mb-1, mb-2, mb-4, text-gray-400, text-lg, text-xl, w-[26rem]
+====================
+📄 Fil: src/components/contacts/ContactPanel.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:29:51
+📏 Antal rader: 23
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 1 – ['import React from "react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: ContactPanel.jsx
+import React from "react";
+
+export default function ContactPanel({ contact }) {
+  return (
+    <aside className="hidden lg:block mac-panel w-[26rem]">
+      {!contact ? (
+        <p className="text-gray-400">Välj en kontakt för att visa detaljer.</p>
+      ) : (
+        <>
+          <div className="mac-avatar mb-4 text-lg">
+            {(contact.first_name?.[0] + contact.last_name?.[0]).toUpperCase()}
+          </div>
+          <h2 className="text-xl font-bold mb-2">
+            {contact.first_name} {contact.last_name}
+          </h2>
+          <p className="mb-1"><strong>Email:</strong> {contact.email}</p>
+          <p className="mb-1"><strong>Telefon:</strong> {contact.phone}</p>
+          <p className="mb-1"><strong>Företag:</strong> {contact.company}</p>
+        </>
+      )}
+    </aside>
+  );
+}
+END: ContactPanel.jsx
+
+📦 Externa moduler: react";
+🎨 CSS-klasser: font-bold, hover:font-medium, mb-1, p-4, text-gray-600, text-lg, text-sm
+====================
+📄 Fil: src/components/contacts/ContactSidebar.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:29:51
+📏 Antal rader: 20
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 1 – ['import React from "react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: ContactSidebar.jsx
+import React from "react";
+
+export default function ContactList({ contacts, onSelectContact }) {
+  return (
+    <div className="p-4">
+      <ul>
+        {contacts.map((contact) => (
+          <li
+            key={contact.id}
+            className={`mac-card cursor-pointer hover:bg-gray-50`}
+            onClick={() => onSelectContact(contact.id)}
+          >
+            <h2 className="text-lg font-bold mb-1 hover:font-medium">{contact.name}</h2>
+            <p className="text-sm text-gray-600">{contact.email}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+END: ContactSidebar.jsx
+
+📦 Externa moduler: react";, react-dom/client";
+📁 Lokala imports: ./App";
+====================
+📄 Fil: src/main.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:29:51
+📏 Antal rader: 12
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 1 inline, 0 block
+📥 Imports: 5 – ['import React from "react";', 'import ReactDOM from "react-dom/client";', 'import App from "./App";', 'import "./index.css"; // du kan skapa denna för Tailwind eller lämna bort', 'import "./macStyle.css";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: main.jsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css"; // du kan skapa denna för Tailwind eller lämna bort
+import "./macStyle.css";
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+END: main.jsx
+
+📦 Externa moduler: react";, react-router-dom";
+📁 Lokala imports: ./components/layout/PageWrapper";, ./routes/Bookings";, ./routes/Contacts";, ./routes/Dashboard";, ./routes/NotFound";, ./routes/Settings";
+====================
+📄 Fil: src/App.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 16:01:10
+📏 Antal rader: 25
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 8 – ['import React from "react";', 'import { BrowserRouter as Router, Routes, Route } from "react-router-dom";', 'import PageWrapper from "./components/layout/PageWrapper";', 'import Dashboard from "./routes/Dashboard";', 'import Contacts from "./routes/Contacts";', 'import Bookings from "./routes/Bookings";', 'import Settings from "./routes/Settings";', 'import NotFound from "./routes/NotFound";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: App.jsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import PageWrapper from "./components/layout/PageWrapper";
+
+import Dashboard from "./routes/Dashboard";
+import Contacts from "./routes/Contacts";
+import Bookings from "./routes/Bookings";
+import Settings from "./routes/Settings";
+import NotFound from "./routes/NotFound";
+
+export default function App() {
+  return (
+    <Router>
+      <PageWrapper>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/contacts" element={<Contacts />} />
+          <Route path="/bookings" element={<Bookings />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </PageWrapper>
+    </Router>
+  );
+}
+END: App.jsx
+
+====================
+📄 Fil: src/macStyle.css
+📂 Kodtyp: 🎨 Stilmall
+🗂 Filtyp: 🎨 CSS
+📅 Senast ändrad: 2025-06-03 13:09:11
+📏 Antal rader: 88
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 6 rader (6.8%) – 0 inline, 6 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: macStyle.css
+/* === Apple-liknande inputfält === */
+.input-mac {
+  border: 1px solid #d1d5db;
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+}
+.input-mac:focus {
+  outline: none;
+  border-color: #007aff;
+  background: white;
+}
+/* === MacSpot Basstil === */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f9f9f9;
+  color: #1e1e1e;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  margin-bottom: 0.5rem;
+}
+
+p {
+  line-height: 1.6;
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+  color: #333;
+}
+
+/* === Kontaktkort === */
+.mac-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  border: 1px solid #ececec;
+}
+.mac-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* === Panel === */
+.mac-panel {
+  background: #ffffff;
+  padding: 2rem 2.5rem;
+  border-radius: 0 0 0 0;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.04);
+}
+
+/* === Avatar / Initialbubbla === */
+.mac-avatar {
+  width: 48px;
+  height: 48px;
+  background: #d4d4d8;
+  color: #1e1e1e;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  user-select: none;
+}
+
+/* === Knapp === */
+.mac-btn {
+  padding: 0.45rem 1rem;
+  background: #007aff;
+  color: white;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: background 0.2s ease;
+  border: none;
+}
+.mac-btn:hover {
+  background: #0062d2;
+}
+END: macStyle.css
+
+====================
+📄 Fil: src/routes/Bookings.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:34:32
+📏 Antal rader: 0
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Bookings.jsx
+
+END: Bookings.jsx
+
+📦 Externa moduler: react";
+📁 Lokala imports: ../components/contacts/ContactList";
+🌍 API-anrop: http://localhost:8000/contacts
+🎨 CSS-klasser: font-bold, p-6, space-y-4, text-2xl, text-red-500
+====================
+📄 Fil: src/routes/Contacts.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 16:13:56
+📏 Antal rader: 25
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 1 inline, 0 block
+📥 Imports: 2 – ['import React, { useEffect, useState } from "react";', 'import ContactList from "../components/contacts/ContactList";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: Contacts.jsx
+import React, { useEffect, useState } from "react";
+import ContactList from "../components/contacts/ContactList";
+
+export default function Contacts() {
+  const [contacts, setContacts] = useState([]);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/contacts")
+      .then((res) => {
+        if (!res.ok) throw new Error("Fel vid hämtning av kontakter");
+        return res.json();
+      })
+      .then(setContacts)
+      .catch(setError);
+  }, []);
+
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold">Kontakter</h1>
+      {error && <p className="text-red-500">Fel: {error.message}</p>}
+      <ContactList contacts={contacts} />
+    </div>
+  );
+}
+END: Contacts.jsx
+
+====================
+📄 Fil: src/routes/NotFound.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:34:32
+📏 Antal rader: 0
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: NotFound.jsx
+
+END: NotFound.jsx
+
+📦 Externa moduler: react";
+🎨 CSS-klasser: bg-white, font-bold, font-medium, font-semibold, gap-4, grid, grid-cols-1, mb-4, md:grid-cols-3, p-6, rounded-xl, shadow-sm, space-y-2, space-y-8, text-2xl, text-3xl, text-blue-600, text-gray-600, text-gray-700, text-gray-800, text-green-600, text-lg, text-purple-600, text-sm
+====================
+📄 Fil: src/routes/Dashboard.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:57:09
+📏 Antal rader: 37
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 1 – ['import React from "react";']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Dashboard.jsx
+
+
+import React from "react";
+
+export default function Dashboard() {
+  return (
+    <div className="p-6 space-y-8">
+      <h1 className="text-2xl font-bold">Översikt</h1>
+
+      {/* KPI-kort */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-medium text-gray-700">Kontakter</h2>
+          <p className="text-3xl font-bold text-blue-600">128</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-medium text-gray-700">Bokningar</h2>
+          <p className="text-3xl font-bold text-green-600">43</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-medium text-gray-700">Senaste aktivitet</h2>
+          <p className="text-3xl font-bold text-purple-600">7 st</p>
+        </div>
+      </div>
+
+      {/* Aktivitetspanel */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Senaste aktivitet</h2>
+        <ul className="space-y-2">
+          <li className="text-sm text-gray-600">📬 Ny kontakt: anna@exempel.se</li>
+          <li className="text-sm text-gray-600">📅 Bokning skapad: Möte 13:00</li>
+          <li className="text-sm text-gray-600">📌 Kontakt redigerad: Johan Karlsson</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+END: Dashboard.jsx
+
+====================
+📄 Fil: src/routes/Settings.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:34:32
+📏 Antal rader: 0
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Settings.jsx
+
+END: Settings.jsx
+
+====================
+📄 Fil: src/routes/Accounting.jsx
+📂 Kodtyp: ⚛️ React-komponent
+🗂 Filtyp: ⚛️ React (JSX)
+📅 Senast ändrad: 2025-06-04 14:34:32
+📏 Antal rader: 0
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%) – 0 inline, 0 block
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Accounting.jsx
+
+END: Accounting.jsx
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 package.json
+   {
+     "name": "local_frontend",
+     "version": "1.0.0",
+     "type": "module",
+     "main": "vite.config.js",
+     "scripts": {
+       "dev": "vite",
+       "build": "vite build",
+       "preview": "vite preview"
+     },
+     "keywords": [],
+     "author": "",
+     "license": "ISC",
+     "dependencies": {
+       "react": "^19.1.0",
+       "react-dom": "^19.1.0",
+       "react-router-dom": "^6.30.1",
+       "vite": "^6.3.5"
+     },
+     "devDependencies": {
+       "@tailwindcss/postcss": "^4.1.8",
+       "@vitejs/plugin-react": "^4.5.1",
+       "autoprefixer": "^10.4.21",
+       "postcss": "^8.5.4",
+       "tailwindcss": "^4.1.8"
+     },
+     "description": ""
+   }
+
+📈 SUMMERING AV ALLA KODFILER
+====================================
+📏 Totalt antal rader kod: 3043
+🧩 Totalt antal funktioner: 0
+🧠 Total komplexitetspoäng: 44
+🧪 Antal TODO/FIXME totalt: 0
+
+📚 Summering per kodtyp:
+  • .html: 1 filer, 12 rader
+  • .js: 2 filer, 22 rader
+  • .cjs: 1 filer, 6 rader
+  • .py: 1 filer, 244 rader
+  • .json: 2 filer, 2446 rader
+  • .css: 2 filer, 91 rader
+  • .jsx: 15 filer, 222 rader
+
+🎨 Totalt antal unika CSS-klasser: 52
+🌍 Totalt antal API-anrop: 1
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+index.html,12,0,0,0,0
+tailwind.config.js,7,0,0,0,0
+postcss.config.cjs,6,0,0,0,0
+vite.config.js,15,0,0,0,3
+inspect_frontend.py,244,0,41,0,4
+package-lock.json,2418,0,0,0,0
+package.json,28,0,0,0,0
+index.css,3,0,0,0,0
+Header.jsx,12,0,0,0,1
+PageWrapper.jsx,15,0,0,0,3
+Sidebar.jsx,9,0,0,0,1
+ContactDetail.jsx,13,0,1,0,1
+ContactList.jsx,31,0,1,0,1
+ContactPanel.jsx,23,0,0,0,1
+ContactSidebar.jsx,20,0,0,0,1
+main.jsx,12,0,0,0,5
+App.jsx,25,0,0,0,8
+macStyle.css,88,0,0,6,0
+Bookings.jsx,0,0,0,0,0
+Contacts.jsx,25,0,1,0,2
+NotFound.jsx,0,0,0,0,0
+Dashboard.jsx,37,0,0,0,1
+Settings.jsx,0,0,0,0,0
+Accounting.jsx,0,0,0,0,0
