@@ -10,6 +10,27 @@
 
   const sessionStartTime = Date.now();
 
+  // Advanced session tracking variables
+  let visibleSeconds = 0;
+  let lastVisibleTime = document.visibilityState === 'visible' ? Date.now() : null;
+  let maxScroll = 0;
+  let resizeCount = 0;
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      lastVisibleTime = Date.now();
+    } else if (lastVisibleTime) {
+      visibleSeconds += Math.round((Date.now() - lastVisibleTime) / 1000);
+      lastVisibleTime = null;
+    }
+  });
+
+  window.addEventListener('resize', () => resizeCount++);
+  window.addEventListener('scroll', () => {
+    const current = Math.round(window.scrollY + window.innerHeight);
+    if (current > maxScroll) maxScroll = current;
+  });
+
   let ipAddress = null;
   fetch('https://api.ipify.org?format=json')
     .then(res => res.json())
@@ -50,9 +71,20 @@
         innerHeight: window.innerHeight,
         scrollY: window.scrollY
       },
+      timezone_offset_min: new Date().getTimezoneOffset(),
+      is_mobile: /Mobi|Android/i.test(navigator.userAgent),
+      color_depth: window.screen.colorDepth,
+      nav_type: performance?.navigation?.type ?? null,
+      do_not_track: navigator.doNotTrack === "1",
       fingerprint: fingerprintHash,
       ip_address: ipAddress || null
     };
+
+    try {
+      if (performance?.timing?.loadEventEnd > 0) {
+        enrichedMetadata.page_load_ms = performance.timing.loadEventEnd - performance.timing.navigationStart;
+      }
+    } catch {}
 
     const payload = {
       visitor_id: visitorId,
@@ -84,10 +116,21 @@
   sendEvent('page_view');
 
   window.addEventListener('beforeunload', () => {
+    if (lastVisibleTime) {
+      visibleSeconds += Math.round((Date.now() - lastVisibleTime) / 1000);
+    }
+
     const timeOnPage = Math.round(performance.now() / 1000);
+    const visitedPages = JSON.parse(sessionStorage.getItem('visitedPages') || '[]');
+    const clickTrail = JSON.parse(sessionStorage.getItem('clickTrail') || '[]');
+
     sendEvent('session_end', {
       time_on_page_sec: timeOnPage,
-      visited_pages: JSON.parse(sessionStorage.getItem('visitedPages') || '[]')
+      visible_seconds: visibleSeconds,
+      scroll_depth_px: maxScroll,
+      resize_count: resizeCount,
+      visited_pages: visitedPages,
+      click_trail: clickTrail
     });
   });
 
@@ -106,6 +149,16 @@
   document.addEventListener('click', (e) => {
     const target = e.target.closest('a, button');
     if (target) {
+      // Advanced clickTrail tracking
+      const clickTrail = JSON.parse(sessionStorage.getItem('clickTrail') || '[]');
+      clickTrail.push({
+        tag: target.tagName,
+        text: target.innerText?.slice(0, 50),
+        href: target.href || null,
+        ts: new Date().toISOString()
+      });
+      sessionStorage.setItem('clickTrail', JSON.stringify(clickTrail));
+
       sendEvent('click', {
         tag: target.tagName,
         text: target.innerText.slice(0, 30),

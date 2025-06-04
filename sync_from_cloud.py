@@ -107,11 +107,68 @@ def sync():
                 print(f"❌ Fel vid synk för {table} (id={change_id}): {e}")
                 continue
 
+        sync_tracking_events(local_conn, remote_conn)
+
+    # Sync tracking_event rows from cloud to local
+    except Exception as e:
+        print(f"❌ Fel i sync-funktionen: {e}")
     finally:
         local_cur.close()
         remote_cur.close()
         local_conn.close()
         remote_conn.close()
+
+
+def sync_tracking_events(local_conn, remote_conn):
+    remote_cur = remote_conn.cursor()
+    local_cur = local_conn.cursor()
+
+    try:
+        remote_cur.execute("""
+            SELECT id, visitor_id, event_type, timestamp, metadata
+            FROM tracking_event
+            WHERE synced_at IS NULL
+            ORDER BY timestamp ASC
+            LIMIT 100
+        """)
+        rows = remote_cur.fetchall()
+
+        for row in rows:
+            try:
+                insert_sql = """
+                    INSERT INTO tracking_event (id, visitor_id, event_type, timestamp, metadata)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                """
+                local_cur.execute(insert_sql, [
+                    row[0],  # id
+                    row[1],  # visitor_id
+                    row[2],  # event_type
+                    row[3],  # timestamp
+                    json.dumps(row[4])  # metadata
+                ])
+                remote_cur.execute("UPDATE tracking_event SET synced_at = now() WHERE id = %s", [row[0]])
+            except Exception as e:
+                print(f"❌ Tracking-event synkfel: {e}")
+                continue
+
+        local_conn.commit()
+        remote_conn.commit()
+
+        # Rensa alla synkade tracking_event från molnet direkt efter synk
+        try:
+            remote_cur.execute("""
+                DELETE FROM tracking_event
+                WHERE synced_at IS NOT NULL
+            """)
+            remote_conn.commit()
+            print("🧹 Rensade alla synkade tracking_event från molnet.")
+        except Exception as e:
+            print(f"⚠️ Kunde inte rensa molndata: {e}")
+    finally:
+        local_cur.close()
+        remote_cur.close()
+
 
 if __name__ == "__main__":
     sync()
