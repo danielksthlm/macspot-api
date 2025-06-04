@@ -33,5 +33,5 @@ tests/
 !booking_settings/**
 !test_azurecloud/
 !test_azurecloud/**
-!trackingPixel/
-!trackingPixel/**
+!tracking_pixel/
+!tracking_pixel/**

@@ -8,11 +8,11 @@ async def test_invoice_to_transaction():
     # Detta kräver att en attachment redan finns i databasen
     attachment_id = "00000000-0000-0000-0000-000000000000"  # byt till ett riktigt id vid test
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(base_url="http://localhost:8000") as ac:
         response = await ac.post(
             "/accounting/invoice_to_transaction",
             params={"attachment_id": attachment_id},
-            headers={"Authorization": "Bearer testtoken"}
+            headers={"Authorization": "Bearer hemlig_nyckel_123"}
         )
         assert response.status_code in [200, 422, 404]  # beror på testdata
         print("Svar:", response.json())
@@ -21,11 +21,11 @@ async def test_invoice_to_transaction():
 async def test_invoice_gpt_analysis():
     attachment_id = "00000000-0000-0000-0000-000000000000"  # byt till riktig testbilaga
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(base_url="http://localhost:8000") as ac:
         response = await ac.post(
             "/accounting/invoice_gpt_analysis",
             params={"attachment_id": attachment_id},
-            headers={"Authorization": "Bearer testtoken"}
+            headers={"Authorization": "Bearer hemlig_nyckel_123"}
         )
         assert response.status_code in [200, 404]
         print("GPT-svar:", response.json())
