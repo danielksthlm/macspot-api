@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["post", "options"],
-      "route": "tracking_pixel"
+      "route": "tracking"
     },
     {
       "type": "http",

@@ -1,5 +1,7 @@
+// Tracking-logik för insamling av event
 const { pool } = require('../shared/db/pgPool');
 
+// Detta är tracking-logik
 module.exports = async function (context, req) {
   if (req.method !== 'POST') {
     context.res = {
@@ -11,7 +13,7 @@ module.exports = async function (context, req) {
 
   const body = req.body;
 
-  if (!body || !body.visitor_id || !body.event) {
+  if (!body || !body.visitor_id || !body.event_type) {
     context.res = {
       status: 400,
       body: 'Missing required fields',
@@ -21,7 +23,7 @@ module.exports = async function (context, req) {
 
   const {
     visitor_id,
-    event: event_type,
+    event_type,
     url,
     timestamp,
     referrer,
@@ -31,26 +33,33 @@ module.exports = async function (context, req) {
     metadata,
   } = body;
 
+  // Slå ihop metadata + kontext till en sammanhängande JSONB
+  const finalMetadata = {
+    ...metadata,
+    url,
+    referrer,
+    utm: {
+      source: utm_source,
+      medium: utm_medium,
+      campaign: utm_campaign,
+    },
+  };
+
   try {
     await pool.query(
       `INSERT INTO tracking_event (
-        visitor_id, event_type, url, timestamp, referrer,
-        utm_source, utm_medium, utm_campaign, metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        visitor_id, event_type, timestamp, metadata
+      ) VALUES ($1, $2, $3, $4)`,
       [
         visitor_id,
         event_type,
-        url,
         timestamp || new Date().toISOString(),
-        referrer,
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        metadata || {},
+        finalMetadata,
       ]
     );
 
-    context.log(`[TRACK] ${event_type} från ${visitor_id} på ${url}`);
+    const who = finalMetadata?.email || 'anonym';
+    context.log(`[TRACK] ${event_type} från ${visitor_id} (${who})`);
     context.res = {
       status: 200,
       body: 'Event saved',
