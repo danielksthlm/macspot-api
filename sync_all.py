@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import sys
 import psycopg2
 import json
+from sync_from_cloud import sync as sync_from_cloud
 
 with open("/tmp/launchd_debug.txt", "a") as f:
     f.write("[sync_all.py] Körning initierad\n")
@@ -53,6 +54,8 @@ def run_script(name, script_path):
 
 try:
     start_time = datetime.now(timezone.utc)
+    local_db_ok = True
+    cloud_db_ok = True
     def is_database_online(host, port):
         import socket
         try:
@@ -73,10 +76,12 @@ try:
     # Kontrollera att båda databaser är online innan sync startar
     if not is_database_online("localhost", 5433):
         print("❌ Lokal databas är inte tillgänglig (localhost:5433)")
+        local_db_ok = False
         exit(1)
 
     if not is_database_online("macspotpg.postgres.database.azure.com", 5432):
         print("❌ Azure-databasen är inte tillgänglig (macspotpg.postgres.database.azure.com:5432)")
+        cloud_db_ok = False
         exit(1)
 
     print(f"📌 Körning initierad: {datetime.now(timezone.utc).isoformat()}")
@@ -107,12 +112,6 @@ try:
     # Kör sync_to_cloud.py efter kontrollen
     run_script("🟢 Kör sync_to_cloud.py...", "sync_to_cloud.py")
 
-    scripts_part2 = [
-        ("🔵 Kör sync_from_cloud.py...", "sync_from_cloud.py")
-    ]
-
-    for msg, script in scripts_part2:
-        run_script(msg, script)
 
     # Kör generate_fromcloud_pending.py om event_log innehåller sync_fromcloud_mismatch
     with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
@@ -203,6 +202,8 @@ try:
         cur_cloud.close()
         cloud.close()
 
+    out_cloud, tracking_count = sync_from_cloud()
+
     print(f"\n✅ [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Fullständig synk körd.")
 
     # Sammanfatta diff-loggar (senaste 5 poster, med email och tabell-format)
@@ -234,6 +235,32 @@ except Exception as e:
 finally:
     print(f"🏁 Körning avslutad: {datetime.now(timezone.utc).isoformat()}")
     duration = datetime.now(timezone.utc) - start_time
+
+    # Räkna antal lyckade synkar och tracking_event
+    synced_out = out_local if 'out_local' in locals() else 0
+    synced_in = out_cloud if 'out_cloud' in locals() else 0
+
     print(f"⏱️ Total körtid: {int(duration.total_seconds())} sekunder")
+    # Visa macOS-notis om synken är färdig (endast på Mac)
+    import subprocess
+    try:
+        if not local_db_ok or not cloud_db_ok:
+            status_msg = "❌ Fel: "
+            if not local_db_ok:
+                status_msg += "lokal DB nere. "
+            if not cloud_db_ok:
+                status_msg += "moln-DB nere. "
+        else:
+            status_msg = f"Synk klar: {synced_out} ut, {synced_in} in, {tracking_count} tracking-events"
+
+        subprocess.run([
+            "/opt/homebrew/bin/terminal-notifier",
+            "-title", "MacSpot Sync",
+            "-message", status_msg,
+            "-appIcon", "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/klrab.icns",
+            "-open", "file:///Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot_sync.log"
+        ])
+    except Exception as e:
+        print(f"⚠️ Kunde inte visa notis med terminal-notifier: {e}")
     out.close()
     err.close()

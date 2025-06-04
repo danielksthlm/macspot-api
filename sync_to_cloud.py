@@ -34,7 +34,8 @@ def get_table_columns(conn, table_name):
 def build_insert_sql(table_name, payload):
     cols = ", ".join(payload.keys())
     placeholders = ", ".join(["%s"] * len(payload))
-    return f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING", list(payload.values())
+    values = [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()]
+    return f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING", values
 
 def build_update_sql(table_name, payload):
     cleaned_payload = {k: v for k, v in payload.items() if k != "id"}

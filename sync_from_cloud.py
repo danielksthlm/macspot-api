@@ -107,7 +107,8 @@ def sync():
                 print(f"❌ Fel vid synk för {table} (id={change_id}): {e}")
                 continue
 
-        sync_tracking_events(local_conn, remote_conn)
+        tracking_count = sync_tracking_events(local_conn, remote_conn)
+        return count, tracking_count
 
     # Sync tracking_event rows from cloud to local
     except Exception as e:
@@ -117,11 +118,14 @@ def sync():
         remote_cur.close()
         local_conn.close()
         remote_conn.close()
+    return count
 
 
 def sync_tracking_events(local_conn, remote_conn):
     remote_cur = remote_conn.cursor()
     local_cur = local_conn.cursor()
+
+    tracking_synced = 0
 
     try:
         remote_cur.execute("""
@@ -148,6 +152,7 @@ def sync_tracking_events(local_conn, remote_conn):
                     json.dumps(row[4])  # metadata
                 ])
                 remote_cur.execute("UPDATE tracking_event SET synced_at = now() WHERE id = %s", [row[0]])
+                tracking_synced += 1
             except Exception as e:
                 print(f"❌ Tracking-event synkfel: {e}")
                 continue
@@ -169,6 +174,8 @@ def sync_tracking_events(local_conn, remote_conn):
         local_cur.close()
         remote_cur.close()
 
+    return tracking_synced
+
 
 if __name__ == "__main__":
-    sync()
+    print(sync())
