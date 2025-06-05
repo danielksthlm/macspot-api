@@ -10,13 +10,33 @@ import {
 
 export default function Sidebar() {
   return (
-   <div
-      className="mac-sidebar"
-    >
+    <div className="mac-sidebar">
       {/* Rubrik */}
-      <div className="px-2 pb-2 font-heading text-[20px] leading-snug tracking-wide">
-        <span className="text-KLR_Orange font-semibold">MacSpot</span>{" "}
-        <span className="text-KLR_Whitesmoke font-body italic text-[15px]">by Daniel</span>
+      <div className="font-heading">
+        <span
+          style={{
+            color: "rgba(255, 255, 255, 0.3)",
+            borderStyle: "solid",
+            borderWidth: "10px",
+            borderColor: "rgba(255, 255, 255, 0.2)",
+            padding: "20px",
+            fontSize: "30px",
+            fontWeight: "800",
+            lineHeight: "20px",
+            display: "inline-block"
+          }}
+        > MacSpot</span>
+        <span
+          style={{
+            color: "var(--KLR_Whitesmoke)",
+            fontStyle: "italic",
+            fontFamily: "var(--font-body, 'Roboto Slab', serif)",
+            fontSize: "10px",
+            display: "block",
+            marginTop: "-11px",
+            marginLeft: "10px"
+          }}
+        >by Daniel </span>
       </div>
 
       {/* Grupp: Dashboard */}
