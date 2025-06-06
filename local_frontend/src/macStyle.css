@@ -97,9 +97,13 @@ p {
 .mac-sidebar {
   width: 256px;
   height: 100vh;
-  background: radial-gradient(200% 100% at -5% 110%, var(--KLR_Orange) 0%, var(--KLR_Dark_Blue) 50%);
   display: flex;
   flex-direction: column;
-  padding: 2rem;
+  padding: 1.5rem;
   gap: 2rem;
+  background-image: url('/assets/BackgroundMacSpot.svg');
+  background-size: cover;
+  background-position: center;
+  color: white;
+  font-family: var(--font-heading);
 }

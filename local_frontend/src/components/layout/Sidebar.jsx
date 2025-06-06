@@ -11,66 +11,64 @@ import {
 export default function Sidebar() {
   return (
     <div className="mac-sidebar">
-      {/* Rubrik */}
-      <div className="font-heading">
-        <span
-          style={{
-            color: "rgba(255, 255, 255, 0.3)",
-            borderStyle: "solid",
-            borderWidth: "10px",
-            borderColor: "rgba(255, 255, 255, 0.2)",
-            padding: "20px",
-            fontSize: "30px",
-            fontWeight: "800",
-            lineHeight: "20px",
-            display: "inline-block"
-          }}
-        > MacSpot</span>
+      {/* Rubrik med bildbakgrund */}
+      <div className="font-heading text-center py-6">
         <span
           style={{
             color: "var(--KLR_Whitesmoke)",
-            fontStyle: "italic",
-            fontFamily: "var(--font-body, 'Roboto Slab', serif)",
-            fontSize: "10px",
-            display: "block",
-            marginTop: "-11px",
-            marginLeft: "10px"
+            borderStyle: "solid",
+            borderWidth: "10px",
+            fontWeight: "800",
+            fontSize: "30px",
+            padding: "20px",
+            borderColor: "rgba(255, 255, 255, 0.5)",
+            lineHeight: "20px",
+            display: "inline-block"
           }}
-        >by Daniel </span>
-      </div>
-
-      {/* Grupp: Dashboard */}
-      <div>
-        <NavLink to="/" className={({ isActive }) =>
-          `flex items-center gap-3 text-base px-3 py-2 rounded ${isActive ? 'bg-blue-700 text-white' : 'hover:bg-blue-800'}`
-        }>
-          <FaTachometerAlt className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Hem</span>
-        </NavLink>
+        >
+          MacSpot
+        </span>
+        <div
+          style={{
+            fontSize: "10px",
+            color: "white",
+            marginTop: "-12px",
+            fontWeight: "800",
+            fontStyle: "italic",
+            lineHeight: "12px",
+            letterSpacing: "0.5px"
+          }}
+        >
+          by AnyNode
+        </div>
       </div>
 
       {/* Grupp: Relationer */}
-      <div className="space-y-1">
-        <div className="text-[11px] text-gray-300 tracking-wider uppercase px-3 mb-1">Relationer</div>
+        <div className="text-[10px] uppercase tracking-widest text-KLR_Whitesmoke/60 font-semibold px-3 mb-1">Relationer</div>
+
         <NavLink to="/contacts" className={({ isActive }) =>
-          `flex items-center gap-3 text-base px-3 py-2 rounded ${isActive ? 'bg-blue-700 text-white' : 'hover:bg-blue-800'}`
+          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium tracking-wide ${
+            isActive ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white/80'
+          }`
         }>
-          <FaIdCard className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Kontakter</span>
+          <FaIdCard className="text-base" />
+          <span>Kontakter</span>
         </NavLink>
-        <NavLink to="/companies" className="flex items-center gap-3 text-base px-3 py-2 rounded hover:bg-blue-800">
-          <FaBuilding className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Företag</span>
+
+        <NavLink to="/companies" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 text-white/80 text-sm font-medium tracking-wide">
+          <FaBuilding className="text-base" />
+          <span>Företag</span>
         </NavLink>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaStar className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Kunder (filter)</span>
+
+        <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium tracking-wide text-white/40">
+          <FaStar className="text-base" />
+          <span>Kunder (filter)</span>
         </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaLink className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Relationer (CC)</span>
+
+        <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium tracking-wide text-white/40">
+          <FaLink className="text-base" />
+          <span>Relationer (CC)</span>
         </div>
-      </div>
 
       {/* Grupp: Marknad & Kommunikation */}
       <div className="space-y-1">
