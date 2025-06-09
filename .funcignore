@@ -35,3 +35,5 @@ tests/
 !test_azurecloud/**
 !tracking/
 !tracking/**
+!verify_token/
+!verify_token/**
