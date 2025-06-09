@@ -1,44 +1,63 @@
-// 📄 Fil: request_verification/index.js
 const pool = require('../shared/db/pgPool');
-const { v4: uuidv4 } = require('uuid');
-const { sendMail } = require('../shared/notification/sendMail');
 
 module.exports = async function (context, req) {
-  const email = req.body?.email;
-  const action = req.body?.action; // "newsletter" eller "download_pdf"
+  const token = req.query.token || (req.body && req.body.token);
 
-  if (!email || !action) {
-    context.res = { status: 400, body: { error: 'email och action krävs' } };
+  if (!token) {
+    context.res = { status: 400, body: { error: 'token krävs' } };
     return;
   }
 
-  const token = uuidv4();
-  const id = uuidv4();
-
   try {
-    await pool.query(
-      `INSERT INTO pending_verification (id, email, action, token, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [id, email, action, token]
+    // Rensa gamla tokens som aldrig använts (äldre än 2 dagar)
+    await pool.query(`
+      DELETE FROM pending_verification
+      WHERE used_at IS NULL AND created_at < NOW() - INTERVAL '2 days'
+    `);
+    const result = await pool.query(
+      `SELECT email, metadata, created_at FROM pending_verification WHERE token = $1 AND used_at IS NULL LIMIT 1`,
+      [token]
     );
 
-    const verifyLink = `https://klrab.se/verify?token=${token}`;
-    const subject = action === 'newsletter'
-      ? 'Bekräfta din prenumeration'
-      : 'Ladda ned din fil – bekräfta e-post';
+    if (result.rowCount === 0) {
+      context.res = { status: 404, body: { error: 'Ogiltig eller använd token' } };
+      return;
+    }
 
-    const body = `
-      <p>Hej!</p>
-      <p>Klicka på länken nedan för att bekräfta din e-postadress:</p>
-      <p><a href="${verifyLink}">${verifyLink}</a></p>
-      <p>Om du inte begärt detta kan du ignorera meddelandet.</p>
-    `;
+    const row = result.rows[0];
+    const createdAt = new Date(row.metadata?.created_at || row.created_at);
+    const maxAgeMs = 24 * 60 * 60 * 1000; // 24h
+    if (Date.now() - createdAt.getTime() > maxAgeMs) {
+      context.res = { status: 410, body: { error: 'Token har gått ut' } };
+      return;
+    }
 
-    await sendMail({ to: email, subject, body });
+    const { email, metadata } = row;
+    const action = metadata?.action;
+
+    await pool.query(
+      `UPDATE pending_verification SET used_at = NOW() WHERE token = $1`,
+      [token]
+    );
+
+    // Logga event efter att token är bekräftad som giltig
+    if (action === 'newsletter') {
+      await pool.query(
+        `INSERT INTO event_log (event_type, payload, created_at)
+         VALUES ($1, $2, NOW())`,
+        ['newsletter_verified', { email }]
+      );
+    } else if (action === 'download_pdf') {
+      await pool.query(
+        `INSERT INTO event_log (event_type, payload, created_at)
+         VALUES ($1, $2, NOW())`,
+        ['pdf_verified', { email, action }]
+      );
+    }
 
     context.res = {
       status: 200,
-      body: { status: 'ok', message: 'Verifieringsmejl skickat' }
+      body: { email, action }
     };
   } catch (err) {
     context.res = {

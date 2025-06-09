@@ -33,7 +33,9 @@ filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/bookings/index.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/utils/debugLogger.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/shared/slots/slotEngine.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/trackingPixel/index.js"
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/tracking/index.js",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/verify_token/index.js",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/request_verification/index.js"
 ]
 
 # Slutlig sammanslagen fil
@@ -216,7 +218,7 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
             utfil.write(f"START: {visat_filnamn}\n")
             utfil.write(f"// ⚠️ Filen '{visat_filnamn}' hittades inte\n")
             utfil.write(f"END: {visat_filnamn}\n\n")
-            saknade_filer.append(visat_filnamn)
+            saknade_filer.append(rel_path)
 
     # Lista alla relevanta konfigurationsfiler i hela macspot-api
     utfil.write("📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)\n")
@@ -276,7 +278,9 @@ with open(output_fil, "w", encoding="utf-8") as utfil:
 if saknade_filer:
     print("⚠️ Följande filer hittades inte:")
     for fil in saknade_filer:
-        print(f" - {fil}")
+        print(f" - {fil} (relativ sökväg)")
+        with open(output_fil, "a", encoding="utf-8") as loggfil:
+            loggfil.write(f"⚠️ Fil saknas i filsystemet: {fil} (relativ sökväg)\n")
 
 # Slutlig sammanslagen fil
 

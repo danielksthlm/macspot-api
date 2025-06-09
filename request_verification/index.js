@@ -1,4 +1,3 @@
-// 📄 Fil: verify_token/index.js
 const pool = require('../shared/db/pgPool');
 const { sendMail } = require('../shared/notification/sendMail');
 
@@ -11,8 +10,13 @@ module.exports = async function (context, req) {
   }
 
   try {
+    // Rensa gamla tokens som aldrig använts (äldre än 2 dagar)
+    await pool.query(`
+      DELETE FROM pending_verification
+      WHERE used_at IS NULL AND created_at < NOW() - INTERVAL '2 days'
+    `);
     const res = await pool.query(
-      `SELECT * FROM pending_verification WHERE token = $1 AND used_at IS NULL LIMIT 1`,
+      `SELECT email, metadata, created_at FROM pending_verification WHERE token = $1 AND used_at IS NULL LIMIT 1`,
       [token]
     );
     const row = res.rows[0];
@@ -22,7 +26,15 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const { email, action } = row;
+    const createdAt = new Date(row.metadata?.created_at || row.created_at);
+    const maxAgeMs = 24 * 60 * 60 * 1000; // 24h
+    if (Date.now() - createdAt.getTime() > maxAgeMs) {
+      context.res = { status: 410, body: { error: 'Token har gått ut' } };
+      return;
+    }
+
+    const { email, metadata } = row;
+    const action = metadata?.action;
 
     if (action === 'newsletter') {
       // Kontrollera om kontakt redan finns
