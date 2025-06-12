@@ -16,6 +16,28 @@
   let maxScroll = 0;
   let resizeCount = 0;
 
+  let rageClickCount = 0;
+  let lastClickTime = 0;
+  let idleTime = 0;
+  let lastActivity = Date.now();
+  let scrollVelocityMax = 0;
+  let lastScrollY = window.scrollY;
+
+  ['mousemove', 'keydown', 'scroll'].forEach(event => {
+    document.addEventListener(event, () => lastActivity = Date.now());
+  });
+
+  setInterval(() => {
+    const now = Date.now();
+    if (now - lastActivity > 5000) idleTime += 5;
+  }, 5000);
+
+  window.addEventListener('scroll', () => {
+    const delta = Math.abs(window.scrollY - lastScrollY);
+    if (delta > scrollVelocityMax) scrollVelocityMax = delta;
+    lastScrollY = window.scrollY;
+  });
+
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       lastVisibleTime = Date.now();
@@ -130,7 +152,10 @@
       scroll_depth_px: maxScroll,
       resize_count: resizeCount,
       visited_pages: visitedPages,
-      click_trail: clickTrail
+      click_trail: clickTrail,
+      total_idle_seconds: idleTime,
+      rage_clicks: rageClickCount,
+      scroll_velocity_max: scrollVelocityMax
     });
   });
 
@@ -149,6 +174,9 @@
   document.addEventListener('click', (e) => {
     const target = e.target.closest('a, button');
     if (target) {
+      if (Date.now() - lastClickTime < 300) rageClickCount++;
+      lastClickTime = Date.now();
+
       // Advanced clickTrail tracking
       const clickTrail = JSON.parse(sessionStorage.getItem('clickTrail') || '[]');
       clickTrail.push({
