@@ -16,7 +16,10 @@ filnamn_lista = [
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/embed_block_1_contact.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/embed_block_2_calendar.js",
     "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/embed_block_3_booking.js",
-    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/styles_init.css"
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/styles_init.css",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/footer_block_4_verification.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/embed_block_5_verify-message.py",
+    "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/frontend_webflow/tracker.js"
 ]
 
 # Slutlig sammanslagen fil
