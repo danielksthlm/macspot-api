@@ -73,10 +73,12 @@ export default function Sidebar() {
       {/* Grupp: Marknad & Kommunikation */}
       <div className="space-y-1">
         <div className="text-[11px] text-gray-300 tracking-wider uppercase px-3 mb-1">Marknad</div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
+        <NavLink to="/prospects" className={({ isActive }) =>
+          `flex items-center gap-3 text-base px-3 py-2 rounded ${isActive ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white/80'}`
+        }>
           <FaFlag className="text-lg" />
           <span className="text-sm font-medium tracking-wide">Prospekt</span>
-        </div>
+        </NavLink>
         <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
           <FaClock className="text-lg" />
           <span className="text-sm font-medium tracking-wide">Kommunikationslogg</span>

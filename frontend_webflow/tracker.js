@@ -202,13 +202,15 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  const form = document.querySelector("form");
+  const forms = document.querySelectorAll("form");
 
-  if (form) {
-    form.addEventListener("submit", function (e) {
-      const emailInput = document.getElementById("email");
-      const nameInput = document.getElementById("name");
+  forms.forEach(form => {
+    const emailInput = form.querySelector('input[type="email"]') || form.querySelector(".newsletter-email");
+    const nameInput = form.querySelector("#name") || form.querySelector("input[name='name']");
 
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
       const email = emailInput ? emailInput.value.trim() : null;
       const name = nameInput ? nameInput.value.trim() : null;
 
@@ -221,9 +223,39 @@ document.addEventListener("DOMContentLoaded", function () {
           page_title: document.title
         });
         console.log("[tracking] Skickade form_submit:", email, name);
+
+        // Send verification request after tracking form_submit
+        try {
+          if (window.MacSpotUtils.fetchJSON) {
+            await MacSpotUtils.fetchJSON('/api/request_verification', {
+              email,
+              action: 'newsletter',
+              campaign_id: 'klrab_juni_2025'
+            }, 'POST');
+          }
+
+          if (window.MacSpotUtils.trackEvent) {
+            window.MacSpotUtils.trackEvent("verification_requested", {
+              email,
+              action: 'newsletter',
+              campaign_id: 'klrab_juni_2025'
+            });
+          }
+
+          const successMsg = document.createElement("div");
+          successMsg.innerText = "Tack! Kontrollera din e-post.";
+          successMsg.style.color = "#006400";
+          successMsg.style.marginTop = "10px";
+          form.appendChild(successMsg);
+
+          form.reset();
+        } catch (err) {
+          console.error("Verifieringsfel:", err);
+          alert("Det gick inte att skicka din prenumeration.");
+        }
       }
     });
-  }
+  });
 
   const pages = JSON.parse(sessionStorage.getItem('visitedPages') || '[]');
   pages.push(window.location.pathname);
