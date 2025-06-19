@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function ContactList({ contacts }) {
+export default function ContactList({ contacts, onSelectContact }) {
   if (!contacts || contacts.length === 0) {
     return <div className="text-gray-400 p-4">Inga kontakter att visa</div>;
   }
@@ -10,7 +10,11 @@ export default function ContactList({ contacts }) {
       {contacts.map((c) => {
         const initials = `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase();
         return (
-          <div key={c.id} className="mac-card p-4 shadow rounded-xl bg-white">
+          <div
+            key={c.id}
+            className="mac-card p-4 shadow rounded-xl bg-white cursor-pointer hover:shadow-md transition"
+            onClick={() => onSelectContact(c.id)}
+          >
             <div className="mac-avatar mb-2">{initials}</div>
             <h2 className="text-lg font-bold">{c.first_name} {c.last_name}</h2>
             <p className="text-sm text-gray-600">{c.email}</p>

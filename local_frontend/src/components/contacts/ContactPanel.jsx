@@ -2,7 +2,7 @@ import React from "react";
 
 export default function ContactPanel({ contact }) {
   return (
-    <aside className="hidden lg:block mac-panel w-[26rem]">
+    <aside className="mac-panel w-full lg:w-[26rem]">
       {!contact ? (
         <p className="text-gray-400">Välj en kontakt för att visa detaljer.</p>
       ) : (
