@@ -1,21 +1,133 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
-  FaTachometerAlt, FaIdCard, FaBuilding, FaStar, FaLink,
+  FaIdCard, FaBuilding, FaStar, FaLink,
   FaFlag, FaClock, FaPaperPlane, FaRandom,
   FaFile, FaBriefcase, FaClipboardList,
   FaReceipt, FaDollarSign, FaLayerGroup, FaChartBar, FaPercentage,
-  FaRedo, FaUserShield, FaCog, FaUpload, FaDownload
+  FaRedo, FaCog, FaUpload, FaDownload,
+  FaChevronDown, FaChevronRight
 } from "react-icons/fa";
 
+const menu = [
+  {
+    title: "Relationer",
+    items: [
+      { to: "/contacts", icon: FaIdCard, label: "Kontakter" },
+      { to: "/companies", icon: FaBuilding, label: "Företag" },
+      { to: "/customers", icon: FaStar, label: "Kunder" },
+      { to: "/relations", icon: FaLink, label: "Relationer" },
+    ],
+  },
+  {
+    title: "Marknad",
+    items: [
+      { to: "/prospects", icon: FaFlag, label: "Prospekt" },
+      { to: "/kampanjer", icon: FaRandom, label: "Kampanjer" },
+      { to: "/utskick", icon: FaPaperPlane, label: "Utskick" },
+      { to: "/kommunikationslogg", icon: FaClock, label: "Kommunikationslogg" },
+      { to: "/materialbank", icon: FaFile, label: "Materialbank" },
+      { to: "/statistik", icon: FaChartBar, label: "Statistik" },
+    ],
+  },
+  {
+    title: "Uppdrag",
+    items: [
+      { to: "/offers", icon: FaFile, label: "Offerter" },
+      { to: "/projekt", icon: FaBriefcase, label: "Projekt" },
+      { to: "/projektlogg", icon: FaClipboardList, label: "Projektlogg" },
+      { to: "/projektfiler", icon: FaPaperPlane, label: "Projektfiler" },
+      { to: "/uppdragshistorik", icon: FaClipboardList, label: "Uppdragshistorik" },
+    ],
+  },
+  {
+    title: "Ekonomi",
+    items: [
+      { to: "/fakturor", icon: FaReceipt, label: "Fakturor" },
+      { to: "/kundreskontra", icon: FaDollarSign, label: "Kundreskontra" },
+      { to: "/verifications", icon: FaReceipt, label: "Verifikationer" },
+      { to: "/transaktioner", icon: FaDollarSign, label: "Transaktioner" },
+      { to: "/rapporter", icon: FaChartBar, label: "Rapporter" },
+      { to: "/momsrapport", icon: FaPercentage, label: "Momsrapport" },
+      { to: "/leverantorer", icon: FaBuilding, label: "Leverantörer" },
+      { to: "/kontoplan", icon: FaLayerGroup, label: "Kontoplan" },
+    ],
+  },
+  {
+    title: "System",
+    items: [
+      { to: "/settings", icon: FaCog, label: "Inställningar" }, // inkl behörigheter, Testdata/Sandbox, Backup/Restore
+      { to: "/workflow", icon: FaRedo, label: "Workflow" },
+      { to: "/import", icon: FaUpload, label: "Import" },
+      { to: "/export", icon: FaDownload, label: "Export" },
+    ],
+  },
+];
+
+// Färg för inaktiv text (standard)
+const navTextColor = "text-[var(--KLR_Whitesmoke)]";
+
+// Hover-färg för text
+const navTextColorHover = "hover:text-[var(--KLR_Orange)]";
+
+// Stil för menytext som inline style
+const navTextStyle = {
+  fontSize: '13px',
+  fontWeight: 700,
+  letterSpacing: '0.1em'
+};
+
+// Positionering för ikoner i menyobjekt
+const navIconPosition = "absolute left-[12px] top-1/2 -translate-y-1/2";
+
+// Samlad ikonstil (inkl. storlek)
+const navIconStyle = `${navIconPosition} text-[16px]`;
+
+// Vertikalt avstånd mellan menyobjekt
+const navItemSpacing = "mb-[6px]";
+
+// Grundlayout för varje menyobjekt
+const navBaseClass = `relative flex items-center gap-[12px] rounded-lg px-[34px] focus:outline-none ${navItemSpacing}`;
+
+// Klass för inaktivt menyobjekt (färg + ingen kant)
+const navInactiveClass = `${navTextColor} border-l-[3px] border-transparent`;
+
+// Hover-effekter (färg och vänsterkant)
+const navHoverClass = `${navTextColorHover} hover:border-l-[3px] hover:border-[var(--KLR_Orange)]`;
+
+// Klass för aktivt menyobjekt (bakgrund, färg och vänsterkant)
+const navActiveClass = "bg-white/20 text-[var(--KLR_Orange)] border-l-[3px] border-[var(--KLR_Orange)]";
+
 export default function Sidebar() {
+  const groupTitleStyle = {
+    fontWeight: 800,
+    fontSize: '14px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    color: 'var(--KLR_Whitesmoke)',
+    marginBottom: '4px'
+  };
+
+  const [openGroups, setOpenGroups] = useState(() =>
+    Object.fromEntries(menu.map(group => [group.title, true]))
+  );
+
+  const toggleGroup = (title) => {
+    setOpenGroups(prev => {
+      const updated = {};
+      Object.keys(prev).forEach(key => {
+        updated[key] = key === title ? !prev[title] : false;
+      });
+      return updated;
+    });
+  };
+
   return (
     <div className="mac-sidebar">
       {/* Rubrik med bildbakgrund */}
-      <div className="font-heading text-center py-6">
+      <div className="font-heading text-center mb-[-8px]">
         <span
           style={{
-            color: "var(--KLR_Whitesmoke)",
             borderStyle: "solid",
             borderWidth: "10px",
             fontWeight: "800",
@@ -25,141 +137,49 @@ export default function Sidebar() {
             lineHeight: "20px",
             display: "inline-block"
           }}
+          className="text-[var(--KLR_Whitesmoke)]"
         >
-          MacSpot
+          Northlight
         </span>
         <div
           style={{
-            fontSize: "10px",
-            color: "white",
+            fontSize: "9px",
+            color: "rgba(255, 255, 255, 0.5)",
             marginTop: "-12px",
             fontWeight: "800",
             fontStyle: "italic",
-            lineHeight: "12px",
+            lineHeight: "11px",
             letterSpacing: "0.5px"
           }}
         >
-          by AnyNode
+          – navigate your business
         </div>
       </div>
 
-      {/* Grupp: Relationer */}
-        <div className="text-[10px] uppercase tracking-widest text-KLR_Whitesmoke/60 font-semibold px-3 mb-1">Relationer</div>
-
-        <NavLink to="/contacts" className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium tracking-wide ${
-            isActive ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white/80'
-          }`
-        }>
-          <FaIdCard className="text-base" />
-          <span>Kontakter</span>
-        </NavLink>
-
-        <NavLink to="/companies" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 text-white/80 text-sm font-medium tracking-wide">
-          <FaBuilding className="text-base" />
-          <span>Företag</span>
-        </NavLink>
-
-        <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium tracking-wide text-white/40">
-          <FaStar className="text-base" />
-          <span>Kunder (filter)</span>
-        </div>
-
-        <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium tracking-wide text-white/40">
-          <FaLink className="text-base" />
-          <span>Relationer (CC)</span>
-        </div>
-
-      {/* Grupp: Marknad & Kommunikation */}
-      <div className="space-y-1">
-        <div className="text-[11px] text-gray-300 tracking-wider uppercase px-3 mb-1">Marknad</div>
-        <NavLink to="/prospects" className={({ isActive }) =>
-          `flex items-center gap-3 text-base px-3 py-2 rounded ${isActive ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white/80'}`
-        }>
-          <FaFlag className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Prospekt</span>
-        </NavLink>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaClock className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Kommunikationslogg</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaPaperPlane className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Utskick</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaRandom className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Kampanjer</span>
-        </div>
-      </div>
-
-      {/* Grupp: Uppdrag */}
-      <div className="space-y-1">
-        <div className="text-[11px] text-gray-300 tracking-wider uppercase px-3 mb-1">Uppdrag</div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaFile className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Offerter</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaBriefcase className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Projekt</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaClipboardList className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Projektlogg</span>
-        </div>
-      </div>
-
-      {/* Grupp: Ekonomi */}
-      <div className="space-y-1">
-        <div className="text-[11px] text-gray-300 tracking-wider uppercase px-3 mb-1">Ekonomi</div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaReceipt className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Verifikationer</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaDollarSign className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Transaktioner</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaLayerGroup className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Kontoplan</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaChartBar className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Rapporter</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaPercentage className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Momsrapport</span>
-        </div>
-      </div>
-
-      {/* Grupp: System */}
-      <div className="space-y-1 mt-auto">
-        <div className="text-[11px] text-gray-300 tracking-wider uppercase px-3 mb-1">System</div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaRedo className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Workflow</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaUserShield className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Roller</span>
-        </div>
-        <NavLink to="/settings" className={({ isActive }) =>
-          `flex items-center gap-3 text-base px-3 py-2 rounded ${isActive ? 'bg-blue-700 text-white' : 'hover:bg-blue-800'}`
-        }>
-          <FaCog className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Inställningar</span>
-        </NavLink>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaUpload className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Import</span>
-        </div>
-        <div className="flex items-center gap-3 text-base px-3 py-2 text-gray-500">
-          <FaDownload className="text-lg" />
-          <span className="text-sm font-medium tracking-wide">Export</span>
-        </div>
+      <div className="flex flex-col" style={{gap: '12px', marginTop: '0px'}}>
+        {menu.map((group, index) => (
+          <div key={index} className={group.title === "System" ? "mt-auto" : undefined}>
+            <div
+              style={groupTitleStyle}
+              className="cursor-pointer flex items-center justify-between pr-2"
+              onClick={() => toggleGroup(group.title)}
+            >
+              {group.title}
+              {openGroups[group.title] ? (
+                <FaChevronDown className="text-[10px] ml-2 text-[var(--KLR_Whitesmoke)]" />
+              ) : (
+                <FaChevronRight className="text-[10px] ml-2 text-[var(--KLR_Whitesmoke)]" />
+              )}
+            </div>
+            {openGroups[group.title] && group.items.map(({ to, icon: Icon, label }) => (
+              <NavLink key={to} to={to} className={({ isActive }) =>
+                `${navBaseClass} ${isActive ? navActiveClass : navInactiveClass} ${navHoverClass}`}>
+                <Icon className={navIconStyle} />
+                <span style={navTextStyle}>{label}</span>
+              </NavLink>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );

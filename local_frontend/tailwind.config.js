@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+import plugin from 'tailwindcss/plugin'
+
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
@@ -16,5 +18,50 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    plugin(function({ addComponents, theme }) {
+      addComponents({
+        '.h1': {
+          fontFamily: theme('fontFamily.heading').join(', '),
+          fontWeight: '700',
+          fontSize: '24px',
+          lineHeight: '40px',
+          marginTop: '32px',
+          marginBottom: '16px',
+        },
+        '.h2': {
+          fontFamily: theme('fontFamily.heading').join(', '),
+          fontWeight: '700',
+          fontSize: '20px',
+          lineHeight: '36px',
+          marginTop: '32px',
+          marginBottom: '16px',
+        },
+        '.h3': {
+          fontFamily: theme('fontFamily.heading').join(', '),
+          fontWeight: '700',
+          fontSize: '18px',
+          lineHeight: '20px',
+          marginTop: '0px',
+          marginBottom: '0px',
+        },
+        '.h4': {
+          fontFamily: theme('fontFamily.heading').join(', '),
+          fontWeight: '700',
+          fontSize: '16px',
+          lineHeight: '20px',
+          marginTop: '0px',
+          marginBottom: '0px',
+        },
+        '.p': {
+          fontFamily: theme('fontFamily.body').join(', '),
+          fontWeight: '400',
+          fontSize: '16px',
+          lineHeight: '24px',
+          marginTop: '8px',
+          marginBottom: '16px',
+        },
+      })
+    }),
+  ],
 }

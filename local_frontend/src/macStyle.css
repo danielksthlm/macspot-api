@@ -27,19 +27,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-  margin-bottom: 0.5rem;
-}
-
-p {
-  line-height: 1.6;
-  font-size: 0.95rem;
-  margin-bottom: 0.4rem;
-  color: #333;
-}
 
 /* === Kontaktkort === */
 .mac-card {
@@ -105,5 +92,4 @@ p {
   background-size: cover;
   background-position: center;
   color: white;
-  font-family: var(--font-heading);
 }
