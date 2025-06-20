@@ -1,0 +1,3092 @@
+📂 KODTRÄD
+==========
+├── local_backend
+│   ├── __init__.py
+│   ├── apple_contact_sync
+│   │   ├── Package.swift
+│   │   ├── Sources
+│   │   │   ├── main.swift
+│   ├── config.py
+│   ├── main.py
+│   ├── modules
+│   │   ├── __init__.py
+│   │   ├── accounting
+│   │   │   ├── __init__.py
+│   │   │   ├── accounts_payable
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── routes.py
+│   │   │   │   ├── services.py
+│   │   │   ├── base
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── export.py
+│   │   │   │   ├── gpt_invoice_parser.py
+│   │   │   │   ├── routes.py
+│   │   │   │   ├── schemas.py
+│   │   │   │   ├── services.py
+│   │   │   │   ├── suggest_accounting.py
+│   │   │   ├── closing
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── routes.py
+│   │   │   │   ├── services.py
+│   │   │   ├── invoicing
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── routes.py
+│   │   │   │   ├── services.py
+│   │   │   ├── tax_reporting
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── routes.py
+│   │   │   │   ├── services.py
+│   │   │   ├── tests
+│   │   │   │   ├── test_accounting.py
+│   │   ├── crm
+│   │   │   ├── __init__.py
+│   │   │   ├── routes.py
+│   │   │   ├── services.py
+==========
+
+====================
+📄 Fil: config.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 15:51:16
+📏 Antal rader: 9
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 1 – ['import os']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: config.py
+import os
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Ladda .env från projektroten
+env_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=env_path)
+
+DB_DSN = os.getenv("LOCAL_DB_DSN")  # alt. bygg ihop från PGHOST, etc
+END: config.py
+
+====================
+📄 Fil: __init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend
+
+END: __init__.py
+
+====================
+📄 Fil: main.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:26:28
+📏 Antal rader: 59
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 1 – ['import os']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 3
+🧪 TODO/FIXME: 0
+====================
+START: main.py
+from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
+from fastapi.security import APIKeyHeader
+from fastapi.middleware.cors import CORSMiddleware
+import os
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+# Routers från olika moduler
+from local_backend.modules.crm.routes import router as crm_router
+from local_backend.modules.accounting.base.routes import router as base_accounting_router
+from local_backend.modules.accounting.tax_reporting.routes import router as tax_router
+from local_backend.modules.accounting.closing.routes import router as closing_router
+from local_backend.modules.accounting.invoicing.routes import router as invoicing_router
+from local_backend.modules.accounting.accounts_payable.routes import router as payable_router
+
+app = FastAPI()
+
+api_key_header = APIKeyHeader(name="Authorization")
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="MacSpot API",
+        version="1.0.0",
+        description="Redovisnings-API med autentisering",
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "APIKeyHeader": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization"
+        }
+    }
+    for path in openapi_schema["paths"].values():
+        for op in path.values():
+            op.setdefault("security", []).append({"APIKeyHeader": []})
+    app.openapi_schema = openapi_schema
+    return openapi_schema
+
+app.openapi = custom_openapi
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Inkludera routers
+app.include_router(crm_router)
+app.include_router(base_accounting_router)
+app.include_router(tax_router)
+app.include_router(closing_router)
+app.include_router(invoicing_router)
+app.include_router(payable_router)
+END: main.py
+
+====================
+📄 Fil: modules/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend/modules
+
+END: __init__.py
+
+====================
+📄 Fil: modules/accounting/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend/modules/accounting
+
+END: __init__.py
+
+====================
+📄 Fil: modules/accounting/tax_reporting/services.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:51:34
+📏 Antal rader: 21
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 1 – ['import asyncpg']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 2
+🧪 TODO/FIXME: 0
+====================
+START: services.py
+import asyncpg
+
+async def generate_tax_report(db_url: str, year: int, month: int):
+    conn = await asyncpg.connect(dsn=db_url)
+    try:
+        rows = await conn.fetch("""
+            SELECT
+                a.number AS account,
+                a.name AS account_name,
+                SUM(e.amount) AS total
+            FROM entry e
+            JOIN account a ON e.account_id = a.id
+            WHERE EXTRACT(YEAR FROM e.created_at) = $1
+              AND EXTRACT(MONTH FROM e.created_at) = $2
+              AND a.number LIKE '26%'  -- momsrelaterade konton
+            GROUP BY a.number, a.name
+            ORDER BY a.number
+        """, year, month)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+END: services.py
+
+====================
+📄 Fil: modules/accounting/tax_reporting/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend/modules/accounting/tax_reporting
+
+END: __init__.py
+
+====================
+📄 Fil: modules/accounting/tax_reporting/routes.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:51:35
+📏 Antal rader: 12
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 1 – ['import os']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: routes.py
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
+import os
+from .services import generate_tax_report
+
+router = APIRouter(prefix="/tax_reporting", tags=["tax_reporting"])
+
+@router.get("/report", dependencies=[Depends(lambda: None)])  # Placeholder for auth
+async def get_tax_report(year: int = Query(...), month: int = Query(...)):
+    db_url = os.environ["LOCAL_DB_URL"]
+    result = await generate_tax_report(db_url, year, month)
+    return JSONResponse(content={"status": "ok", "report": result})
+END: routes.py
+
+====================
+📄 Fil: modules/accounting/tests/test_accounting.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 09:05:20
+📏 Antal rader: 31
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 1 – ['import pytest']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: test_accounting.py
+import pytest
+from httpx import AsyncClient
+from uuid import uuid4
+from local_backend.main import app
+
+@pytest.mark.asyncio
+async def test_invoice_to_transaction():
+    # Detta kräver att en attachment redan finns i databasen
+    attachment_id = "00000000-0000-0000-0000-000000000000"  # byt till ett riktigt id vid test
+
+    async with AsyncClient(base_url="http://localhost:8000") as ac:
+        response = await ac.post(
+            "/accounting/invoice_to_transaction",
+            params={"attachment_id": attachment_id},
+            headers={"Authorization": "Bearer hemlig_nyckel_123"}
+        )
+        assert response.status_code in [200, 422, 404]  # beror på testdata
+        print("Svar:", response.json())
+
+@pytest.mark.asyncio
+async def test_invoice_gpt_analysis():
+    attachment_id = "00000000-0000-0000-0000-000000000000"  # byt till riktig testbilaga
+
+    async with AsyncClient(base_url="http://localhost:8000") as ac:
+        response = await ac.post(
+            "/accounting/invoice_gpt_analysis",
+            params={"attachment_id": attachment_id},
+            headers={"Authorization": "Bearer hemlig_nyckel_123"}
+        )
+        assert response.status_code in [200, 404]
+        print("GPT-svar:", response.json())
+END: test_accounting.py
+
+====================
+📄 Fil: modules/accounting/accounts_payable/services.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:50:16
+📏 Antal rader: 14
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import asyncpg', 'import os']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: services.py
+import asyncpg
+import os
+
+async def get_open_invoices():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT id, supplier, due_date, amount, status
+        FROM invoice
+        WHERE status = 'unpaid'
+        ORDER BY due_date ASC
+    """)
+    await conn.close()
+    return [dict(row) for row in rows]
+END: services.py
+
+====================
+📄 Fil: modules/accounting/accounts_payable/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend/modules/accounting/accounts_payable
+
+END: __init__.py
+
+====================
+📄 Fil: modules/accounting/accounts_payable/routes.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:50:16
+📏 Antal rader: 8
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: routes.py
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/accounts_payable", tags=["Accounts Payable"])
+
+@router.get("/open_invoices")
+async def list_open_invoices():
+    from .services import get_open_invoices
+    return await get_open_invoices()
+END: routes.py
+
+====================
+📄 Fil: modules/accounting/invoicing/services.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:49:29
+📏 Antal rader: 13
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: services.py
+from datetime import date
+from uuid import uuid4
+
+async def generate_invoice():
+    return {
+        "invoice_id": str(uuid4()),
+        "date": date.today().isoformat(),
+        "total": 2500.00,
+        "currency": "SEK",
+        "items": [
+            {"description": "Konsulttjänster maj", "quantity": 10, "unit_price": 250.00}
+        ]
+    }
+END: services.py
+
+====================
+📄 Fil: modules/accounting/invoicing/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend/modules/accounting/invoicing
+
+END: __init__.py
+
+====================
+📄 Fil: modules/accounting/invoicing/routes.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:49:28
+📏 Antal rader: 10
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: routes.py
+from fastapi import APIRouter
+from .services import generate_invoice
+from fastapi.responses import JSONResponse
+
+router = APIRouter(prefix="/invoicing", tags=["invoicing"])
+
+@router.get("/generate_invoice")
+async def generate_invoice_route():
+    invoice = await generate_invoice()
+    return JSONResponse(content={"status": "ok", "invoice": invoice})
+END: routes.py
+
+====================
+📄 Fil: modules/accounting/closing/services.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:46:55
+📏 Antal rader: 31
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import asyncpg', 'import os']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: services.py
+import asyncpg
+import os
+from datetime import date, timedelta
+
+async def lock_period_service():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    today = date.today()
+    result = await conn.execute("""
+        UPDATE period
+        SET locked = true
+        WHERE end_date < $1 AND locked = false
+    """, today)
+    await conn.close()
+    return f"Perioder låsta: {result}"
+
+async def perform_year_end_closing():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    latest = await conn.fetchrow("SELECT end_date FROM period ORDER BY end_date DESC LIMIT 1")
+    if not latest:
+        await conn.close()
+        return "Ingen tidigare period hittades"
+    new_start = latest["end_date"] + timedelta(days=1)
+    new_end = new_start.replace(year=new_start.year + 1) - timedelta(days=1)
+    await conn.execute("""
+        INSERT INTO period (id, start_date, end_date, locked, name, created_at)
+        VALUES (gen_random_uuid(), $1, $2, false, $3, now())
+    """, new_start, new_end, f"{new_start.year}")
+    await conn.close()
+    return f"Ny period skapad: {new_start} – {new_end}"
+END: services.py
+
+====================
+📄 Fil: modules/accounting/closing/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend/modules/accounting/closing
+
+END: __init__.py
+
+====================
+📄 Fil: modules/accounting/closing/routes.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:45:47
+📏 Antal rader: 16
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: routes.py
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+
+from .services import lock_period_service, perform_year_end_closing
+
+router = APIRouter(prefix="/closing", tags=["closing"])
+
+@router.post("/lock_period")
+async def lock_period():
+    result = await lock_period_service()
+    return JSONResponse(content={"status": "ok", "message": result})
+
+@router.post("/year_end")
+async def year_end():
+    result = await perform_year_end_closing()
+    return JSONResponse(content={"status": "ok", "message": result})
+END: routes.py
+
+====================
+📄 Fil: modules/accounting/base/services.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 08:18:32
+📏 Antal rader: 483
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 7 – ['import os', 'import asyncpg', 'import os', 'import asyncpg', 'import json', 'import json', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 57
+🧪 TODO/FIXME: 0
+====================
+START: services.py
+from typing import Optional
+import os
+import asyncpg
+
+async def generate_resultatrapport():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT rs.group_name, SUM(e.amount) AS total
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        JOIN report_structure rs
+          ON (a.number = rs.account_number OR a.number BETWEEN split_part(rs.account_range, '-', 1)::text AND split_part(rs.account_range, '-', 2)::text)
+        WHERE rs.report_type = 'resultat'
+        GROUP BY rs.group_name, rs.order_index
+        ORDER BY rs.order_index
+    """)
+    await conn.close()
+    return [{"group": row["group_name"], "total": float(row["total"])} for row in rows]
+
+async def generate_balansrapport():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT rs.group_name, SUM(e.amount) AS total
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        JOIN report_structure rs
+          ON (a.number = rs.account_number OR a.number BETWEEN split_part(rs.account_range, '-', 1)::text AND split_part(rs.account_range, '-', 2)::text)
+        WHERE rs.report_type = 'balans'
+        GROUP BY rs.group_name, rs.order_index
+        ORDER BY rs.order_index
+    """)
+    await conn.close()
+    return [{"group": row["group_name"], "total": float(row["total"])} for row in rows]
+
+async def generate_momsrapport():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT rs.group_name, SUM(e.amount) AS total
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        JOIN report_structure rs
+          ON (a.number = rs.account_number OR a.number BETWEEN split_part(rs.account_range, '-', 1)::text AND split_part(rs.account_range, '-', 2)::text)
+        WHERE rs.report_type = 'moms'
+        GROUP BY rs.group_name, rs.order_index
+        ORDER BY rs.order_index
+    """)
+    await conn.close()
+    results = [{"group": row["group_name"], "total": float(row["total"])} for row in rows]
+    netto = sum(r["total"] for r in results)
+    results.append({"group": "Netto att betala", "total": netto})
+    return results
+async def get_chart_of_accounts(language="sv"):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT
+            a.number,
+            COALESCE(t.name, a.name) AS name,
+            a.type,
+            a.is_active,
+            a.report_type,
+            a.report_group
+        FROM account a
+        LEFT JOIN account_translation t
+          ON t.account_id = a.id AND t.language = $1
+        ORDER BY a.number
+    """, language)
+    await conn.close()
+    return [dict(row) for row in rows]
+from .schemas import TransactionIn
+from uuid import uuid4
+from decimal import Decimal
+from datetime import datetime
+import os
+import asyncpg
+import json
+
+def fix_encoding(text):
+    if isinstance(text, str):
+        try:
+            return text.encode("latin1").decode("utf-8")
+        except Exception:
+            return text
+    return text
+
+async def get_accounts(language="sv"):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT 
+            a.id,
+            a.number,
+            COALESCE(t.name, a.name) AS name,
+            a.type
+        FROM account a
+        LEFT JOIN account_translation t
+          ON t.account_id = a.id AND t.language = $1
+        ORDER BY a.number
+    """, language)
+    await conn.close()
+    from uuid import UUID
+    return [
+        {
+            k: fix_encoding(str(v)) if isinstance(v, str) else str(v) if isinstance(v, UUID) else v
+            for k, v in row.items()
+        }
+        for row in rows
+    ]
+
+async def get_transactions(language="sv", filter_user=None):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    # Prepare for future translation of 'description' via transaction_translation
+    rows = await conn.fetch("""
+        SELECT
+            t.id,
+            t.date,
+            COALESCE(tt.description, t.description) AS description,
+            t.description AS original_description,
+            t.series,
+            t.ver_no,
+            t.metadata,
+            t.created_at,
+            json_agg(json_build_object(
+                'id', e.id,
+                'account_id', e.account_id,
+                'amount', e.amount,
+                'description', e.description,
+                'metadata', e.metadata
+            )) AS entries
+        FROM transaction t
+        LEFT JOIN transaction_translation tt
+          ON tt.transaction_id = t.id AND tt.language = $1
+        LEFT JOIN entry e ON e.transaction_id = t.id
+        WHERE ($2::text IS NULL OR t.metadata->>'user' = $2)
+        GROUP BY t.id, tt.description
+        ORDER BY t.date DESC, t.ver_no DESC
+        LIMIT 100
+    """, language, filter_user)
+    await conn.close()
+    from uuid import UUID
+    from datetime import date
+    result = []
+    for row in rows:
+        user = None
+        try:
+            user = json.loads(row["metadata"]).get("user")
+        except Exception:
+            pass
+        has_translation = row["description"] != row["original_description"]
+        obj = {
+            k: fix_encoding(str(v)) if isinstance(v, str)
+            else str(v) if isinstance(v, (UUID, date))
+            else v
+            for k, v in row.items()
+        }
+        obj["has_translation"] = has_translation
+        obj["user"] = user
+        result.append(obj)
+    return result
+
+
+# Skapa ny funktion för att skapa transaktion
+async def create_transaction(transaction: TransactionIn):
+    import json
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+
+    default_user = os.getenv("DEFAULT_USER_EMAIL", "unknown@local")
+
+    # Hämta nästa ver_no för serien
+    ver_row = await conn.fetchrow("""
+        UPDATE journal_series
+        SET next_ver_no = next_ver_no + 1
+        WHERE series = $1
+        RETURNING next_ver_no - 1 AS ver_no
+    """, transaction.series)
+    if not ver_row:
+        await conn.close()
+        raise ValueError(f"Ogiltig verifikationsserie: {transaction.series}")
+    ver_no = ver_row["ver_no"]
+
+    # Hämta alla kontonummer i en gång
+    account_rows = await conn.fetch("SELECT id, number FROM account")
+    account_map = {r["number"]: r["id"] for r in account_rows}
+
+    # Kontroll: alla konton måste finnas
+    for entry in transaction.entries:
+        if entry.account_number not in account_map:
+            await conn.close()
+            raise ValueError(f"Konto saknas: {entry.account_number}")
+
+    # Kontroll: debet = kredit
+    total = sum([entry.amount for entry in transaction.entries])
+    if total != Decimal("0.00"):
+        await conn.close()
+        raise ValueError(f"Obalanserad transaktion: {total}")
+
+    # Kontrollera metadata och sätt user om saknas, serialisera till JSON-sträng
+    metadata_dict = transaction.metadata or {}
+    if "user" not in metadata_dict:
+        metadata_dict["user"] = default_user
+    # --- created_by lookup ---
+    created_by = None
+    user_email = metadata_dict.get("user", default_user)
+    contact_row = await conn.fetchrow("SELECT id FROM contact WHERE email = $1", user_email)
+    if contact_row:
+        created_by = contact_row["id"]
+    metadata = json.dumps(metadata_dict)
+
+    # Skapa verifikat
+    tx_id = uuid4()
+    now = datetime.utcnow()
+    await conn.execute("""
+        INSERT INTO transaction (id, date, description, series, ver_no, metadata, created_at, updated_at, status, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
+    """, tx_id, transaction.date, transaction.description, transaction.series, ver_no, metadata, now, transaction.status, created_by)
+
+    import json
+    for entry in transaction.entries:
+        entry_metadata = entry.metadata or {}
+        entry_metadata["user"] = entry_metadata.get("user", metadata_dict["user"])
+        entry_metadata["generated_by"] = entry_metadata.get("generated_by", "macspot-backend")
+        entry_metadata = json.dumps(entry_metadata)
+        await conn.execute("""
+            INSERT INTO entry (id, transaction_id, account_id, amount, description, metadata, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+        """, uuid4(), tx_id, account_map[entry.account_number], entry.amount,
+             entry.description, entry_metadata, now)
+
+    await conn.close()
+    return {"status": "ok", "transaction_id": str(tx_id), "series": transaction.series, "ver_no": ver_no}
+
+
+# Avvikelse-/felupptäckt
+async def detect_anomalies():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    try:
+        rows = await conn.fetch("""
+            SELECT t.id, t.description, t.date, t.ver_no, a.number AS account_number, e.amount
+            FROM transaction t
+            JOIN entry e ON e.transaction_id = t.id
+            JOIN account a ON a.id = e.account_id
+            WHERE t.date > now() - interval '12 months'
+        """)
+        seen = set()
+        anomalies = []
+        for r in rows:
+            key = (r["description"], float(r["amount"]))
+            if key in seen:
+                anomalies.append({
+                    "transaction_id": str(r["id"]),
+                    "ver_no": r["ver_no"],
+                    "reason": "Dublett: samma text och belopp",
+                    "description": r["description"],
+                    "amount": float(r["amount"]),
+                    "date": r["date"].isoformat(),
+                })
+            else:
+                seen.add(key)
+            if abs(float(r["amount"])) > 50000:
+                anomalies.append({
+                    "transaction_id": str(r["id"]),
+                    "ver_no": r["ver_no"],
+                    "reason": "Högt belopp",
+                    "description": r["description"],
+                    "amount": float(r["amount"]),
+                    "date": r["date"].isoformat(),
+                })
+    finally:
+        await conn.close()
+    return anomalies
+
+# --- Budget vs Actual report
+async def generate_budget_vs_actual(db_url: str, year: Optional[int] = None, month: Optional[int] = None):
+    conditions = []
+    values = []
+
+    if year:
+        conditions.append("b.year = $%d" % (len(values)+1))
+        values.append(year)
+    if month:
+        conditions.append("b.month = $%d" % (len(values)+1))
+        values.append(month)
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch(f"""
+        SELECT
+            b.year,
+            b.month,
+            b.account_number,
+            b.amount AS budget,
+            COALESCE(SUM(e.amount), 0) AS actual
+        FROM budget b
+        LEFT JOIN account a ON a.number = b.account_number
+        LEFT JOIN entry e ON e.account_id = a.id
+          AND EXTRACT(YEAR FROM e.created_at) = b.year
+          AND EXTRACT(MONTH FROM e.created_at) = b.month
+        {where_clause}
+        GROUP BY b.year, b.month, b.account_number, b.amount
+        ORDER BY b.year, b.month, b.account_number
+    """, *values)
+    await conn.close()
+    return [dict(r) for r in rows]
+
+async def generate_cashflow_report():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT 
+            TO_CHAR(t.date, 'YYYY-MM') AS period,
+            SUM(e.amount) FILTER (WHERE a.type = 'tillgång' AND e.amount > 0) AS inflow,
+            SUM(e.amount) FILTER (WHERE a.type = 'tillgång' AND e.amount < 0) AS outflow
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        JOIN transaction t ON e.transaction_id = t.id
+        GROUP BY period
+        ORDER BY period
+    """)
+    await conn.close()
+    return [dict(r) for r in rows]
+
+async def generate_full_cashflow_report():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT 
+            TO_CHAR(t.date, 'YYYY-MM') AS period,
+            a.number AS account_number,
+            a.name AS account_name,
+            a.type AS account_type,
+            SUM(e.amount) AS total
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        JOIN transaction t ON e.transaction_id = t.id
+        WHERE a.type IN ('tillgång', 'skuld')
+        GROUP BY period, a.number, a.name, a.type
+        ORDER BY period, a.number
+    """)
+    await conn.close()
+
+    # Strukturera datan
+    cashflow = {}
+    for r in rows:
+        period = r["period"]
+        if period not in cashflow:
+            cashflow[period] = {
+                "period": period,
+                "accounts": []
+            }
+        cashflow[period]["accounts"].append({
+            "account_number": r["account_number"],
+            "account_name": r["account_name"],
+            "account_type": r["account_type"],
+            "amount": float(r["total"])
+        })
+
+    return list(cashflow.values())
+
+
+# Ny funktion: indirekt kassaflödesanalys
+async def generate_indirect_cashflow(db_url: str):
+    conn = await asyncpg.connect(dsn=db_url)
+    try:
+        # Steg 1: Hämta årets resultat (nettoresultat)
+        net_result_row = await conn.fetchrow("""
+            SELECT SUM(e.amount) AS net_income
+            FROM entry e
+            JOIN account a ON e.account_id = a.id
+            WHERE a.report_type = 'resultat'
+        """)
+
+        # Steg 2: Justera för icke-kassapåverkande poster (t.ex. avskrivningar)
+        adjustments = await conn.fetch("""
+            SELECT a.number, a.name, SUM(e.amount) AS total
+            FROM entry e
+            JOIN account a ON e.account_id = a.id
+            WHERE a.number LIKE '7%' -- t.ex. avskrivningar: 7830 etc.
+            GROUP BY a.number, a.name
+        """)
+
+        # Steg 3: Förändringar i rörelsekapital (tillgångar och skulder)
+        working_capital = await conn.fetch("""
+            SELECT a.type, a.number, a.name, SUM(e.amount) AS delta
+            FROM entry e
+            JOIN account a ON e.account_id = a.id
+            WHERE a.type IN ('tillgång', 'skuld')
+            GROUP BY a.type, a.number, a.name
+        """)
+
+        await conn.close()
+
+        return {
+            "net_income": float(net_result_row["net_income"] or 0),
+            "adjustments": [
+                {
+                    "account": r["number"],
+                    "name": r["name"],
+                    "amount": float(r["total"])
+                } for r in adjustments
+            ],
+            "working_capital_changes": [
+                {
+                    "account": r["number"],
+                    "name": r["name"],
+                    "type": r["type"],
+                    "delta": float(r["delta"])
+                } for r in working_capital
+            ]
+        }
+    except Exception as e:
+        await conn.close()
+        raise
+
+# Ny funktion: kontoavstämning för ett specifikt konto
+async def generate_reconciliation_report(db_url: str, account_number: str):
+    conn = await asyncpg.connect(dsn=db_url)
+    try:
+        rows = await conn.fetch("""
+            SELECT t.date, t.description, e.amount
+            FROM entry e
+            JOIN transaction t ON t.id = e.transaction_id
+            JOIN account a ON a.id = e.account_id
+            WHERE a.number = $1
+            ORDER BY t.date
+        """, account_number)
+        total = sum([r["amount"] for r in rows])
+        transactions = [{
+            "date": r["date"].isoformat(),
+            "description": r["description"],
+            "amount": float(r["amount"])
+        } for r in rows]
+        return {
+            "account_number": account_number,
+            "total_balance": float(total),
+            "transactions": transactions
+        }
+    finally:
+        await conn.close()
+
+# --- SIE export ---
+async def generate_sie_export(start_date=None, end_date=None):
+    conn = await asyncpg.connect(dsn=os.environ["LOCAL_DB_URL"])
+    try:
+        sie_lines = []
+        sie_lines.append("#FLAGGA 0")
+        sie_lines.append("#FORMAT PC8")
+        sie_lines.append("#GEN 2")
+        sie_lines.append("#SIETYP 4")
+        sie_lines.append("#PROGRAM macspot 1.0")
+        sie_lines.append(f"#ORGNR 000000-0000")
+        sie_lines.append(f"#FNAMN Ditt Företag AB")
+
+        # Kontoplan
+        accounts = await conn.fetch("SELECT number, name FROM account ORDER BY number")
+        for acc in accounts:
+            sie_lines.append(f"#KONTO {acc['number']} \"{acc['name']}\"")
+
+        # Verifikationer
+        query = """
+            SELECT t.id, t.date, t.series, t.ver_no, t.description, e.amount, a.number AS account
+            FROM transaction t
+            JOIN entry e ON e.transaction_id = t.id
+            JOIN account a ON a.id = e.account_id
+            WHERE ($1::date IS NULL OR t.date >= $1)
+              AND ($2::date IS NULL OR t.date <= $2)
+            ORDER BY t.date, t.ver_no
+        """
+        rows = await conn.fetch(query, start_date, end_date)
+        for row in rows:
+            datum = row["date"].strftime("%Y%m%d")
+            sie_lines.append(f"#{'VER'} \"{row['series']}\" {datum} \"{row['description']}\"")
+            sie_lines.append(f"#{'TRANS'} {row['account']} {row['amount']} \"\"")
+
+        return "\n".join(sie_lines)
+    finally:
+        await conn.close()
+END: services.py
+
+====================
+📄 Fil: modules/accounting/base/suggest_accounting.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 08:04:51
+📏 Antal rader: 302
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 1 rader (0.3%)
+📥 Imports: 5 – ['import re', 'import fitz  # PyMuPDF', 'import asyncpg', 'import os', 'import asyncpg']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 45
+🧪 TODO/FIXME: 2
+====================
+START: suggest_accounting.py
+import re
+from typing import Optional, Dict
+import fitz  # PyMuPDF
+# from .match_supplier import match_supplier_name
+
+# Import GPT invoice parser from separate module
+from .gpt_invoice_parser import parse_invoice_with_gpt
+
+
+def parse_invoice_text(text: str) -> Dict[str, Optional[str]]:
+    text = text.replace(",", ".")  # Normalize decimal separator
+    text = text.replace("O", "0").replace("I", "1")
+    numbers = [float(m.group()) for m in re.finditer(r"\d{1,3}(?:[ ]?\d{3})*(?:\.\d{2})", text)]
+    total_amount = max(numbers) if numbers else None
+
+    vat_patterns = {
+        "25%": r"(25\s?%|moms\s?25\s?%)",
+        "12%": r"(12\s?%)",
+        "6%": r"(6\s?%)"
+    }
+    vat_detected = None
+    for rate, pattern in vat_patterns.items():
+        if re.search(pattern, text, re.IGNORECASE):
+            vat_detected = rate
+            break
+    if not vat_detected:
+        vat_detected = "25%"
+
+    date_patterns = [r"\d{4}-\d{2}-\d{2}", r"\d{2}/\d{2}/\d{4}", r"\d{2}\.\d{2}\.\d{4}"]
+    invoice_date = None
+    for pattern in date_patterns:
+        match = re.search(pattern, text)
+        if match:
+            invoice_date = match.group()
+            break
+
+    ocr_match = re.search(r"(OCR|Referens)?\s*[:#]?\s?(\d{6,})", text, re.IGNORECASE)
+    reference = ocr_match.group(2) if ocr_match else None
+
+    currency_match = re.search(r"(SEK|kr|EUR|€|USD|\$)", text, re.IGNORECASE)
+    currency = currency_match.group() if currency_match else "SEK"
+
+    orgnr = re.search(r"\b\d{6}-\d{4}\b", text)  # Ex: 556123-4567
+    iban = re.search(r"[A-Z]{2}\d{2}[ ]?\d{4}[ ]?\d{4}[ ]?\d{4}[ ]?\d{4}", text)
+
+    return {
+        "total_amount": total_amount,
+        "vat_rate": vat_detected,
+        "invoice_date": invoice_date,
+        "reference_number": reference,
+        "currency": currency,
+        "orgnr": orgnr.group() if orgnr else None,
+        "iban": iban.group() if iban else None,
+        # TODO: match supplier by name/orgnr/IBAN
+    }
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        all_text = []
+        for page in doc:
+            all_text.append(page.get_text())
+        return "\n".join(all_text)
+    except Exception as e:
+        return f"ERROR: {e.__class__.__name__} – {str(e)}"
+
+
+# --- NEW FUNCTION ---
+async def analyze_invoice_attachment(attachment_id: str, db_url: str) -> dict:
+    import asyncpg
+    from datetime import datetime
+    conn = await asyncpg.connect(dsn=db_url)
+    row = await conn.fetchrow("SELECT data FROM attachment WHERE id = $1", attachment_id)
+    await conn.close()
+    if not row:
+        return {"error": "Attachment not found"}
+    text = extract_text_from_pdf(row["data"])
+    parsed = parse_invoice_text(text)
+    needs_fallback = False
+    try:
+        parsed_date = parsed.get("invoice_date")
+        if parsed_date:
+            try:
+                invoice_date_obj = datetime.strptime(parsed_date[:10], "%Y-%m-%d")
+                if invoice_date_obj > datetime.now():
+                    needs_fallback = True
+            except ValueError:
+                needs_fallback = True
+        else:
+            needs_fallback = True
+
+        total = parsed.get("total_amount")
+        if not total or float(total) < 10 or float(total) > 1_000_000:
+            needs_fallback = True
+
+        if not parsed.get("reference_number"):
+            needs_fallback = True
+    except Exception:
+        needs_fallback = True
+
+    if needs_fallback:
+        gpt_parsed = parse_invoice_with_gpt(text, log=True)
+        parsed.update({k: v for k, v in gpt_parsed.items() if v})
+    parsed["supplier_name"] = "UNKNOWN"
+    return {"text": text, "parsed": parsed}
+
+def generate_transaction_from_parsed(parsed: dict, supplier_name: str = "", currency: str = "SEK") -> dict:
+    supplier_name = parsed.get("supplier_name", supplier_name)
+    description = f"Faktura {supplier_name}".strip()
+    total = parsed.get("total_amount")
+    vat_rate = parsed.get("vat_rate")
+    date = parsed.get("invoice_date") or ""
+    ref = parsed.get("reference_number") or ""
+    currency = parsed.get("currency", currency)
+
+    if not total or not vat_rate:
+        return {}
+
+    total = round(float(total), 2)
+    vat_factor = {"25%": 0.2, "12%": 0.1071, "6%": 0.0566}.get(vat_rate, 0.2)
+    vat_amount = round(total * vat_factor / (1 + vat_factor), 2)
+    net_amount = round(total - vat_amount, 2)
+
+    raw_entries = [
+        {
+            "account_number": "3001",
+            "amount": -net_amount,
+            "description": "Försäljning",
+            "currency": currency
+        },
+        {
+            "account_number": "2611",
+            "amount": -vat_amount,
+            "description": f"Moms {vat_rate}",
+            "currency": currency
+        },
+        {
+            "account_number": "1930",
+            "amount": total,
+            "description": "Inbetalning",
+            "currency": currency
+        }
+    ]
+    entries = apply_regulatory_rules(parsed, raw_entries)
+
+    return {
+        "description": description,
+        "date": date,
+        "reference": ref,
+        "currency": currency,
+        "entries": entries
+    }
+def detect_anomalies(transactions: list) -> list:
+    anomalies = []
+    for tx in transactions:
+        seen_refs = set()
+        ref = tx.get("reference", "")
+        if ref in seen_refs:
+            anomalies.append({
+                "transaction_id": tx.get("id"),
+                "issue": f"Duplicate reference: {ref}"
+            })
+        elif ref:
+            seen_refs.add(ref)
+        for entry in tx.get("entries", []):
+            desc = entry.get("description", "").lower()
+            amount = abs(entry.get("amount", 0))
+            if "lunch" in desc or "middag" in desc:
+                if amount > 1000:
+                    anomalies.append({
+                        "transaction_id": tx.get("id"),
+                        "issue": f"High meal expense: {amount} SEK"
+                    })
+            if entry.get("account_number") == "3001" and amount > 500000:
+                anomalies.append({
+                    "transaction_id": tx.get("id"),
+                    "issue": f"Unusually high revenue: {amount} SEK"
+                })
+            if entry.get("account_number") == "2641" and float(entry.get("amount", 0)) > 0:
+                anomalies.append({
+                    "transaction_id": tx.get("id"),
+                    "issue": "Possible VAT paid on purchase (check for reverse charge)"
+                })
+    return anomalies
+
+def suggest_periodization(description: str, total_amount: float) -> Optional[dict]:
+    """
+    Försök periodisera kostnader automatiskt.
+    T.ex. Dropbox-abonnemang 1200 SEK → 100 SEK/månad i 12 månader.
+    """
+    description = description.lower()
+    recurring_keywords = ["abonnemang", "dropbox", "google", "office365", "försäkring", "hyra", "licens"]
+    if any(word in description for word in recurring_keywords) and total_amount > 1000:
+        monthly = round(total_amount / 12, 2)
+        return {
+            "type": "monthly",
+            "months": 12,
+            "monthly_amount": monthly,
+            "total": total_amount
+        }
+    return None
+
+def apply_regulatory_rules(parsed: dict, entries: list) -> list:
+    """
+    Justera konton, moms och texter enligt svenska redovisningsregler:
+    - Representation (avdragsgill/ej avdragsgill)
+    - Omvänd moms (EU-handel)
+    - Avdragsgränser
+    """
+    adjusted = []
+    description_text = parsed.get("description", "").lower()
+    vat_rate = parsed.get("vat_rate", "25%")
+    currency = parsed.get("currency", "SEK")
+    total = parsed.get("total_amount", 0)
+
+    for entry in entries:
+        account = entry["account_number"]
+        text = entry["description"].lower()
+        amount = entry["amount"]
+
+        # Representation
+        if "lunch" in text or "middag" in text or "representation" in text:
+            if abs(amount) > 300:
+                account = "5832"  # ej avdragsgill representation
+            else:
+                account = "5831"  # avdragsgill representation
+
+        # EU-handel (om moms = 0% + utländsk valuta → anta EU-tjänst)
+        if vat_rate == "0%" or vat_rate == "0" or vat_rate is None:
+            if currency != "SEK":
+                if amount < 0:
+                    account = "2645"  # Ingående moms omvänd skattskyldighet
+                else:
+                    account = "2614"  # Utgående moms omvänd skattskyldighet
+
+        # TODO: Lägg till fler regler här vid behov
+        adjusted.append({
+            **entry,
+            "account_number": account,
+            "currency": currency
+        })
+
+    return adjusted
+
+# --- NEW FUNCTION ---
+import os
+import asyncpg
+
+async def generate_cashflow_report():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT 
+            TO_CHAR(t.date, 'YYYY-MM') AS period,
+            SUM(e.amount) FILTER (WHERE a.type = 'tillgång' AND e.amount > 0) AS inflow,
+            SUM(e.amount) FILTER (WHERE a.type = 'tillgång' AND e.amount < 0) AS outflow
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        JOIN transaction t ON e.transaction_id = t.id
+        GROUP BY period
+        ORDER BY period
+    """)
+    await conn.close()
+    return [dict(r) for r in rows]
+
+async def generate_full_cashflow_report():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT 
+            TO_CHAR(t.date, 'YYYY-MM') AS period,
+            a.number AS account_number,
+            a.name AS account_name,
+            a.type AS account_type,
+            SUM(e.amount) AS total
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        JOIN transaction t ON e.transaction_id = t.id
+        WHERE a.type IN ('tillgång', 'skuld')
+        GROUP BY period, a.number, a.name, a.type
+        ORDER BY period, a.number
+    """)
+    await conn.close()
+
+    # Strukturera datan
+    cashflow = {}
+    for r in rows:
+        period = r["period"]
+        if period not in cashflow:
+            cashflow[period] = {
+                "period": period,
+                "accounts": []
+            }
+        cashflow[period]["accounts"].append({
+            "account_number": r["account_number"],
+            "account_name": r["account_name"],
+            "account_type": r["account_type"],
+            "amount": float(r["total"])
+        })
+
+    return list(cashflow.values())
+END: suggest_accounting.py
+
+====================
+📄 Fil: modules/accounting/base/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 19
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+from .services import *
+from .schemas import *
+from .suggest_accounting import *
+from .export import *
+
+__all__ = [
+    "create_transaction",
+    "get_accounts",
+    "get_transactions",
+    "generate_resultatrapport",
+    "generate_balansrapport",
+    "generate_momsrapport",
+    "generate_sie_export",
+    "analyze_invoice_attachment",
+    "generate_transaction_from_parsed",
+    "suggest_account",
+    "suggest_periodization",
+    "detect_anomalies"
+]
+
+END: __init__.py
+
+====================
+📄 Fil: modules/accounting/base/export.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 17:44:30
+📏 Antal rader: 69
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 5 – ['import os', 'import json', 'import datetime', 'import asyncpg', 'import asyncio']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 6
+🧪 TODO/FIXME: 0
+====================
+START: export.py
+import os
+from dotenv import load_dotenv
+import json
+import datetime
+import asyncpg
+import asyncio
+
+load_dotenv(dotenv_path="/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/.env")
+
+EXPORT_ROOT = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/exports/accounting"
+EXPORT_DATA_DIR = os.path.join(EXPORT_ROOT, "exportdata")
+EXPORT_ATTACHMENTS_DIR = os.path.join(EXPORT_ROOT, "attachments")
+
+DB_CONFIG = {
+    "user": os.environ["LOCAL_DB_USER"],
+    "password": os.environ["LOCAL_DB_PASSWORD"],
+    "database": os.environ["LOCAL_DB_NAME"],
+    "host": os.environ["LOCAL_DB_HOST"],
+    "port": os.environ["LOCAL_DB_PORT"]
+}
+
+async def export_data():
+    os.makedirs(EXPORT_DATA_DIR, exist_ok=True)
+    os.makedirs(EXPORT_ATTACHMENTS_DIR, exist_ok=True)
+
+    date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    data_dir = os.path.join(EXPORT_DATA_DIR, date_str)
+    os.makedirs(data_dir, exist_ok=True)
+
+    conn = await asyncpg.connect(**DB_CONFIG)
+
+    # Export transactions
+    transactions = await conn.fetch("SELECT * FROM transaction")
+    with open(os.path.join(data_dir, "transactions.json"), "w") as f:
+        json.dump([dict(r) for r in transactions], f, default=str, indent=2)
+
+    # Export accounts
+    accounts = await conn.fetch("SELECT * FROM account")
+    with open(os.path.join(data_dir, "accounts.json"), "w") as f:
+        json.dump([dict(r) for r in accounts], f, indent=2, default=str)
+
+    # Export momsrapport
+    moms = await conn.fetch("""
+        SELECT 
+          CASE 
+            WHEN a.number LIKE '26%' THEN 'Utgående moms' 
+            WHEN a.number LIKE '264%' THEN 'Ingående moms' 
+            ELSE 'Annat' 
+          END AS group_name,
+          SUM(e.amount) AS total
+        FROM entry e
+        JOIN account a ON e.account_id = a.id
+        GROUP BY group_name
+    """)
+    with open(os.path.join(data_dir, "momsrapport.json"), "w") as f:
+        json.dump([dict(r) for r in moms], f, indent=2, default=str)
+
+    # Export attachments
+    attachments = await conn.fetch("SELECT id, filename, data FROM attachment")
+    for a in attachments:
+        file_path = os.path.join(EXPORT_ATTACHMENTS_DIR, f"{a['id']}_{a['filename']}")
+        with open(file_path, "wb") as f:
+            f.write(a["data"])
+
+    await conn.close()
+    print(f"✅ Export klar: {data_dir}")
+
+if __name__ == "__main__":
+    asyncio.run(export_data())
+END: export.py
+
+====================
+📄 Fil: modules/accounting/base/schemas.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 08:15:57
+📏 Antal rader: 49
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: schemas.py
+from typing import Optional, List
+from uuid import UUID
+from decimal import Decimal
+from datetime import date
+
+from pydantic import BaseModel, Field
+
+class TransactionTranslationOut(BaseModel):
+    transaction_id: UUID
+    language: str
+    description: str
+
+class TransactionTranslationIn(BaseModel):
+    transaction_id: UUID
+    language: str
+    description: str
+
+class EntryIn(BaseModel):
+    account_number: str
+    amount: Decimal
+    description: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+class TransactionIn(BaseModel):
+    date: date
+    description: Optional[str] = None
+    series: str = Field(default="A", max_length=10)
+    metadata: Optional[dict] = None
+    entries: List[EntryIn]
+    status: Optional[str] = Field(default="prelim", pattern="^(prelim|posted|locked)$")
+
+class EntryOut(BaseModel):
+    id: UUID
+    account_id: UUID
+    amount: Decimal
+    description: Optional[str]
+    metadata: Optional[dict]
+
+class TransactionOut(BaseModel):
+    id: UUID
+    date: date
+    description: Optional[str]
+    series: str
+    ver_no: int
+    metadata: Optional[dict]
+    entries: List[EntryOut]
+    user: Optional[str] = None
+    status: Optional[str]
+END: schemas.py
+
+====================
+📄 Fil: modules/accounting/base/gpt_invoice_parser.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 08:01:38
+📏 Antal rader: 60
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 3 – ['import openai', 'import json', 'import os']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 1
+🧪 TODO/FIXME: 0
+====================
+START: gpt_invoice_parser.py
+from typing import Optional, Dict
+import openai
+import json
+import os
+from dotenv import load_dotenv
+from datetime import datetime
+
+def parse_invoice_with_gpt(text: str, log: bool = False) -> Dict[str, Optional[str]]:
+    load_dotenv()
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    prompt = f"""
+    Du är en redovisningsexpert som extraherar data från OCR-scannade fakturor i PDF-format.
+    Svara alltid med ett strikt JSON-objekt. Ingen förklaring.
+
+    Extrahera följande fält:
+    - total_amount (float)
+    - vat_rate (t.ex. "25%")
+    - invoice_date (YYYY-MM-DD)
+    - reference_number (OCR eller referensnummer)
+    - currency (t.ex. "SEK", "EUR")
+    - orgnr (organisationsnummer, t.ex. "556123-4567")
+    - iban (internationellt kontonummer)
+
+    Svarsexempel:
+    {{
+      "total_amount": 1234.56,
+      "vat_rate": "25%",
+      "invoice_date": "2025-06-01",
+      "reference_number": "1234567890",
+      "currency": "SEK",
+      "orgnr": "556123-4567",
+      "iban": "SE3550000000054910000003"
+    }}
+
+    Text:
+    {text}
+    """
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        gpt_output = response.choices[0].message.content
+        result = json.loads(gpt_output)
+
+        if log:
+            log_dir = os.path.join(os.path.dirname(__file__), "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "gpt_invoice.log")
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n\n--- {datetime.now().isoformat()} ---\n")
+                f.write("PROMPT:\n")
+                f.write(prompt.strip() + "\n")
+                f.write("GPT SVAR:\n")
+                f.write(gpt_output.strip())
+
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+END: gpt_invoice_parser.py
+
+====================
+📄 Fil: modules/accounting/base/routes.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 09:24:55
+📏 Antal rader: 476
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 12 – ['import os', 'import os', 'import csv', 'import asyncpg', 'import asyncpg', 'import os', 'import datetime', 'import asyncpg', 'import os', 'import asyncpg', 'import asyncpg', 'import datetime']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 19
+🧪 TODO/FIXME: 0
+====================
+START: routes.py
+from fastapi import APIRouter
+from fastapi import Depends
+router = APIRouter(prefix="/accounting", tags=["accounting"])
+
+# 🔐 Följande endpoints kräver Bearer-token (API-autentisering):
+# - POST /transactions
+# - POST /transaction_translations
+# - POST /attachments
+
+import os
+API_KEY = os.getenv("API_ACCOUNTING_KEY")
+
+from fastapi import Header, HTTPException
+def verify_token(authorization: str = Header(None)):
+    if authorization != f"Bearer {API_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+
+@router.get("/report/reconciliation", dependencies=[Depends(verify_token)])
+async def get_reconciliation(account_number: str):
+    from .services import generate_reconciliation_report
+    db_url = os.environ["LOCAL_DB_URL"]
+    result = await generate_reconciliation_report(db_url, account_number)
+    return JSONResponse(content={"status": "ok", "result": result})
+from .suggest_accounting import analyze_invoice_attachment
+from fastapi import HTTPException
+from fastapi import Path
+from fastapi import UploadFile, File
+from fastapi import Depends, Header
+from fastapi import Query
+from uuid import UUID
+from .schemas import TransactionIn, TransactionTranslationIn, TransactionTranslationOut
+from .services import create_transaction
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from .services import get_accounts, get_transactions, generate_full_cashflow_report
+from typing import Optional
+import os
+
+# --- BANK RECONCILIATION & CSV UPLOAD ---
+import csv
+from fastapi import UploadFile
+from io import StringIO
+
+
+
+router = APIRouter(prefix="/accounting", tags=["accounting"])
+
+# 🔐 Följande endpoints kräver Bearer-token (API-autentisering):
+# - POST /transactions
+# - POST /transaction_translations
+# - POST /attachments
+
+API_KEY = os.getenv("API_ACCOUNTING_KEY")
+
+def verify_token(authorization: str = Header(None)):
+    if authorization != f"Bearer {API_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+
+@router.get("/chart_of_accounts")
+async def get_chart(lang: str = "sv"):
+    from .services import get_chart_of_accounts
+    data = await get_chart_of_accounts(language=lang)
+    return JSONResponse(content=data)
+
+@router.get("/report/resultat")
+async def get_resultatrapport():
+    from .services import generate_resultatrapport
+    data = await generate_resultatrapport()
+    return JSONResponse(content=data)
+
+@router.get("/report/balans")
+async def get_balansrapport():
+    from .services import generate_balansrapport
+    data = await generate_balansrapport()
+    return JSONResponse(content=data)
+
+@router.get("/report/moms")
+async def get_momsrapport():
+    from .services import generate_momsrapport
+    data = await generate_momsrapport()
+    return JSONResponse(content=data)
+
+@router.get("/accounts")
+async def list_accounts(lang: str = "sv"):
+    data = await get_accounts(language=lang)
+    return JSONResponse(content=data)
+
+@router.get("/transactions")
+async def list_transactions(lang: str = "sv", user: Optional[str] = None):
+    data = await get_transactions(language=lang, filter_user=user)
+    return JSONResponse(content=data)
+
+
+# Skapa ny POST-route för transactions
+@router.post("/transactions", dependencies=[Depends(verify_token)])
+async def post_transaction(transaction: TransactionIn):
+    """
+    Skapa en ny transaction. Tar emot och sparar även currency_code, exchange_rate och total_amount_original.
+    """
+    try:
+        # Pass entire transaction object, which now includes currency_code, exchange_rate, total_amount_original
+        result = await create_transaction(transaction)
+        return JSONResponse(content=result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Ny POST-endpoint för att föreslå konto baserat på beskrivning, filnamn och belopp
+@router.post("/suggest_accounting")
+async def suggest_accounting_api(payload: dict):
+    desc = payload.get("description", "")
+    file_name = payload.get("file_name", "")
+    amount = payload.get("amount")
+    suggestion = suggest_account(desc, file_name, amount)
+    return {"status": "ok", **suggestion}
+
+from .suggest_accounting import extract_text_from_pdf
+import asyncpg
+
+@router.post("/extract_text_from_attachment")
+async def extract_text_endpoint(attachment_id: UUID):
+    try:
+        db_url = os.environ["LOCAL_DB_URL"]
+        conn = await asyncpg.connect(dsn=db_url)
+        row = await conn.fetchrow("SELECT data FROM attachment WHERE id = $1", attachment_id)
+        await conn.close()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+
+        text = extract_text_from_pdf(row["data"])
+        return {"text": text}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Skapa ny POST-route för transaction_translations
+import asyncpg
+from fastapi import HTTPException
+
+
+@router.post("/transaction_translations", dependencies=[Depends(verify_token)])
+async def add_transaction_translation(translation: TransactionTranslationIn):
+    try:
+        db_url = os.environ["LOCAL_DB_URL"]
+        conn = await asyncpg.connect(dsn=db_url)
+        await conn.execute("""
+            INSERT INTO transaction_translation (transaction_id, language, description)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (transaction_id, language) DO UPDATE
+            SET description = EXCLUDED.description
+        """, translation.transaction_id, translation.language, translation.description)
+        await conn.close()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Ny GET-endpoint för att hämta översättningar för en transaction_id
+from typing import List
+from uuid import UUID
+
+@router.get("/transaction_translations/{transaction_id}", response_model=List[TransactionTranslationOut])
+async def get_transaction_translations(transaction_id: UUID):
+    try:
+        db_url = os.environ["LOCAL_DB_URL"]
+        conn = await asyncpg.connect(dsn=db_url)
+        rows = await conn.fetch("""
+            SELECT transaction_id, language, description
+            FROM transaction_translation
+            WHERE transaction_id = $1
+        """, transaction_id)
+        await conn.close()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Ny POST-endpoint för att ladda upp bilagor
+@router.post("/attachments", dependencies=[Depends(verify_token)])
+async def upload_attachment(transaction_id: UUID, file: UploadFile = File(...)):
+    allowed_types = ["application/pdf", "image/jpeg", "image/png"]
+    max_size_bytes = 5 * 1024 * 1024  # 5 MB
+
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=422, detail=f"Filtypen '{file.content_type}' är inte tillåten")
+
+    content = await file.read()
+
+    if len(content) > max_size_bytes:
+        raise HTTPException(status_code=422, detail=f"Filen är för stor (max 5 MB)")
+
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    await conn.execute("""
+        INSERT INTO attachment (transaction_id, filename, content_type, data)
+        VALUES ($1, $2, $3, $4)
+    """, transaction_id, file.filename, file.content_type, content)
+    await conn.close()
+
+    return {"status": "ok", "filename": file.filename}
+# Ny GET-endpoint för att hämta alla bilagor för en viss transaction_id
+from uuid import UUID
+
+@router.get("/attachments/{transaction_id}")
+async def get_attachments(transaction_id: UUID):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT id, filename, content_type, data, uploaded_at
+        FROM attachment
+        WHERE transaction_id = $1
+        ORDER BY uploaded_at
+    """, transaction_id)
+    await conn.close()
+    return [
+        {
+            "id": str(row["id"]),
+            "filename": row["filename"],
+            "content_type": row["content_type"],
+            "uploaded_at": row["uploaded_at"].isoformat(),
+            "size_bytes": len(row["data"])
+        }
+        for row in rows
+    ]
+
+
+# Ny GET-endpoint för att ladda ner en bilaga
+from uuid import UUID
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+
+@router.get("/attachments/{attachment_id}/download")
+async def download_attachment(attachment_id: UUID):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    row = await conn.fetchrow("""
+        SELECT filename, content_type, data
+        FROM attachment
+        WHERE id = $1
+    """, attachment_id)
+    await conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    return StreamingResponse(BytesIO(row["data"]), media_type=row["content_type"], headers={
+        "Content-Disposition": f'attachment; filename="{row["filename"]}"'
+    })
+
+# Byt namn på en bilaga
+@router.put("/attachments/{attachment_id}/rename", dependencies=[Depends(verify_token)])
+async def rename_attachment(attachment_id: UUID, new_filename: str):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    result = await conn.execute("""
+        UPDATE attachment SET filename = $1 WHERE id = $2
+    """, new_filename, attachment_id)
+    await conn.close()
+    return {"status": "ok", "result": result}
+
+# Radera en bilaga
+@router.delete("/attachments/{attachment_id}", dependencies=[Depends(verify_token)])
+async def delete_attachment(attachment_id: UUID):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    result = await conn.execute("""
+        DELETE FROM attachment WHERE id = $1
+    """, attachment_id)
+    await conn.close()
+    return {"status": "ok", "result": result}
+
+
+# Ny POST-endpoint för att analysera en fakturabilaga
+from uuid import UUID
+from fastapi import Depends
+
+
+@router.post("/analyze_invoice", dependencies=[Depends(verify_token)])
+async def analyze_invoice(attachment_id: UUID):
+    db_url = os.environ["LOCAL_DB_URL"]
+    try:
+        result = await analyze_invoice_attachment(attachment_id, db_url)
+        from .suggest_accounting import suggest_periodization, generate_transaction_from_parsed
+        periodization = suggest_periodization(result.get("text", ""), result.get("parsed", {}).get("total_amount", 0))
+        tx_suggestion = generate_transaction_from_parsed(result.get("parsed", {}))
+        result["periodization"] = periodization
+        result["transaction_suggestion"] = tx_suggestion
+        return JSONResponse(content={"status": "ok", **result})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Ny POST-endpoint: Konvertera fakturabilaga till transaktion
+from uuid import UUID
+from fastapi import Depends
+
+@router.post("/invoice_to_transaction", dependencies=[Depends(verify_token)])
+async def invoice_to_transaction(attachment_id: UUID):
+    from .suggest_accounting import analyze_invoice_attachment, generate_transaction_from_parsed
+    from .services import create_transaction
+    from .schemas import TransactionIn, EntryIn
+    import os
+    import datetime
+
+    db_url = os.environ["LOCAL_DB_URL"]
+    result = await analyze_invoice_attachment(str(attachment_id), db_url)
+    parsed = result.get("parsed", {})
+
+    tx_suggestion = generate_transaction_from_parsed(parsed)
+    if not tx_suggestion:
+        raise HTTPException(status_code=422, detail="Kunde inte generera transaktion från faktura")
+
+    try:
+        entries = [
+            EntryIn(
+                account_number=e["account_number"],
+                amount=e["amount"],
+                description=e.get("description"),
+                metadata={"generated_by": "invoice_to_transaction"}
+            )
+            for e in tx_suggestion["entries"]
+        ]
+
+        transaction = TransactionIn(
+            date=datetime.date.fromisoformat(tx_suggestion["date"]) if tx_suggestion.get("date") else datetime.date.today(),
+            description=tx_suggestion.get("description", "Fakturaimport"),
+            series="A",
+            metadata={"reference": tx_suggestion.get("reference"), "source": "invoice_auto"},
+            entries=entries
+        )
+
+        result = await create_transaction(transaction)
+        return {"status": "ok", **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Ny POST-endpoint för GPT-analys av faktura
+@router.post("/invoice_gpt_analysis", dependencies=[Depends(verify_token)])
+async def invoice_gpt_analysis(attachment_id: UUID):
+    from .suggest_accounting import extract_text_from_pdf, parse_invoice_with_gpt
+    import asyncpg
+    import os
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    row = await conn.fetchrow("SELECT data FROM attachment WHERE id = $1", str(attachment_id))
+    await conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    text = extract_text_from_pdf(row["data"])
+    gpt_result = parse_invoice_with_gpt(text)
+    return {"text": text, "gpt_parsed": gpt_result}
+
+# Ny GET-endpoint för att flagga avvikande transaktioner
+@router.get("/anomalies", dependencies=[Depends(verify_token)])
+async def get_anomalies():
+    from .services import detect_anomalies
+    db_url = os.environ["LOCAL_DB_URL"]
+    try:
+        anomalies = await detect_anomalies(db_url)
+        return JSONResponse(content={"status": "ok", "anomalies": anomalies})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Ny GET-endpoint för budget vs actual
+from typing import Optional
+
+@router.get("/report/budget_vs_actual", dependencies=[Depends(verify_token)])
+async def get_budget_vs_actual(year: Optional[int] = Query(None), month: Optional[int] = Query(None)):
+    from .services import generate_budget_vs_actual
+    db_url = os.environ["LOCAL_DB_URL"]
+    data = await generate_budget_vs_actual(db_url, year=year, month=month)
+    return JSONResponse(content={"status": "ok", "result": data})
+
+@router.post("/suggest_periodization")
+async def suggest_periodization_api(payload: dict):
+    from .suggest_accounting import suggest_periodization
+    description = payload.get("description", "")
+    total_amount = float(payload.get("total_amount", 0))
+    suggestion = suggest_periodization(description, total_amount)
+    return {"status": "ok", "periodization": suggestion}
+
+@router.get("/report/cashflow", dependencies=[Depends(verify_token)])
+async def get_cashflow_report():
+    data = await generate_full_cashflow_report()
+    return JSONResponse(content={"status": "ok", "result": data})
+
+# Ny GET-endpoint för indirekt kassaflödesanalys
+@router.get("/report/cashflow_indirect", dependencies=[Depends(verify_token)])
+async def get_indirect_cashflow():
+    from .services import generate_indirect_cashflow
+    db_url = os.environ["LOCAL_DB_URL"]
+    data = await generate_indirect_cashflow(db_url)
+    return JSONResponse(content={"status": "ok", "result": data})
+
+
+# --- BANK CSV UPLOAD ENDPOINT ---
+@router.post("/bank/upload_csv", dependencies=[Depends(verify_token)])
+async def upload_bank_csv(file: UploadFile = File(...)):
+    db_url = os.environ["LOCAL_DB_URL"]
+    content = await file.read()
+    text = content.decode("utf-8")
+    reader = csv.DictReader(StringIO(text))
+    import asyncpg
+    conn = await asyncpg.connect(dsn=db_url)
+    count = 0
+    for row in reader:
+        await conn.execute("""
+            INSERT INTO bank_statement (date, balance, source, metadata)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+        """, row["date"], float(row["balance"]), row.get("source", "unknown"), row)
+        count += 1
+    await conn.close()
+    return {"status": "ok", "imported": count}
+
+# --- BANK RECONCILIATION ENDPOINT ---
+@router.get("/bank/reconcile", dependencies=[Depends(verify_token)])
+async def reconcile_bank(account_number: str = Query(...)):
+    import asyncpg
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+
+    rows = await conn.fetch("""
+        SELECT TO_CHAR(t.date, 'YYYY-MM-DD') AS date, SUM(e.amount) AS balance
+        FROM entry e
+        JOIN transaction t ON e.transaction_id = t.id
+        JOIN account a ON a.id = e.account_id
+        WHERE a.number = $1
+        GROUP BY t.date
+    """, account_number)
+
+    entries_by_date = {r["date"]: float(r["balance"]) for r in rows}
+
+    banks = await conn.fetch("""
+        SELECT TO_CHAR(date, 'YYYY-MM-DD') AS date, balance
+        FROM bank_statement
+        ORDER BY date
+    """)
+
+    await conn.close()
+
+    diffs = []
+    for row in banks:
+        bdate = row["date"]
+        bbal = float(row["balance"])
+        expected = entries_by_date.get(bdate)
+        if expected is not None and abs(expected - bbal) > 0.01:
+            diffs.append({"date": bdate, "bank_balance": bbal, "accounting_balance": expected, "difference": round(expected - bbal, 2)})
+
+    return {"status": "ok", "differences": diffs}
+# --- SIE export endpoint ---
+
+from typing import Optional
+from fastapi import Query, Depends
+from fastapi import HTTPException
+
+@router.get("/export/sie", dependencies=[Depends(verify_token)])
+async def export_sie(start_date: Optional[str] = Query(None), end_date: Optional[str] = Query(None)):
+    from .services import generate_sie_export
+    import datetime
+    from fastapi.responses import PlainTextResponse
+
+    try:
+        start = datetime.date.fromisoformat(start_date) if start_date else None
+        end = datetime.date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Felaktigt datumformat. Använd YYYY-MM-DD.")
+
+    sie_data = await generate_sie_export(start, end)
+    return PlainTextResponse(sie_data, media_type="text/plain", headers={
+        "Content-Disposition": 'attachment; filename="export.se"'
+    })
+END: routes.py
+
+====================
+📄 Fil: modules/crm/services.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 10:06:33
+📏 Antal rader: 67
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 3 – ['import os', 'import asyncpg', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 5
+🧪 TODO/FIXME: 0
+====================
+START: services.py
+import os
+import asyncpg
+from typing import List
+
+import json
+
+def fix_encoding(text):
+    if isinstance(text, str):
+        try:
+            return text.encode("latin1").decode("utf-8")
+        except Exception:
+            return text
+    return text
+
+async def get_all_contacts():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT 
+            c.id,
+            c.email,
+            c.booking_email,
+            c.metadata,
+            COALESCE(b.count, 0) AS booking_count
+        FROM contact c
+        LEFT JOIN (
+            SELECT contact_id, COUNT(*) AS count
+            FROM bookings
+            GROUP BY contact_id
+        ) b ON c.id = b.contact_id
+        ORDER BY c.created_at DESC
+        LIMIT 100
+    """)
+    await conn.close()
+    contacts = []
+    for row in rows:
+        metadata_raw = row["metadata"]
+        if isinstance(metadata_raw, dict):
+            metadata = metadata_raw
+        elif isinstance(metadata_raw, str):
+            try:
+                metadata = json.loads(metadata_raw)
+            except Exception:
+                metadata = {}
+        else:
+            metadata = {}
+        print("RAW last_name:", metadata.get("last_name"))
+        contacts.append({
+            "id": str(row["id"]),
+            "email": row["email"],
+            "booking_email": row["booking_email"],
+            "first_name": fix_encoding(metadata.get("first_name")),
+            "last_name": fix_encoding(metadata.get("last_name")),
+            "company": fix_encoding(metadata.get("company")),
+            "phone": metadata.get("phone"),
+            "booking_count": row["booking_count"]
+        })
+    return contacts
+
+async def get_contact_by_id(contact_id: str):
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    row = await conn.fetchrow("SELECT * FROM contact WHERE id = $1", contact_id)
+    await conn.close()
+    if row:
+        return dict(row)
+    return {"error": "Contact not found"}
+END: services.py
+
+====================
+📄 Fil: modules/crm/__init__.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-03 21:33:00
+📏 Antal rader: 1
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: __init__.py
+# __init__.py för local_backend/modules/crm
+
+END: __init__.py
+
+====================
+📄 Fil: modules/crm/routes.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 14:52:54
+📏 Antal rader: 14
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: routes.py
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from .services import get_all_contacts, get_contact_by_id
+
+router = APIRouter(prefix="/contacts", tags=["contacts"])
+
+@router.get("")
+async def list_contacts():
+    data = await get_all_contacts()
+    return JSONResponse(content=data, media_type="application/json; charset=utf-8")
+
+@router.get("/{contact_id}")
+async def get_contact(contact_id: str):
+    return await get_contact_by_id(contact_id)
+END: routes.py
+
+====================
+📄 Fil: apple_contact_sync/Package.swift
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 📄 Okänt format
+📅 Senast ändrad: 2025-06-19 23:05:43
+📏 Antal rader: 22
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 2 rader (9.1%)
+📥 Imports: 1 – ['import PackageDescription']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: Package.swift
+// swift-tools-version: 6.1
+// The swift-tools-version declares the minimum version of Swift required to build this package.
+
+import PackageDescription
+
+let package = Package(
+    name: "contact_sync",
+    platforms: [
+        .macOS(.v12)
+    ],
+    dependencies: [
+        .package(url: "https://github.com/codewinsdotcom/PostgresClientKit", from: "1.3.0")
+    ],
+    targets: [
+        .executableTarget(
+            name: "contact_sync",
+            dependencies: [
+                .product(name: "PostgresClientKit", package: "PostgresClientKit")
+            ]
+        )
+    ]
+)
+
+END: Package.swift
+
+====================
+📄 Fil: apple_contact_sync/Sources/main.swift
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 📄 Okänt format
+📅 Senast ändrad: 2025-06-20 00:08:30
+📏 Antal rader: 118
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 2 rader (1.7%)
+📥 Imports: 3 – ['import Foundation', 'import Contacts', 'import PostgresClientKit']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 15
+🧪 TODO/FIXME: 0
+====================
+START: main.swift
+import Foundation
+import Contacts
+import PostgresClientKit
+
+// 🔄 Ladda .env
+let envURL = URL(fileURLWithPath: "../.env")
+guard let envData = try? String(contentsOf: envURL) else {
+  fatalError("Kunde inte läsa .env")
+}
+
+var env: [String: String] = [:]
+for line in envData.split(separator: "\n") {
+  let parts = line.split(separator: "=", maxSplits: 1)
+  if parts.count == 2 {
+    env[String(parts[0])] = String(parts[1])
+  }
+}
+
+print("📄 Laddade miljövariabler:")
+for (key, value) in env {
+    print("  \(key)=\(value)")
+}
+
+guard
+  let host = env["PGHOST"],
+  let portString = env["PGPORT"],
+  let db = env["PGDATABASE"],
+  let user = env["PGUSER"],
+  let password = env["PGPASSWORD"],
+  let port = Int(portString)
+else {
+  fatalError("Saknar någon PG* variabel")
+}
+
+// 🔗 Anslut till PostgreSQL
+var configuration = PostgresClientKit.ConnectionConfiguration()
+configuration.host = host
+configuration.port = port
+configuration.database = db
+configuration.user = user
+configuration.credential = .trust
+configuration.ssl = false
+
+do {
+  let connection = try PostgresClientKit.Connection(configuration: configuration)
+  defer { connection.close() }
+
+  let keysToFetch: [CNKeyDescriptor] = [
+    CNContactEmailAddressesKey as CNKeyDescriptor,
+    CNContactGivenNameKey as CNKeyDescriptor,
+    CNContactFamilyNameKey as CNKeyDescriptor,
+    CNContactOrganizationNameKey as CNKeyDescriptor,
+    CNContactPhoneNumbersKey as CNKeyDescriptor
+  ]
+  let store = CNContactStore()
+  let request = CNContactFetchRequest(keysToFetch: keysToFetch)
+  try store.enumerateContacts(with: request) { contact, _ in
+    do {
+      guard let email = contact.emailAddresses.first?.value as String? else { return }
+      let firstName = contact.givenName
+      let lastName = contact.familyName
+      _ = contact.organizationName
+      _ = contact.phoneNumbers.first?.value.stringValue ?? ""
+
+      print("📱 macOS-kontakt: \(firstName) \(lastName) — \(email)")
+
+      let stmt = try connection.prepareStatement(text: "SELECT metadata FROM contact WHERE email = $1")
+      defer { stmt.close() }
+
+      let result = try stmt.execute(parameterValues: [email])
+      var found = false
+      while let row = result.next() {
+          let metadataValue = try row.get().columns[0]
+          let metadataString = try metadataValue.string()
+          print("🗄️ DB-data:", metadataString)
+          
+          if let data = metadataString.data(using: .utf8) {
+              found = true
+              let json = try JSONSerialization.jsonObject(with: data, options: [])
+              print("🧩 JSON:", json)
+          }
+      }
+      if !found {
+          print("❓ Ingen match i databasen för: \(email)")
+          let insertPendingStmt = try connection.prepareStatement(
+              text: """
+              INSERT INTO pending_changes (table_name, action, row_data, created_at)
+              VALUES ($1, $2, $3::jsonb, NOW())
+              """
+          )
+          let org = contact.organizationName
+          let phone = contact.phoneNumbers.first?.value.stringValue ?? ""
+          let json = """
+          {
+            "email": "\(email)",
+            "first_name": "\(firstName)",
+            "last_name": "\(lastName)",
+            "organization": "\(org)",
+            "phone": "\(phone)",
+            "metadata": {
+              "origin": "macos"
+            }
+          }
+          """
+          try insertPendingStmt.execute(parameterValues: ["contact", "insert", json])
+          insertPendingStmt.close()
+          print("🕓 Skapade pending_changes för \(email)")
+      }
+
+      print("—")
+    } catch {
+      print("❌ Fel i kontaktloop: \(error)")
+    }
+  }
+
+} catch {
+  print("💥 Fel vid databaskoppling: \(error)")
+}
+
+END: main.swift
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+Inga function.json, host.json, package.json eller .funcignore hittades i projektet.
+
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 1911
+🧩 Totalt antal funktioner: 0
+🧠 Total komplexitetspoäng: 156
+🧪 Antal TODO/FIXME totalt: 2
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+config.py,9,0,0,0,1
+__init__.py,1,0,0,0,0
+main.py,59,0,3,0,1
+__init__.py,1,0,0,0,0
+__init__.py,1,0,0,0,0
+services.py,21,0,2,0,1
+__init__.py,1,0,0,0,0
+routes.py,12,0,1,0,1
+test_accounting.py,31,0,0,0,1
+services.py,14,0,1,0,2
+__init__.py,1,0,0,0,0
+routes.py,8,0,0,0,0
+services.py,13,0,0,0,0
+__init__.py,1,0,0,0,0
+routes.py,10,0,0,0,0
+services.py,31,0,1,0,2
+__init__.py,1,0,0,0,0
+routes.py,16,0,0,0,0
+services.py,483,0,57,0,7
+suggest_accounting.py,302,0,45,1,5
+__init__.py,19,0,0,0,0
+export.py,69,0,6,0,5
+schemas.py,49,0,0,0,0
+gpt_invoice_parser.py,60,0,1,0,3
+routes.py,476,0,19,0,12
+services.py,67,0,5,0,3
+__init__.py,1,0,0,0,0
+routes.py,14,0,0,0,0
+Package.swift,22,0,0,2,1
+main.swift,118,0,15,2,3
+📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • meeting_type (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  📐 Kolumntyper:
+    - start_time: timestamp with time zone
+    - end_time: timestamp with time zone
+    - meeting_type: text
+    - metadata: jsonb
+    - created_at: timestamp with time zone
+    - contact_id: uuid
+    - id: uuid
+    - updated_at: timestamp with time zone
+    - booking_email: text
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+  🔗 Relationer:
+    - contact_id ➡ contact.id
+  ⚙️ Triggers:
+    - log_bookings_change_trigger (INSERT): EXECUTE FUNCTION log_bookings_change()
+    - log_bookings_change_trigger (DELETE): EXECUTE FUNCTION log_bookings_change()
+    - log_bookings_change_trigger (UPDATE): EXECUTE FUNCTION log_bookings_change()
+    - audit_sync_bookings_trigger (INSERT): EXECUTE FUNCTION log_bookings_change()
+    - audit_sync_bookings_trigger (DELETE): EXECUTE FUNCTION log_bookings_change()
+    - audit_sync_bookings_trigger (UPDATE): EXECUTE FUNCTION log_bookings_change()
+  🧪 Exempelrader:
+    - start_time=2025-06-03 08:00:00+02:00, end_time=2025-06-03 08:10:00+02:00, meeting_type=facetime, metadata={'phone': '070956145345', 'origin': 'klrab.se', 'company': 'Test AB', 'subject': 'FaceTime-möte: Daniel | Test AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'FaceTime', 'last_name': 'Källberg', 'first_name': 'Daniel', 'ip_address': '172.226.49.36:49063', 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'facetime:070956145345', 'body_preview': '<html>\r\n<head>\r\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n</head>\r\n<body>\r\nDetta är en inbjudan till möte: FaceTime-möte: Daniel | Test AB &amp; Daniel | Kinnekulle Ledningsrådgivning AB\r\n</body>\r\n</html>\r\n', 'meeting_length': 10, 'calendar_response_status': 'none'}, created_at=2025-06-02 22:50:37.228000+02:00, contact_id=1138f1b8-d247-4bb8-b9a1-57340b6da8ff, id=66143b52-dc79-448c-a6a9-ad4c6f6d7914, updated_at=2025-06-02 22:50:37.228000+02:00, booking_email=daniel.kallberg@mac.com
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • booking_email (text)
+  • updated_at (timestamp with time zone)
+  • email (text)
+  📐 Kolumntyper:
+    - metadata: jsonb
+    - created_at: timestamp with time zone
+    - id: uuid
+    - booking_email: text
+    - updated_at: timestamp with time zone
+    - email: text
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+    - log_contact_change_trigger (INSERT): EXECUTE FUNCTION log_contact_change()
+    - log_contact_change_trigger (DELETE): EXECUTE FUNCTION log_contact_change()
+    - log_contact_change_trigger (UPDATE): EXECUTE FUNCTION log_contact_change()
+    - audit_sync_contact_trigger (INSERT): EXECUTE FUNCTION log_contact_change()
+    - audit_sync_contact_trigger (DELETE): EXECUTE FUNCTION log_contact_change()
+    - audit_sync_contact_trigger (UPDATE): EXECUTE FUNCTION log_contact_change()
+  🧪 Exempelrader:
+    - metadata={'phone': '070956145345', 'origin': 'klrab.se', 'company': 'Test AB', 'last_name': 'Källberg', 'first_name': 'Daniel'}, created_at=2025-06-02 22:50:24.084981+02:00, id=1138f1b8-d247-4bb8-b9a1-57340b6da8ff, booking_email=daniel.kallberg@mac.com, updated_at=2025-06-02 22:50:24.084981+02:00, email=daniel.kallberg@mac.com
+
+📁 Tabell: booking_settings
+  • key (text)
+  • value (jsonb)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  📐 Kolumntyper:
+    - key: text
+    - value: jsonb
+    - value_type: text
+    - updated_at: timestamp with time zone
+  🔑 [p] booking_settings_pkey: PRIMARY KEY (key)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 22:46:14.058171+02:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 12:37:53.619684+02:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
+📁 Tabell: vat_rate
+  • id (uuid)
+  • name (text)
+  • percentage (numeric)
+  • account_sales (uuid)
+  • account_vat (uuid)
+  • created_at (timestamp with time zone)
+  📐 Kolumntyper:
+    - id: uuid
+    - name: text
+    - percentage: numeric
+    - account_sales: uuid
+    - account_vat: uuid
+    - created_at: timestamp with time zone
+  🔑 [p] vat_rate_pkey: PRIMARY KEY (id)
+  🔑 [f] vat_rate_account_sales_fkey: FOREIGN KEY (account_sales) REFERENCES account(id)
+  🔑 [f] vat_rate_account_vat_fkey: FOREIGN KEY (account_vat) REFERENCES account(id)
+  🔗 Relationer:
+    - account_sales ➡ account.id
+    - account_vat ➡ account.id
+  ⚙️ Triggers:
+
+📁 Tabell: transaction
+  • id (uuid)
+  • date (date)
+  • description (text)
+  • series (text)
+  • ver_no (integer)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • status (text)
+  • currency_code (text)
+  • exchange_rate (numeric)
+  • total_amount_original (numeric)
+  • created_by (uuid)
+  📐 Kolumntyper:
+    - id: uuid
+    - date: date
+    - description: text
+    - series: text
+    - ver_no: integer
+    - created_at: timestamp with time zone
+    - updated_at: timestamp with time zone
+    - metadata: jsonb
+    - status: text
+    - currency_code: text
+    - exchange_rate: numeric
+    - total_amount_original: numeric
+    - created_by: uuid
+  🔑 [p] transaction_pkey: PRIMARY KEY (id)
+  🔑 [u] unique_verifikat: UNIQUE (series, ver_no)
+  🔑 [c] transaction_status_check: CHECK ((status = ANY (ARRAY['prelim'::text, 'posted'::text, 'locked'::text])))
+  🔑 [f] transaction_created_by_fkey: FOREIGN KEY (created_by) REFERENCES contact(id)
+  🔗 Relationer:
+    - created_by ➡ contact.id
+  ⚙️ Triggers:
+
+📁 Tabell: company
+  • name (text)
+  • org_number (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  📐 Kolumntyper:
+    - name: text
+    - org_number: text
+    - metadata: jsonb
+    - created_at: timestamp with time zone
+    - id: uuid
+  🔑 [p] company_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  📐 Kolumntyper:
+    - key: character varying
+    - sv: text
+    - en: text
+  🔑 [u] unique_translation_key: UNIQUE (key)
+  🔑 [p] translation_pkey: PRIMARY KEY (key)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: journal_series
+  • series (text)
+  • name (text)
+  • description (text)
+  • next_ver_no (integer)
+  📐 Kolumntyper:
+    - series: text
+    - name: text
+    - description: text
+    - next_ver_no: integer
+  🔑 [p] journal_series_pkey: PRIMARY KEY (series)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - series=A, name=Huvudbok, description=Ordinarie verifikatserie för huvudbok, next_ver_no=11
+
+📁 Tabell: period
+  • id (uuid)
+  • name (text)
+  • start_date (date)
+  • end_date (date)
+  • locked (boolean)
+  • created_at (timestamp with time zone)
+  📐 Kolumntyper:
+    - id: uuid
+    - name: text
+    - start_date: date
+    - end_date: date
+    - locked: boolean
+    - created_at: timestamp with time zone
+  🔑 [p] period_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+
+📁 Tabell: ccrelation
+  • contact_id (uuid)
+  • company_id (uuid)
+  • role (text)
+  • main_contact (boolean)
+  • start_date (date)
+  • end_date (date)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  📐 Kolumntyper:
+    - contact_id: uuid
+    - company_id: uuid
+    - role: text
+    - main_contact: boolean
+    - start_date: date
+    - end_date: date
+    - metadata: jsonb
+    - created_at: timestamp with time zone
+    - id: uuid
+  🔑 [p] ccrelation_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_ccrelation_contact_id: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE
+  🔑 [f] fk_ccrelation_company_id: FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+  🔗 Relationer:
+    - contact_id ➡ contact.id
+    - company_id ➡ company.id
+  ⚙️ Triggers:
+
+📁 Tabell: currency
+  • code (text)
+  • name (text)
+  • symbol (text)
+  • exchange_rate (numeric)
+  • updated_at (timestamp with time zone)
+  📐 Kolumntyper:
+    - code: text
+    - name: text
+    - symbol: text
+    - exchange_rate: numeric
+    - updated_at: timestamp with time zone
+  🔑 [p] currency_pkey: PRIMARY KEY (code)
+  🔗 Relationer:
+  ⚙️ Triggers:
+
+📁 Tabell: template_transaction
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • default_amount (numeric)
+  • default_account_debit (uuid)
+  • default_account_credit (uuid)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  📐 Kolumntyper:
+    - id: uuid
+    - name: text
+    - description: text
+    - default_amount: numeric
+    - default_account_debit: uuid
+    - default_account_credit: uuid
+    - metadata: jsonb
+    - created_at: timestamp with time zone
+  🔑 [p] template_transaction_pkey: PRIMARY KEY (id)
+  🔑 [f] template_transaction_default_account_debit_fkey: FOREIGN KEY (default_account_debit) REFERENCES account(id)
+  🔑 [f] template_transaction_default_account_credit_fkey: FOREIGN KEY (default_account_credit) REFERENCES account(id)
+  🔗 Relationer:
+    - default_account_debit ➡ account.id
+    - default_account_credit ➡ account.id
+  ⚙️ Triggers:
+
+📁 Tabell: event_log
+  • source (text)
+  • event_type (text)
+  • payload (jsonb)
+  • received_at (timestamp with time zone)
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • action (text)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  📐 Kolumntyper:
+    - source: text
+    - event_type: text
+    - payload: jsonb
+    - received_at: timestamp with time zone
+    - id: uuid
+    - table_name: text
+    - record_id: uuid
+    - action: text
+    - timestamp: timestamp with time zone
+    - booking_id: uuid
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 22:51:38.761446+02:00, id=bf18a343-98f4-41ba-8aef-d004d928082c, table_name=contact, record_id=1138f1b8-d247-4bb8-b9a1-57340b6da8ff, action=INSERT, timestamp=2025-06-02 22:51:38.761446+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 22:51:38.761446+02:00, id=aff22700-0c2f-468b-b668-fffce6e976ee, table_name=contact, record_id=1138f1b8-d247-4bb8-b9a1-57340b6da8ff, action=INSERT, timestamp=2025-06-02 22:51:38.761446+02:00, booking_id=None
+    - source=sync, event_type=insert_contact, payload={'id': '1138f1b8-d247-4bb8-b9a1-57340b6da8ff', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '070956145345', 'origin': 'klrab.se', 'company': 'Test AB', 'last_name': 'Källberg', 'first_name': 'Daniel'}, 'created_at': '2025-06-02T20:50:24.084981+00:00', 'updated_at': '2025-06-02T20:50:24.084981+00:00', 'booking_email': 'daniel.kallberg@mac.com'}, received_at=2025-06-02 22:51:38.761446+02:00, id=1bfe1832-7861-4b8a-9efd-9577db9c9591, table_name=None, record_id=None, action=None, timestamp=2025-06-02 22:51:38.761446+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 22:51:38.834777+02:00, id=1192420b-3826-4726-875b-c24ae9233de2, table_name=bookings, record_id=66143b52-dc79-448c-a6a9-ad4c6f6d7914, action=INSERT, timestamp=2025-06-02 22:51:38.834777+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-02 22:51:38.834777+02:00, id=9f4d9915-396a-4554-b80a-50426c071779, table_name=bookings, record_id=66143b52-dc79-448c-a6a9-ad4c6f6d7914, action=INSERT, timestamp=2025-06-02 22:51:38.834777+02:00, booking_id=None
+
+📁 Tabell: entry_tag
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • created_at (timestamp with time zone)
+  📐 Kolumntyper:
+    - id: uuid
+    - name: text
+    - description: text
+    - created_at: timestamp with time zone
+  🔑 [p] entry_tag_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+
+📁 Tabell: account
+  • id (uuid)
+  • number (text)
+  • name (text)
+  • type (text)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • is_active (boolean)
+  • account_group (text)
+  • report_type (text)
+  • report_group (text)
+  📐 Kolumntyper:
+    - id: uuid
+    - number: text
+    - name: text
+    - type: text
+    - created_at: timestamp with time zone
+    - updated_at: timestamp with time zone
+    - is_active: boolean
+    - account_group: text
+    - report_type: text
+    - report_group: text
+  🔑 [p] account_pkey: PRIMARY KEY (id)
+  🔑 [u] account_number_key: UNIQUE (number)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - id=84d18e0a-2338-4c67-8151-5a44f6131d3f, number=1930, name=Företagskonto, type=tillgång, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, number=3001, name=Försäljning Sverige 25%, type=intäkt, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, number=2611, name=Utgående moms 25%, type=skuld, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=f826389c-d9ec-42db-8f17-920ea0e082cd, number=2010, name=Eget kapital, type=eget_kapital, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=5e3ba7a3-1683-42a3-afe5-e03839170542, number=2390, name=Övriga långfristiga skulder, type=skuld, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
+📁 Tabell: pending_changes
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • change_type (text)
+  • direction (text)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • operation (text)
+  • payload (jsonb)
+  • booking_id (uuid)
+  📐 Kolumntyper:
+    - id: uuid
+    - table_name: text
+    - record_id: uuid
+    - change_type: text
+    - direction: text
+    - processed: boolean
+    - created_at: timestamp with time zone
+    - operation: text
+    - payload: jsonb
+    - booking_id: uuid
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🔗 Relationer:
+    - booking_id ➡ bookings.id
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - id=76c81527-5339-4454-95e1-20f930561ed4, table_name=contact, record_id=1138f1b8-d247-4bb8-b9a1-57340b6da8ff, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 22:51:38.761446+02:00, operation=INSERT, payload={'id': '1138f1b8-d247-4bb8-b9a1-57340b6da8ff', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '070956145345', 'origin': 'klrab.se', 'company': 'Test AB', 'last_name': 'Källberg', 'first_name': 'Daniel'}, 'created_at': '2025-06-02T22:50:24.084981+02:00', 'updated_at': '2025-06-02T22:50:24.084981+02:00', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=None
+    - id=49aac044-f005-44f6-ba9e-7a19906c8eb0, table_name=contact, record_id=1138f1b8-d247-4bb8-b9a1-57340b6da8ff, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 22:51:38.761446+02:00, operation=INSERT, payload={'id': '1138f1b8-d247-4bb8-b9a1-57340b6da8ff', 'email': 'daniel.kallberg@mac.com', 'metadata': {'phone': '070956145345', 'origin': 'klrab.se', 'company': 'Test AB', 'last_name': 'Källberg', 'first_name': 'Daniel'}, 'created_at': '2025-06-02T22:50:24.084981+02:00', 'updated_at': '2025-06-02T22:50:24.084981+02:00', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=None
+    - id=eccf7a63-105c-4f7f-9cd1-d9bfba9fa3c8, table_name=bookings, record_id=66143b52-dc79-448c-a6a9-ad4c6f6d7914, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 22:51:38.834777+02:00, operation=INSERT, payload={'id': '66143b52-dc79-448c-a6a9-ad4c6f6d7914', 'end_time': '2025-06-03T08:10:00+02:00', 'metadata': {'phone': '070956145345', 'origin': 'klrab.se', 'company': 'Test AB', 'subject': 'FaceTime-möte: Daniel | Test AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'FaceTime', 'last_name': 'Källberg', 'first_name': 'Daniel', 'ip_address': '172.226.49.36:49063', 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'facetime:070956145345', 'body_preview': '<html>\r\n<head>\r\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n</head>\r\n<body>\r\nDetta är en inbjudan till möte: FaceTime-möte: Daniel | Test AB &amp; Daniel | Kinnekulle Ledningsrådgivning AB\r\n</body>\r\n</html>\r\n', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '1138f1b8-d247-4bb8-b9a1-57340b6da8ff', 'created_at': '2025-06-02T22:50:37.228+02:00', 'start_time': '2025-06-03T08:00:00+02:00', 'updated_at': '2025-06-02T22:50:37.228+02:00', 'meeting_type': 'facetime', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=66143b52-dc79-448c-a6a9-ad4c6f6d7914
+    - id=50aae37f-6a4b-4cd3-83b8-bf18a865227b, table_name=bookings, record_id=66143b52-dc79-448c-a6a9-ad4c6f6d7914, change_type=INSERT, direction=out, processed=True, created_at=2025-06-02 22:51:38.834777+02:00, operation=INSERT, payload={'id': '66143b52-dc79-448c-a6a9-ad4c6f6d7914', 'end_time': '2025-06-03T08:10:00+02:00', 'metadata': {'phone': '070956145345', 'origin': 'klrab.se', 'company': 'Test AB', 'subject': 'FaceTime-möte: Daniel | Test AB & Daniel | Kinnekulle Ledningsrådgivning AB', 'location': 'FaceTime', 'last_name': 'Källberg', 'first_name': 'Daniel', 'ip_address': '172.226.49.36:49063', 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'online_link': 'facetime:070956145345', 'body_preview': '<html>\r\n<head>\r\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n</head>\r\n<body>\r\nDetta är en inbjudan till möte: FaceTime-möte: Daniel | Test AB &amp; Daniel | Kinnekulle Ledningsrådgivning AB\r\n</body>\r\n</html>\r\n', 'meeting_length': 10, 'calendar_response_status': 'none'}, 'contact_id': '1138f1b8-d247-4bb8-b9a1-57340b6da8ff', 'created_at': '2025-06-02T22:50:37.228+02:00', 'start_time': '2025-06-03T08:00:00+02:00', 'updated_at': '2025-06-02T22:50:37.228+02:00', 'meeting_type': 'facetime', 'booking_email': 'daniel.kallberg@mac.com'}, booking_id=66143b52-dc79-448c-a6a9-ad4c6f6d7914
+
+📁 Tabell: report_structure
+  • id (integer)
+  • report_type (text)
+  • group_name (text)
+  • account_number (text)
+  • account_range (text)
+  • order_index (integer)
+  📐 Kolumntyper:
+    - id: integer
+    - report_type: text
+    - group_name: text
+    - account_number: text
+    - account_range: text
+    - order_index: integer
+  🔑 [p] report_structure_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - id=1, report_type=resultat, group_name=Intäkter, account_number=None, account_range=3000-3999, order_index=10
+    - id=2, report_type=resultat, group_name=Varukostnader, account_number=None, account_range=4000-4999, order_index=20
+    - id=3, report_type=resultat, group_name=Övriga externa kostnader, account_number=None, account_range=5000-5999, order_index=30
+    - id=4, report_type=resultat, group_name=Personalkostnader, account_number=None, account_range=6000-6999, order_index=40
+    - id=5, report_type=resultat, group_name=Avskrivningar, account_number=None, account_range=7000-7999, order_index=50
+
+📁 Tabell: entry
+  • id (uuid)
+  • transaction_id (uuid)
+  • account_id (uuid)
+  • amount (numeric)
+  • description (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • amount_original (numeric)
+  📐 Kolumntyper:
+    - id: uuid
+    - transaction_id: uuid
+    - account_id: uuid
+    - amount: numeric
+    - description: text
+    - metadata: jsonb
+    - created_at: timestamp with time zone
+    - amount_original: numeric
+  🔑 [p] entry_pkey: PRIMARY KEY (id)
+  🔑 [f] entry_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+  🔑 [f] entry_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT
+  🔗 Relationer:
+    - transaction_id ➡ transaction.id
+    - account_id ➡ account.id
+  ⚙️ Triggers:
+
+📁 Tabell: attachment
+  • id (uuid)
+  • transaction_id (uuid)
+  • filename (text)
+  • content_type (text)
+  • data (bytea)
+  • uploaded_at (timestamp with time zone)
+  • metadata (jsonb)
+  📐 Kolumntyper:
+    - id: uuid
+    - transaction_id: uuid
+    - filename: text
+    - content_type: text
+    - data: bytea
+    - uploaded_at: timestamp with time zone
+    - metadata: jsonb
+  🔑 [p] attachment_pkey: PRIMARY KEY (id)
+  🔑 [f] attachment_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+  🔗 Relationer:
+    - transaction_id ➡ transaction.id
+  ⚙️ Triggers:
+
+📁 Tabell: transaction_translation
+  • transaction_id (uuid)
+  • language (text)
+  • description (text)
+  📐 Kolumntyper:
+    - transaction_id: uuid
+    - language: text
+    - description: text
+  🔑 [p] transaction_translation_pkey: PRIMARY KEY (transaction_id, language)
+  🔑 [f] transaction_translation_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+  🔗 Relationer:
+    - transaction_id ➡ transaction.id
+  ⚙️ Triggers:
+
+📁 Tabell: account_translation
+  • account_id (uuid)
+  • language (text)
+  • name (text)
+  📐 Kolumntyper:
+    - account_id: uuid
+    - language: text
+    - name: text
+  🔑 [p] account_translation_pkey: PRIMARY KEY (account_id, language)
+  🔑 [f] account_translation_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+  🔗 Relationer:
+    - account_id ➡ account.id
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - account_id=84d18e0a-2338-4c67-8151-5a44f6131d3f, language=en, name=Corporate Bank Account
+    - account_id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, language=en, name=Sales Sweden 25% VAT
+    - account_id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, language=en, name=Output VAT 25%
+    - account_id=f826389c-d9ec-42db-8f17-920ea0e082cd, language=en, name=Equity
+    - account_id=5e3ba7a3-1683-42a3-afe5-e03839170542, language=en, name=Other Long-term Liabilities
+
+📁 Tabell: settings
+  • key (text)
+  • value (text)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  📐 Kolumntyper:
+    - key: text
+    - value: text
+    - value_type: text
+    - updated_at: timestamp with time zone
+  🔑 [p] settings_pkey: PRIMARY KEY (key)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - key=default_language, value=sv, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=reporting_currency, value=SEK, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=period_start_month, value=1, value_type=integer, updated_at=2025-06-03 16:17:04.085806+02:00
+
+📁 Tabell: budget
+  • year (integer)
+  • month (integer)
+  • account_number (text)
+  • amount (numeric)
+  📐 Kolumntyper:
+    - year: integer
+    - month: integer
+    - account_number: text
+    - amount: numeric
+  🔗 Relationer:
+  ⚙️ Triggers:
+
+📁 Tabell: bank_statement
+  • id (uuid)
+  • date (date)
+  • balance (numeric)
+  • source (text)
+  • metadata (jsonb)
+  📐 Kolumntyper:
+    - id: uuid
+    - date: date
+    - balance: numeric
+    - source: text
+    - metadata: jsonb
+  🔑 [p] bank_statement_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+
+📁 Tabell: entry_tag_relation
+  • entry_id (uuid)
+  • tag_id (uuid)
+  📐 Kolumntyper:
+    - entry_id: uuid
+    - tag_id: uuid
+  🔑 [p] entry_tag_relation_pkey: PRIMARY KEY (entry_id, tag_id)
+  🔑 [f] entry_tag_relation_entry_id_fkey: FOREIGN KEY (entry_id) REFERENCES entry(id) ON DELETE CASCADE
+  🔑 [f] entry_tag_relation_tag_id_fkey: FOREIGN KEY (tag_id) REFERENCES entry_tag(id) ON DELETE CASCADE
+  🔗 Relationer:
+    - entry_id ➡ entry.id
+    - tag_id ➡ entry_tag.id
+  ⚙️ Triggers:
+
+📁 Tabell: tracking_event
+  • id (uuid)
+  • visitor_id (text)
+  • event_type (text)
+  • timestamp (timestamp with time zone)
+  • metadata (jsonb)
+  📐 Kolumntyper:
+    - id: uuid
+    - visitor_id: text
+    - event_type: text
+    - timestamp: timestamp with time zone
+    - metadata: jsonb
+  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+  🔗 Relationer:
+  ⚙️ Triggers:
+  🧪 Exempelrader:
+    - id=07b32b47-0341-4ab8-bb6a-03073346db9f, visitor_id=1b9ab6a8-e66c-40cd-85dd-ebb3d028b84f, event_type=page_view, timestamp=2025-06-04 10:36:54.942000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'referrer': None}
+    - id=a48899d9-e535-44f4-8fdd-6d2bcfee1f2a, visitor_id=77616cac-f5e8-4fb3-b615-3fa3bb3f405d, event_type=page_view, timestamp=2025-06-04 10:45:55.043000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 1920, 'height': 1080, 'devicePixelRatio': 1}, 'language': 'en-US', 'platform': 'Linux x86_64', 'referrer': None, 'timezone': 'UTC', 'viewport': {'scrollY': 0, 'innerHeight': 850}, 'user_agent': 'Webflow 1.0 - Site Screenshot', 'deviceMemory': 0.5, 'performance_now': 4821, 'hardwareConcurrency': 2}
+    - id=482f1827-79e1-446b-a8d0-a10261f0c924, visitor_id=77616cac-f5e8-4fb3-b615-3fa3bb3f405d, event_type=page_view, timestamp=2025-06-04 10:45:55.322000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 1920, 'height': 1080, 'devicePixelRatio': 1}, 'language': 'en-US', 'platform': 'Linux x86_64', 'referrer': None, 'timezone': 'UTC', 'viewport': {'scrollY': 0, 'innerHeight': 954}, 'user_agent': 'Webflow 1.0 - Site Screenshot', 'deviceMemory': 0.5, 'performance_now': 5142, 'hardwareConcurrency': 2}
+    - id=a6c1d447-b4b9-48c4-851d-0e0b7000ea7c, visitor_id=1b9ab6a8-e66c-40cd-85dd-ebb3d028b84f, event_type=page_view, timestamp=2025-06-04 10:46:13.270000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 973, 'height': 1293, 'devicePixelRatio': 1}, 'language': 'sv-SE', 'platform': 'MacIntel', 'referrer': None, 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 1293}, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'deviceMemory': None, 'performance_now': 1259, 'hardwareConcurrency': 8}
+    - id=d5c1102b-57dd-4fa2-8b0a-eb4a678f2aa5, visitor_id=1b9ab6a8-e66c-40cd-85dd-ebb3d028b84f, event_type=click, timestamp=2025-06-04 10:46:18.315000+02:00, metadata={'tag': 'A', 'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'href': 'https://www.klrab.se/offerings/100dagar', 'text': '100-dagarsprogram\n❯\n', 'screen': {'width': 2102, 'height': 1293, 'devicePixelRatio': 1}, 'language': 'sv-SE', 'platform': 'MacIntel', 'referrer': None, 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 1293}, 'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15', 'deviceMemory': None, 'performance_now': 6304, 'hardwareConcurrency': 8, 'time_since_page_load_ms': 6304}
+
+📁 Tabell: pending_verification
+  • id (uuid)
+  • email (text)
+  • token (text)
+  • metadata (jsonb)
+  • created_at (timestamp without time zone)
+  • used_at (timestamp without time zone)
+  📐 Kolumntyper:
+    - id: uuid
+    - email: text
+    - token: text
+    - metadata: jsonb
+    - created_at: timestamp without time zone
+    - used_at: timestamp without time zone
+  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+  🔑 [u] pending_verification_token_key: UNIQUE (token)
+  🔗 Relationer:
+  ⚙️ Triggers:
+

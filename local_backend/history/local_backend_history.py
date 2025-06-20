@@ -13,7 +13,11 @@ total_todo = 0
 import glob
 
 rotmapp = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/local_backend"
-filnamn_lista = glob.glob(os.path.join(rotmapp, "**/*.js"), recursive=True) + glob.glob(os.path.join(rotmapp, "**/*.py"), recursive=True)
+filnamn_lista = (
+    glob.glob(os.path.join(rotmapp, "**/*.js"), recursive=True) +
+    glob.glob(os.path.join(rotmapp, "**/*.py"), recursive=True) +
+    glob.glob(os.path.join(rotmapp, "**/*.swift"), recursive=True)
+)
 # Exkludera local_backend/history/local_backend_history.py
 filnamn_lista = [f for f in filnamn_lista if not f.endswith("local_backend/history/local_backend_history.py")]
 

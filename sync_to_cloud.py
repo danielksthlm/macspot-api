@@ -67,6 +67,12 @@ def sync():
             print(f"🔄 Hanterar {operation} för {table_name} (ID: {record_id})")
             try:
                 payload = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
+                
+                origin = payload.get("metadata", {}).get("origin", "") if isinstance(payload.get("metadata"), dict) else ""
+                if table_name == "contact" and origin != "klrab.se":
+                    print(f"⏭️ Skipping contact sync to cloud (origin is not klrab.se): {payload.get('email')}")
+                    continue
+                
                 # Filtrera payload till endast tillåtna kolumner
                 payload = {k: v for k, v in payload.items() if k in allowed_columns.get(table_name, [])}
                 with remote_conn.cursor() as cur:

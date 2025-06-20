@@ -54,13 +54,13 @@ do {
   ]
   let store = CNContactStore()
   let request = CNContactFetchRequest(keysToFetch: keysToFetch)
-  store.enumerateContacts(with: request) { contact, _ in
+  try store.enumerateContacts(with: request) { contact, _ in
     do {
       guard let email = contact.emailAddresses.first?.value as String? else { return }
       let firstName = contact.givenName
       let lastName = contact.familyName
-      let company = contact.organizationName
-      let phone = contact.phoneNumbers.first?.value.stringValue ?? ""
+      _ = contact.organizationName
+      _ = contact.phoneNumbers.first?.value.stringValue ?? ""
 
       print("📱 macOS-kontakt: \(firstName) \(lastName) — \(email)")
 
@@ -68,9 +68,43 @@ do {
       defer { stmt.close() }
 
       let result = try stmt.execute(parameterValues: [email])
-      while case let .row(row) = try result.next() {
-        let metadata = try row.column(0).jsonb()
-        print("🗄️ DB-data:", metadata)
+      var found = false
+      while let row = result.next() {
+          let metadataValue = try row.get().columns[0]
+          let metadataString = try metadataValue.string()
+          print("🗄️ DB-data:", metadataString)
+          
+          if let data = metadataString.data(using: .utf8) {
+              found = true
+              let json = try JSONSerialization.jsonObject(with: data, options: [])
+              print("🧩 JSON:", json)
+          }
+      }
+      if !found {
+          print("❓ Ingen match i databasen för: \(email)")
+          let insertPendingStmt = try connection.prepareStatement(
+              text: """
+              INSERT INTO pending_changes (table_name, action, row_data, created_at)
+              VALUES ($1, $2, $3::jsonb, NOW())
+              """
+          )
+          let org = contact.organizationName
+          let phone = contact.phoneNumbers.first?.value.stringValue ?? ""
+          let json = """
+          {
+            "email": "\(email)",
+            "first_name": "\(firstName)",
+            "last_name": "\(lastName)",
+            "organization": "\(org)",
+            "phone": "\(phone)",
+            "metadata": {
+              "origin": "macos"
+            }
+          }
+          """
+          try insertPendingStmt.execute(parameterValues: ["contact", "insert", json])
+          insertPendingStmt.close()
+          print("🕓 Skapade pending_changes för \(email)")
       }
 
       print("—")
