@@ -89,6 +89,16 @@ try:
 
     run_healthcheck()
 
+    # Kör Apple Kontakter-synk via Swift
+    try:
+        print("🍎 Kör Apple Contact Sync...")
+        subprocess.run([
+            "/usr/bin/swift",
+            "run"
+        ], cwd=f"{BASE}/local_backend/apple_contact_sync", check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Swift-synk misslyckades: {e}")
+
     # Kör sync.py först
     run_script("🟡 Kör sync.py...", "sync.py")
 
