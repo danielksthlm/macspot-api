@@ -117,6 +117,12 @@ try:
     # Kör sync_to_cloud.py efter kontrollen
     run_script("🟢 Kör sync_to_cloud.py...", "sync_to_cloud.py")
 
+    # Kör sync_from_pending_to_apple.py för att spegla kontaktändringar → Apple Kontakter
+    try:
+        run_script("🍎 Spegla till Apple Kontakter...", "local_backend/sync_from_pending_to_apple.py")
+    except Exception as e:
+        print(f"❌ Fel vid spegling till Apple Kontakter: {e}")
+
 
     # Kör generate_fromcloud_pending.py om event_log innehåller sync_fromcloud_mismatch
     with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
