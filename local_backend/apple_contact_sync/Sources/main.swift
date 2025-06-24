@@ -112,10 +112,10 @@ do {
           let stmt = try connection.prepareStatement(text: """
               SELECT id, metadata FROM contact
               WHERE metadata->>'apple_id' = $1
-                 OR email = $2
                  OR EXISTS (
-                   SELECT 1 FROM jsonb_array_elements(metadata->'emails') elem
-                   WHERE elem->>'email' = $2
+                   SELECT 1 FROM ccrelation
+                   WHERE ccrelation.contact_id = contact.id
+                     AND ccrelation.metadata->>'email' = $2
                  )
               """)
           let result = try stmt.execute(parameterValues: [contact.identifier, email])
@@ -283,14 +283,14 @@ do {
                               if !isDupe {
                                   // Kontroll: Finns andra kontakter med samma e-post men annan apple_id → hoppa över
                                   let emailDupeCheckStmt = try connection.prepareStatement(text: """
-                                  SELECT COUNT(*) FROM contact
-                                  WHERE email = $1 AND metadata->>'apple_id' IS DISTINCT FROM $2
+                                  SELECT COUNT(*) FROM ccrelation
+                                  WHERE metadata->>'email' = $1 AND contact_id IS NOT NULL
                                   """)
-                                  let emailDupeResult = try emailDupeCheckStmt.execute(parameterValues: [email, contact.identifier])
+                                  let emailDupeResult = try emailDupeCheckStmt.execute(parameterValues: [email])
                                   if case let .success(row) = emailDupeResult.next() {
                                       let count = try row.columns[0].int()
                                       if count > 0 {
-                                          print("🛑 Dubblettkontakt hittad med samma e-post men annan apple_id – hoppar över pending_change: \(email)")
+                                          print("🛑 Dubblettkontakt hittad med samma e-post – hoppar över pending_change: \(email)")
                                           emailDupeResult.close()
                                           emailDupeCheckStmt.close()
                                           continue
@@ -356,14 +356,16 @@ WHERE metadata->>'apple_id' = $1 OR metadata->>'apple_uid' = $1
 
               // Kontroll: hoppa över om kontakt med denna e-post redan finns
               let emailCheckStmt = try connection.prepareStatement(text: """
-                SELECT id FROM contact
-                WHERE email = $1 OR metadata->>'email' = $1
+                SELECT COUNT(*) FROM ccrelation WHERE metadata->>'email' = $1
               """)
               let emailCheckResult = try emailCheckStmt.execute(parameterValues: [email])
-              if case .success(_) = emailCheckResult.next() {
-                print("🧼 Kontakt med e-post redan finns i DB – hoppar över: \(email)")
-                emailCheckStmt.close()
-                continue
+              if case let .success(row) = emailCheckResult.next() {
+                let count = try row.columns[0].int()
+                if count > 0 {
+                  print("🧼 Kontakt med e-post redan finns i DB – hoppar över: \(email)")
+                  emailCheckStmt.close()
+                  continue
+                }
               }
               emailCheckStmt.close()
 
