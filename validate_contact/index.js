@@ -25,7 +25,7 @@ module.exports = async function (context, req) {
       if (!process.env[key]) throw new Error(`Missing environment variable: ${key}`);
     }
 
-    const contactRes = await pool.query('SELECT * FROM contact WHERE booking_email = $1', [email]);
+    const contactRes = await pool.query('SELECT * FROM contact WHERE email = $1', [email]);
     const contact = contactRes.rows[0];
 
     if ((req.body?.write_if_valid || req.query?.write_if_valid) && contact) {
@@ -40,11 +40,11 @@ module.exports = async function (context, req) {
       }
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
         // Fetch existing metadata
-        const existing = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
+        const existing = await pool.query('SELECT metadata FROM contact WHERE email = $1', [email]);
         const old = existing.rows[0]?.metadata || {};
         const merged = { ...old, ...metadataFromClient };
         await pool.query(
-          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
+          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE email = $2`,
           [merged, email]
         );
         context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
@@ -64,7 +64,7 @@ module.exports = async function (context, req) {
         metadataFromClient.origin = 'klrab.se';
         const newId = uuidv4();
         await pool.query(
-          `INSERT INTO contact (id, email, booking_email, metadata, created_at) VALUES ($1, $2, $2, $3, NOW())`,
+          `INSERT INTO contact (id, email, metadata, created_at) VALUES ($1, $2, $3, NOW())`,
           [newId, email, metadataFromClient]
         );
         context.log.info('✅ Ny kontakt skapad via validate_contact');
@@ -86,7 +86,7 @@ module.exports = async function (context, req) {
 
     let metadata = {};
     if (contact) {
-      const refreshed = await pool.query('SELECT metadata FROM contact WHERE booking_email = $1', [email]);
+      const refreshed = await pool.query('SELECT metadata FROM contact WHERE email = $1', [email]);
       metadata = refreshed.rows[0]?.metadata || {};
     }
 
@@ -146,7 +146,6 @@ module.exports = async function (context, req) {
         body: {
           status: "incomplete",
           contact_id: contact.id,
-          booking_email: contact.booking_email,
           missing_fields: missingFields,
           metadata
         }
@@ -160,7 +159,6 @@ module.exports = async function (context, req) {
         body: {
           status: "existing_customer",
           contact_id: contact.id,
-          booking_email: contact.booking_email,
           metadata
         }
       };

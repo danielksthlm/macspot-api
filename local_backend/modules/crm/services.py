@@ -19,7 +19,6 @@ async def get_all_contacts():
         SELECT 
             c.id,
             c.email,
-            c.booking_email,
             c.metadata,
             COALESCE(b.count, 0) AS booking_count
         FROM contact c
@@ -47,7 +46,6 @@ async def get_all_contacts():
         contacts.append({
             "id": str(row["id"]),
             "email": row["email"],
-            "booking_email": row["booking_email"],
             "first_name": fix_encoding(metadata.get("first_name")),
             "last_name": fix_encoding(metadata.get("last_name")),
             "company": fix_encoding(metadata.get("company")),

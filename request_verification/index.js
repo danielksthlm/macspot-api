@@ -39,20 +39,20 @@ module.exports = async function (context, req) {
     if (action === 'newsletter') {
       // Kontrollera om kontakt redan finns
       const contactRes = await pool.query(
-        `SELECT id, metadata FROM contact WHERE booking_email = $1 LIMIT 1`,
+        `SELECT id, metadata FROM contact WHERE email = $1 LIMIT 1`,
         [email]
       );
       if (contactRes.rows.length > 0) {
         const oldMeta = contactRes.rows[0].metadata || {};
         const merged = { ...oldMeta, subscribed_to_newsletter: true };
         await pool.query(
-          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE booking_email = $2`,
+          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE email = $2`,
           [merged, email]
         );
       } else {
         await pool.query(
-          `INSERT INTO contact (id, email, booking_email, metadata, created_at)
-           VALUES (gen_random_uuid(), $1, $1, $2, NOW())`,
+          `INSERT INTO contact (id, email, metadata, created_at)
+           VALUES (gen_random_uuid(), $1, $2, NOW())`,
           [email, { subscribed_to_newsletter: true }]
         );
       }

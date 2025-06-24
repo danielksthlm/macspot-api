@@ -37,7 +37,7 @@ def extract_pending_changes_from_eventlog(conn):
                 continue
 
             # Hämta aktuell post från databasen
-            cur.execute(f"SELECT * FROM {table} WHERE booking_email = %s", (email,))
+            cur.execute(f"SELECT * FROM {table} WHERE email = %s", (email,))
             result = cur.fetchone()
             if not result:
                 print(f"⚠️ Ingen rad hittades för {email} i {table}")

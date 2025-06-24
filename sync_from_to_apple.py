@@ -178,14 +178,13 @@ def apply_pending_out_contacts(conn):
             # UPSERT-logik: Alltid använd UPSERT, och uppdatera även updated_at
             print(f"➕/🔁 Upsert kontakt: {email}")
             cur.execute("""
-                INSERT INTO contact (id, email, booking_email, metadata, updated_at)
-                VALUES (%s, %s, %s, %s, NOW())
+                INSERT INTO contact (id, email, metadata, updated_at)
+                VALUES (%s, %s, %s, NOW())
                 ON CONFLICT (id) DO UPDATE
                 SET email = EXCLUDED.email,
-                    booking_email = EXCLUDED.booking_email,
                     metadata = EXCLUDED.metadata,
                     updated_at = NOW()
-            """, (record_id, email, email, json.dumps(payload | {"metadata": metadata})))
+            """, (record_id, email, json.dumps(payload | {"metadata": metadata})))
 
             cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
         conn.commit()
