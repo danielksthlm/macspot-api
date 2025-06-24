@@ -1,0 +1,144 @@
+📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: tracking_event
+  • id (uuid)
+  • timestamp (timestamp with time zone)
+  • metadata (jsonb)
+  • synced_at (timestamp with time zone)
+  • visitor_id (text)
+  • event_type (text)
+  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+
+📁 Tabell: slot_cache
+  • created_at (timestamp without time zone)
+  • slot_day (date)
+  • slots (jsonb)
+  • id (uuid)
+  • meeting_length (integer)
+  • booking_email (text)
+  • meeting_type (text)
+  • slot_part (text)
+  🔑 [p] slot_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: calendar_origin_cache
+  • created_at (timestamp without time zone)
+  • timestamp (timestamp with time zone)
+  • event_date (date)
+  • id (integer)
+  • end_time (timestamp without time zone)
+  • address (text)
+  • source (text)
+  🔑 [c] calendar_origin_cache_source_check: CHECK ((source = ANY (ARRAY['Apple Calendar'::text, 'Microsoft 365'::text])))
+  🔑 [p] calendar_origin_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: available_slots_cache
+  • id (uuid)
+  • travel_time_min (integer)
+  • generated_at (timestamp without time zone)
+  • expires_at (timestamp without time zone)
+  • meeting_length (integer)
+  • slot_day (date)
+  • slot_score (integer)
+  • meeting_type (text)
+  • slot_part (text)
+  • slot_iso (text)
+  🔑 [p] available_slots_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: pending_verification
+  • id (uuid)
+  • metadata (jsonb)
+  • created_at (timestamp without time zone)
+  • used_at (timestamp without time zone)
+  • email (text)
+  • token (text)
+  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+  🔑 [u] pending_verification_token_key: UNIQUE (token)
+
+📁 Tabell: travel_time_cache
+  • travel_minutes (integer)
+  • updated_at (timestamp with time zone)
+  • is_fallback (boolean)
+  • hour (integer)
+  • created_at (timestamp with time zone)
+  • to_address (text)
+  • from_address (text)
+  🔑 [u] unique_travel_key: UNIQUE (from_address, to_address, hour)
+  🧪 Topp 5 rader:
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=10, travel_minutes=33, created_at=2025-06-24 14:00:01.374226+00:00, updated_at=2025-06-24 14:00:01.374226+00:00, is_fallback=False
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=14, travel_minutes=32, created_at=2025-06-24 14:00:02.181381+00:00, updated_at=2025-06-24 14:00:02.181381+00:00, is_fallback=False
+
+📁 Tabell: event_log
+  • received_at (timestamp with time zone)
+  • record_id (uuid)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  • id (uuid)
+  • payload (jsonb)
+  • action (text)
+  • event_type (text)
+  • source (text)
+  • table_name (text)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+
+📁 Tabell: booking_settings
+  • value (jsonb)
+  • updated_at (timestamp with time zone)
+  • key (text)
+  • value_type (text)
+  🔑 [u] unique_key: UNIQUE (key)
+  🧪 Topp 5 rader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 20:46:14.058171+00:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 10:37:53.619684+00:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🧪 Topp 5 rader:
+    - key=error_invalid_phone, sv=Ogiltigt telefonnummer. Vi vet att det är svårt att komma ihåg sitt nummer., en=Invalid phone number. We know remembering your own number is hard.
+    - key=error_invalid_name, sv=Namnet är ogiltigt (minst 2 tecken, max 50). Smeknamn som "X" är för Elon., en=Invalid name (min 2 characters, max 50). Nicknames like "X" are taken.
+    - key=error_missing_fields, sv=Alla fält måste vara ifyllda. Vi är petiga så du slipper bli det senare., en=All fields must be filled. We’re picky so you don’t have to be later.
+    - key=error_missing_meeting_link, sv=Möteslänk krävs. Om inte mötet sker via brevduva., en=A meeting link is required. Unless the meeting is via carrier pigeon.
+    - key=error_missing_recaptcha, sv=reCAPTCHA måste verifieras. Nej, det är inte en känslomässig fråga., en=reCAPTCHA verification required. And no, it’s not a personality test.
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • meeting_type (text)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
+📁 Tabell: pending_changes
+  • booking_id (uuid)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • payload (jsonb)
+  • id (uuid)
+  • record_id (uuid)
+  • table_name (text)
+  • operation (text)
+  • change_type (text)
+  • direction (text)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+
+📁 Tabell: contact
+  • updated_at (timestamp with time zone)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • metadata (jsonb)
+  • booking_email (text)
+  • email (text)
+  • apple_uid (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+

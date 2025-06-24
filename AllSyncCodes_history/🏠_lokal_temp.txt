@@ -1,0 +1,329 @@
+📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • meeting_type (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • email (text)
+  • apple_uid (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'magnus.stode@loomis.com', 'label': ''}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46 8 522 920 20 31'}, {'label': '_$!<Mobile>!$_', 'number': '+46 70 643 20 31'}], 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson'}, 'nickname': '', 'addresses': [{'city': '', 'label': '_$!<Home>!$_', 'state': '', 'street': '', 'country': 'Sweden', 'postalCode': ''}], 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'job_title': '', 'last_name': 'Stöde', 'department': '', 'first_name': 'Magnus', 'middle_name': '', 'organization': 'PricewaterhouseCoopers', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, updated_at=2025-06-24 21:48:55.770785+02:00, email=magnus.stode@loomis.com, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/86997398', 'label': '_$!<HomePage>!$_'}, {'url': 'www.wilton-row.com', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'pontus.aldell@jpmorgan.com', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+44 (77) 7599 4555'}, {'label': '_$!<Work>!$_', 'number': '+44 (0) 207 742 7953'}], 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'birthday': '1975-12-11T00:00:00Z', 'metadata': {'origin': 'macos', 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'job_title': 'Executive Director', 'last_name': 'Aldell', 'department': '', 'first_name': 'Pontus', 'middle_name': '', 'organization': 'J.P. Morgan Private Bank', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=pontus-aldell-87217525&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=da7d9009-e4d1-4a84-90e3-5ae2c868bf2b, updated_at=2025-06-24 21:48:55.770785+02:00, email=pontus.aldell@jpmorgan.com, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/106655683', 'label': '_$!<HomePage>!$_'}, {'url': 'http://www.xlntwellness.se', 'label': '_$!<HomePage>!$_'}, {'url': 'http://xlntwellness.blogspot.com/', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'info@xlntwellness.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46739354547'}], 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'STOCKHOLM', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Luxgatan 6', 'country': 'Sweden', 'postalCode': '11262'}, {'city': 'Marbella Area, Spain', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'job_title': 'Personal Trainer', 'last_name': 'Villanueva', 'department': '', 'first_name': 'Antonio', 'middle_name': '', 'organization': 'Sportlife Odenplan', 'social_profiles': [{'url': 'http://twitter.com/TrainerAntonio', 'label': '', 'service': 'Twitter'}, {'url': 'https://www.linkedin.com/profile/view?id=antonio-villanueva-0578762b&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=8d5cb261-5e1f-441d-945e-a330b356ccca, updated_at=2025-06-24 21:48:55.770785+02:00, email=info@xlntwellness.se, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'www.psykologpartners.se', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'info@psykologpartners.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46841009333'}], 'apple_id': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'apple_uid': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Drottninggatan 97', 'country': 'Sverige', 'postalCode': '113 60'}], 'apple_uid': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'job_title': '', 'last_name': '', 'department': '', 'first_name': 'Psykologpartners W & W AB', 'middle_name': '', 'organization': 'Psykologpartners W & W AB', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=3a1e8bd9-cd1c-4ee5-add7-a6fa1599b189, updated_at=2025-06-24 21:48:55.770785+02:00, email=info@psykologpartners.se, apple_uid=None
+    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'alexander.hallstrom@almequity.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '070-614 70 70'}], 'apple_id': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'apple_uid': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'job_title': 'Biträdande Projektledare', 'last_name': 'Hallström', 'department': '', 'first_name': 'Alexander', 'middle_name': '', 'organization': '', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=8bbda143-5a90-48a1-9f61-5cfc234c08a3, updated_at=2025-06-24 21:48:55.770785+02:00, email=alexander.hallstrom@almequity.se, apple_uid=None
+
+📁 Tabell: transaction
+  • id (uuid)
+  • date (date)
+  • description (text)
+  • series (text)
+  • ver_no (integer)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • status (text)
+  • currency_code (text)
+  • exchange_rate (numeric)
+  • total_amount_original (numeric)
+  • created_by (uuid)
+  🔑 [p] transaction_pkey: PRIMARY KEY (id)
+  🔑 [u] unique_verifikat: UNIQUE (series, ver_no)
+  🔑 [c] transaction_status_check: CHECK ((status = ANY (ARRAY['prelim'::text, 'posted'::text, 'locked'::text])))
+  🔑 [f] transaction_created_by_fkey: FOREIGN KEY (created_by) REFERENCES contact(id)
+
+📁 Tabell: booking_settings
+  • key (text)
+  • value (jsonb)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  🔑 [p] booking_settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 22:46:14.058171+02:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 12:37:53.619684+02:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
+📁 Tabell: vat_rate
+  • id (uuid)
+  • name (text)
+  • percentage (numeric)
+  • account_sales (uuid)
+  • account_vat (uuid)
+  • created_at (timestamp with time zone)
+  🔑 [p] vat_rate_pkey: PRIMARY KEY (id)
+  🔑 [f] vat_rate_account_sales_fkey: FOREIGN KEY (account_sales) REFERENCES account(id)
+  🔑 [f] vat_rate_account_vat_fkey: FOREIGN KEY (account_vat) REFERENCES account(id)
+
+📁 Tabell: company
+  • name (text)
+  • org_number (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  🔑 [p] company_pkey: PRIMARY KEY (id)
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🔑 [u] unique_translation_key: UNIQUE (key)
+  🔑 [p] translation_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: journal_series
+  • series (text)
+  • name (text)
+  • description (text)
+  • next_ver_no (integer)
+  🔑 [p] journal_series_pkey: PRIMARY KEY (series)
+  🧪 Topp 5 rader:
+    - series=A, name=Huvudbok, description=Ordinarie verifikatserie för huvudbok, next_ver_no=11
+
+📁 Tabell: period
+  • id (uuid)
+  • name (text)
+  • start_date (date)
+  • end_date (date)
+  • locked (boolean)
+  • created_at (timestamp with time zone)
+  🔑 [p] period_pkey: PRIMARY KEY (id)
+
+📁 Tabell: ccrelation
+  • contact_id (uuid)
+  • company_id (uuid)
+  • role (text)
+  • main_contact (boolean)
+  • start_date (date)
+  • end_date (date)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  🔑 [p] ccrelation_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_ccrelation_contact_id: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE
+  🔑 [f] fk_ccrelation_company_id: FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+
+📁 Tabell: currency
+  • code (text)
+  • name (text)
+  • symbol (text)
+  • exchange_rate (numeric)
+  • updated_at (timestamp with time zone)
+  🔑 [p] currency_pkey: PRIMARY KEY (code)
+
+📁 Tabell: template_transaction
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • default_amount (numeric)
+  • default_account_debit (uuid)
+  • default_account_credit (uuid)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  🔑 [p] template_transaction_pkey: PRIMARY KEY (id)
+  🔑 [f] template_transaction_default_account_debit_fkey: FOREIGN KEY (default_account_debit) REFERENCES account(id)
+  🔑 [f] template_transaction_default_account_credit_fkey: FOREIGN KEY (default_account_credit) REFERENCES account(id)
+
+📁 Tabell: pending_changes
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • change_type (text)
+  • direction (text)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • operation (text)
+  • payload (jsonb)
+  • booking_id (uuid)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - id=48fbb9d7-c365-4836-8bcf-b5f017e74706, table_name=contact, record_id=5dfe78ba-c915-450f-a4df-654831a092e2, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:56.603997+02:00, operation=UPDATE, payload={'note': '', 'urls': [{'url': 'linkedin://#profile/13742424', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'johannes.jogi@swedbank.se', 'label': '_$!<Work>!$_'}, {'email': 'johannes.jogi@j3innovation.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 70-319 12 65'}, {'label': '_$!<Main>!$_', 'number': '+46 8-585 900 00'}], 'apple_id': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'apple_uid': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'STOCKHOLM', 'label': '_$!<Home>!$_', 'state': '', 'street': 'Brunkebergstorg 8', 'country': 'Sweden', 'postalCode': '11151'}, {'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'job_title': 'Owner and Co Founder', 'last_name': 'Jögi', 'department': '', 'first_name': 'Johannes', 'middle_name': '', 'organization': 'Swedbank', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=johannes-j%C3%B6gi-9607284&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, booking_id=None
+    - id=89876f00-8b77-414c-bd75-8a52149223b5, table_name=contact, record_id=47e7ad2f-2b4d-4749-8b9f-eccae751c986, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:16.585313+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'susanne@glendor.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 7 082 23 607'}, {'label': '_$!<Work>!$_', 'number': '+4684289680'}], 'apple_id': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'apple_uid': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Box 22253', 'country': 'Sverige', 'postalCode': '104 22'}, {'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Kungsholmstorg 16', 'country': '', 'postalCode': ''}], 'apple_uid': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'job_title': '', 'last_name': 'Glendor', 'department': '', 'first_name': 'Susanne', 'middle_name': '', 'organization': '', 'social_profiles': []}, booking_id=None
+    - id=bfc95eca-856f-4752-abfd-a49a0ce21f15, table_name=contact, record_id=efe4c159-0bc5-47b7-bf5f-86766c26810b, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:31:57.041584+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'joanna.stillman@kakeldesign.se', 'label': '_$!<Work>!$_'}, {'email': 'stillmanjoanna@gmail.com', 'label': '_$!<Home>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 70-205 73 58'}], 'apple_id': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'apple_uid': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Västerås', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Friledningsgatan 1A', 'country': '', 'postalCode': '721 37'}], 'apple_uid': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'job_title': '', 'last_name': 'Stillman', 'department': '', 'first_name': 'Joanna', 'middle_name': '', 'organization': 'KakelDesign', 'social_profiles': []}, booking_id=None
+    - id=fe09b3c1-ad9d-4838-a71c-d48f704ec532, table_name=contact, record_id=32e951f0-1cb7-4c38-97ac-a0ac3b08c749, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:31:50.653234+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'robmanuell@hotmail.com', 'label': '_$!<Home>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '0730214465'}], 'apple_id': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'apple_uid': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'job_title': '', 'last_name': 'Manuell', 'department': '', 'first_name': 'Robert', 'middle_name': '', 'organization': '', 'social_profiles': []}, booking_id=None
+    - id=5c333847-5688-491d-8cbd-1481bb01860a, table_name=contact, record_id=728c7efb-1c57-459e-874e-0f5125cc3a6b, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:47.415468+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'alexandra.nilsson@apfond6.se', 'label': ''}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 708 74 10 36'}, {'label': '_$!<Work>!$_', 'number': '+46 31 741 10 36'}], 'apple_id': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'apple_uid': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Göteborg', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Sjätte AP-fonden\nÖstra Hamngatan 18', 'country': 'Sweden', 'postalCode': 'SE-411 09'}], 'apple_uid': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'job_title': 'Head of AP Fund Investments', 'last_name': 'Nilsson', 'department': '', 'first_name': 'Alexandra', 'middle_name': '', 'organization': 'Sjätte AP-fonden', 'social_profiles': []}, booking_id=None
+
+📁 Tabell: entry_tag
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • created_at (timestamp with time zone)
+  🔑 [p] entry_tag_pkey: PRIMARY KEY (id)
+
+📁 Tabell: account
+  • id (uuid)
+  • number (text)
+  • name (text)
+  • type (text)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • is_active (boolean)
+  • account_group (text)
+  • report_type (text)
+  • report_group (text)
+  🔑 [p] account_pkey: PRIMARY KEY (id)
+  🔑 [u] account_number_key: UNIQUE (number)
+  🧪 Topp 5 rader:
+    - id=84d18e0a-2338-4c67-8151-5a44f6131d3f, number=1930, name=Företagskonto, type=tillgång, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, number=3001, name=Försäljning Sverige 25%, type=intäkt, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, number=2611, name=Utgående moms 25%, type=skuld, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=f826389c-d9ec-42db-8f17-920ea0e082cd, number=2010, name=Eget kapital, type=eget_kapital, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=5e3ba7a3-1683-42a3-afe5-e03839170542, number=2390, name=Övriga långfristiga skulder, type=skuld, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
+📁 Tabell: report_structure
+  • id (integer)
+  • report_type (text)
+  • group_name (text)
+  • account_number (text)
+  • account_range (text)
+  • order_index (integer)
+  🔑 [p] report_structure_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - id=1, report_type=resultat, group_name=Intäkter, account_number=None, account_range=3000-3999, order_index=10
+    - id=2, report_type=resultat, group_name=Varukostnader, account_number=None, account_range=4000-4999, order_index=20
+    - id=3, report_type=resultat, group_name=Övriga externa kostnader, account_number=None, account_range=5000-5999, order_index=30
+    - id=4, report_type=resultat, group_name=Personalkostnader, account_number=None, account_range=6000-6999, order_index=40
+    - id=5, report_type=resultat, group_name=Avskrivningar, account_number=None, account_range=7000-7999, order_index=50
+
+📁 Tabell: transaction_translation
+  • transaction_id (uuid)
+  • language (text)
+  • description (text)
+  🔑 [p] transaction_translation_pkey: PRIMARY KEY (transaction_id, language)
+  🔑 [f] transaction_translation_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
+📁 Tabell: account_translation
+  • account_id (uuid)
+  • language (text)
+  • name (text)
+  🔑 [p] account_translation_pkey: PRIMARY KEY (account_id, language)
+  🔑 [f] account_translation_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - account_id=84d18e0a-2338-4c67-8151-5a44f6131d3f, language=en, name=Corporate Bank Account
+    - account_id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, language=en, name=Sales Sweden 25% VAT
+    - account_id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, language=en, name=Output VAT 25%
+    - account_id=f826389c-d9ec-42db-8f17-920ea0e082cd, language=en, name=Equity
+    - account_id=5e3ba7a3-1683-42a3-afe5-e03839170542, language=en, name=Other Long-term Liabilities
+
+📁 Tabell: settings
+  • key (text)
+  • value (text)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  🔑 [p] settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=default_language, value=sv, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=reporting_currency, value=SEK, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=period_start_month, value=1, value_type=integer, updated_at=2025-06-03 16:17:04.085806+02:00
+
+📁 Tabell: budget
+  • year (integer)
+  • month (integer)
+  • account_number (text)
+  • amount (numeric)
+
+📁 Tabell: bank_statement
+  • id (uuid)
+  • date (date)
+  • balance (numeric)
+  • source (text)
+  • metadata (jsonb)
+  🔑 [p] bank_statement_pkey: PRIMARY KEY (id)
+
+📁 Tabell: pending_verification
+  • id (uuid)
+  • email (text)
+  • token (text)
+  • metadata (jsonb)
+  • created_at (timestamp without time zone)
+  • used_at (timestamp without time zone)
+  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+  🔑 [u] pending_verification_token_key: UNIQUE (token)
+
+📁 Tabell: tracking_event
+  • id (uuid)
+  • visitor_id (text)
+  • event_type (text)
+  • timestamp (timestamp with time zone)
+  • metadata (jsonb)
+  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - id=65448382-0365-4057-8c78-2d7ef1bbfd18, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:19.476000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'performance_now': 1523, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=0d4bfbba-1290-4092-8b9a-708ffffb761c, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:39.933000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1310, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 21982, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=4f52e783-cb5f-4d4a-bd67-9bf601667129, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=click, timestamp=2025-06-24 17:55:47.207000+02:00, metadata={'tag': 'A', 'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'href': 'https://www.klrab.se/sustainability', 'text': 'HÅLLBARHET', 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 813, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 29256, 'hardwareConcurrency': 4, 'timezone_offset_min': -120, 'time_since_page_load_ms': 29250}
+    - id=a0f20249-cc96-474c-94ea-ba6d9fe68659, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:47.580000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 363, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=acc6e76d-bc03-4d85-bacc-c6ab4c5390ac, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:51.856000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1223, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 4640, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+
+📁 Tabell: entry
+  • id (uuid)
+  • transaction_id (uuid)
+  • account_id (uuid)
+  • amount (numeric)
+  • description (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • amount_original (numeric)
+  🔑 [p] entry_pkey: PRIMARY KEY (id)
+  🔑 [f] entry_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+  🔑 [f] entry_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT
+
+📁 Tabell: attachment
+  • id (uuid)
+  • transaction_id (uuid)
+  • filename (text)
+  • content_type (text)
+  • data (bytea)
+  • uploaded_at (timestamp with time zone)
+  • metadata (jsonb)
+  🔑 [p] attachment_pkey: PRIMARY KEY (id)
+  🔑 [f] attachment_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
+📁 Tabell: entry_tag_relation
+  • entry_id (uuid)
+  • tag_id (uuid)
+  🔑 [p] entry_tag_relation_pkey: PRIMARY KEY (entry_id, tag_id)
+  🔑 [f] entry_tag_relation_entry_id_fkey: FOREIGN KEY (entry_id) REFERENCES entry(id) ON DELETE CASCADE
+  🔑 [f] entry_tag_relation_tag_id_fkey: FOREIGN KEY (tag_id) REFERENCES entry_tag(id) ON DELETE CASCADE
+
+📁 Tabell: event_log
+  • source (text)
+  • event_type (text)
+  • payload (jsonb)
+  • received_at (timestamp with time zone)
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • action (text)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=38d75043-8239-45aa-bf67-921675749983, table_name=contact, record_id=61b2a257-9368-4017-9552-0c22810a03cb, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=c0aaac8a-2080-47e6-a185-abd24b718595, table_name=contact, record_id=e17c6638-c18b-472c-a566-a3785f82135c, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=5b6fdb0f-f11c-4fcb-88fa-670d15a065eb, table_name=contact, record_id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=6839af9a-3393-46a9-b0f8-e511d3775806, table_name=contact, record_id=c6a9bd11-8cca-4ad0-888c-40e8136720d2, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=e2fde31b-4acb-4349-a00c-db9f22a9f9c3, table_name=contact, record_id=c02f4a7e-00b4-4671-bc9b-362ad00ed1e8, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+

@@ -1,0 +1,1190 @@
+📂 KODTRÄD
+==========
+├── shared
+│   ├── slots
+│   │   ├── slotEngine.js
+├── trackingPixel
+│   ├── index.js
+==========
+
+====================
+📄 Fil: shared/slots/slotEngine.js
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🟨 JavaScript
+📅 Senast ändrad: 2025-05-30 14:06:02
+📏 Antal rader: 495
+🧩 Antal funktioner: 11
+💬 Kommentarstäckning: 51 rader (10.3%)
+📥 Imports: 7 – ["const pool = require('../db/pgPool');", 'const { DateTime } = require("luxon");', "const Holidays = require('date-holidays');", 'const { resolveOriginAddress } = require("../calendar/resolveOrigin");', 'const { resolveTravelTime } = require("../maps/resolveTravelTime");', 'const msGraph = require("../calendar/msGraph");', 'const appleCalendar = require("../calendar/appleCalendar");']
+🔍 Längsta funktion: 14 rader
+🧠 Komplexitetspoäng: 72
+🧪 TODO/FIXME: 0
+====================
+START: slotEngine.js
+const pool = require('../db/pgPool');
+const { DateTime } = require("luxon");
+const Holidays = require('date-holidays');
+const { resolveOriginAddress } = require("../calendar/resolveOrigin");
+const { resolveTravelTime } = require("../maps/resolveTravelTime");
+const msGraph = require("../calendar/msGraph");
+const appleCalendar = require("../calendar/appleCalendar");
+const hd = new Holidays('SE'); // Svenska helgdagar
+const isDebug = process.env.DEBUG === 'true';
+
+async function generateSlotCandidates({ day, settings, contact, pool, context, graphClient, appleClient, meeting_length, meeting_type, eventCache }) {
+  const timezone = settings.timezone || "Europe/Stockholm";
+  const holidays = settings.block_holidays ? new Holidays('SE') : null;
+  // Generera tidsintervall var 20:e minut i svensk tid mellan öppettid och stängningstid, exkl. lunch
+  const open = DateTime.fromISO(`${day}T${settings.open_time}`, { zone: timezone });
+  const close = DateTime.fromISO(`${day}T${settings.close_time}`, { zone: timezone });
+  const lunchStart = DateTime.fromISO(`${day}T${settings.lunch_start}`, { zone: timezone });
+  const lunchEnd = DateTime.fromISO(`${day}T${settings.lunch_end}`, { zone: timezone });
+
+  const startTimes = [];
+  let current = open;
+  // Använd context.bookingsByDay som källa till befintliga bokningar per dag
+  const bookingsByDay = (typeof context.bookingsByDay === "object" && context.bookingsByDay) ? context.bookingsByDay : {};
+  // Vi behöver slotDateIso för denna dag
+  // day är en ISO-sträng för dagen, t.ex. "2024-06-08"
+  const slotDateIso = day;
+  const existing = bookingsByDay[slotDateIso] || [];
+  while (current < close) {
+    const end = current.plus({ minutes: meeting_length });
+    const overlapsLunch = current < lunchEnd && end > lunchStart;
+    if (!overlapsLunch) {
+      const isHoliday = settings.block_holidays && holidays?.isHoliday(new Date(current.toISO()));
+      if (isHoliday) {
+        // if (isDebug) context.log(`⛔ Helgdag – hoppar ${current.toISODate()}`);
+        current = current.plus({ minutes: 20 });
+        continue;
+      }
+      // --- NY KOD: Kontrollera om sloten krockar med event i bookingsByDay (inkl. heldagsevent) ---
+      if (isDebug) {
+        context.log(`📋 Befintliga bokningar för ${slotDateIso}:`);
+        for (const ev of existing) {
+          const start = new Date(ev.start).toISOString();
+          const end = new Date(ev.end).toISOString();
+          context.log(`   📆 ${start} → ${end}`);
+        }
+      }
+      const slotStartMs = current.toMillis();
+      const slotEndMs = end.toMillis();
+      const bufferMsEarly = (settings.buffer_between_meetings || 0) * 60000;
+      if (isDebug) {
+        context.log(`🔍 Kontroll av konflikt för slot: ${current.toISO()} → ${end.toISO()}`);
+        for (const ev of existing) {
+          const evStart = new Date(ev.start).toISOString();
+          const evEnd = new Date(ev.end).toISOString();
+          context.log(`   📆 Event: ${evStart} → ${evEnd}`);
+          context.log(`     ↪︎ Jämförelse: ev.start < slotEndMs + bufferMsEarly = ${ev.start} < ${slotEndMs + bufferMsEarly}`);
+          context.log(`     ↪︎ Jämförelse: ev.end > slotStartMs - bufferMsEarly = ${ev.end} > ${slotStartMs - bufferMsEarly}`);
+        }
+      }
+      const slotConflictsWithEvent = existing.some(ev => {
+        return (
+          ev.start < slotEndMs + bufferMsEarly &&
+          ev.end > slotStartMs - bufferMsEarly
+        );
+      });
+      if (slotConflictsWithEvent) {
+        // if (isDebug) context.log(`⛔ Slot krockar med event i bookingsByDay – hoppar ${current.toISO()}`);
+        current = current.plus({ minutes: 20 });
+        continue;
+      }
+      // --- SLUT NY KOD ---
+      startTimes.push(current.toUTC());
+    }
+    current = current.plus({ minutes: 20 });
+  }
+  const slots = [];
+  // Beräkna dagens start och slut
+  const fullDayStart = DateTime.fromISO(`${slotDateIso}T${settings.open_time}`, { zone: timezone }).toMillis();
+  const fullDayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toMillis();
+  const dayEnd = DateTime.fromISO(`${slotDateIso}T${settings.close_time}`, { zone: timezone }).toJSDate();
+  const fullDayBlock = existing.some(ev => {
+    const evStart = Number(ev.start);
+    const evEnd = Number(ev.end);
+    const coveredDuration = evEnd - evStart;
+    const fullDayDuration = fullDayEnd - fullDayStart;
+    return (
+      evStart <= fullDayStart + 30 * 60 * 1000 &&
+      evEnd >= fullDayEnd - 30 * 60 * 1000 &&
+      coveredDuration >= fullDayDuration * 0.95
+    );
+  });
+  if (fullDayBlock) {
+    // context.log(`⛔ Hela dagen blockeras av ett heldagsevent – hoppar ${slotDateIso}`);
+    return [];
+  }
+
+  for (const utcStart of startTimes) {
+    const eventId = utcStart.toISO();
+    const dateObj = utcStart.toJSDate();
+    const weekday = dateObj.toLocaleDateString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
+    const slot_part = utcStart.hour < 12 ? "fm" : "em";
+    const slotHourStr = utcStart.setZone(timezone).toFormat('HH:mm');
+    if (slotHourStr >= settings.lunch_start && slotHourStr < settings.lunch_end) {
+      // if (isDebug) context.log(`🍽️ Slot under lunch (${slotHourStr}) – hoppar ${eventId}`);
+      continue;
+    }
+    const isWeekend = ["saturday", "sunday"].includes(weekday);
+    if (settings.block_weekends && isWeekend) {
+      // if (isDebug) context.log(`⛔ Helg blockerad (${weekday}) – hoppar ${eventId}`);
+      continue;
+    }
+    if (meeting_type === 'atclient' && Array.isArray(settings.allowed_atclient_meeting_days)) {
+      if (!settings.allowed_atclient_meeting_days.includes(weekday)) {
+        // if (isDebug) context.log(`⛔ atclient tillåts ej på ${weekday} – hoppar ${eventId}`);
+        continue;
+      }
+    }
+
+    // Konvertera dateObj till rätt tidszon för helgdagskontroll
+    const localDate = DateTime.fromJSDate(dateObj).setZone(timezone).toJSDate();
+    const isHoliday = hd.isHoliday(localDate);
+    if (settings.block_holidays && isHoliday) {
+      if (isDebug) context.log(`🎌 Helgdag ${isHoliday[0]?.name} – hoppar ${eventId}`);
+      continue;
+    }
+
+
+    const originInfo = await resolveOriginAddress({
+      eventId,
+      calendarId: 'system',
+      pool,
+      context,
+      graphClient,
+      appleClient,
+      fallbackOrigin: settings.default_home_address,
+      settings,
+      eventCache
+    });
+
+    if (!originInfo?.origin) {
+      // context.log(`⚠️ Kunde inte fastställa origin för ${eventId}`);
+      continue;
+    }
+
+    const destination = settings.default_office_address;
+    const travelTimeResult = await resolveTravelTime({
+      origin: originInfo.origin,
+      destination,
+      hour: utcStart.hour,
+      db: pool,
+      accessToken: context.accessToken || null,
+      context
+    });
+    const travelTimeMin = travelTimeResult?.travelTimeMin;
+    const travelSource = travelTimeResult?.source || 'fallback';
+
+    if (!travelTimeMin || typeof travelTimeMin !== "number") {
+      // context.log.warn(`⚠️ Ogiltig restid, hoppar slot: ${eventId}`);
+      continue;
+    }
+
+    const endTime = new Date(dateObj.getTime() + meeting_length * 60000);
+    // dayStart och dayEnd redan definierade ovan
+    if (endTime > dayEnd) {
+      // context.log(`⛔ Slot ${eventId} går utanför öppettid (${settings.close_time}) – hoppar`);
+      continue;
+    }
+
+    // Skip slots that are too soon to reach based on travel time and current time
+    const now = Date.now();
+    if (dateObj.getTime() - now < travelTimeMin * 60 * 1000) {
+      // context.log(`⛔ Slot ${eventId} är för nära i tid – restid ${travelTimeMin} min, nu=${new Date(now).toISOString()} – hoppar`);
+      continue;
+    }
+
+    // Build slot object
+    const slot = {
+      slot_iso: eventId,
+      slot_local: DateTime.fromJSDate(dateObj).setZone(timezone).toISO(),
+      travel_time_min: travelTimeMin,
+      origin: originInfo.origin,
+      originEndTime: originInfo.originEndTime,
+      source: travelSource,
+      require_approval: settings.require_approval,
+      meeting_length,
+      weekday,
+      slot_part
+    };
+
+
+    // --- Score calculation logic ---
+    const slotStart = dateObj.getTime();
+    const slotEnd = slotStart + meeting_length * 60000;
+    // existing redan definierad ovan
+    let gapBefore = null;
+    let gapAfter = null;
+
+    for (const b of existing) {
+      const bStart = b.start;
+      const bEnd = b.end;
+      if (bEnd <= slotStart) {
+        gapBefore = slotStart - bEnd;
+      } else if (bStart >= slotEnd && gapAfter === null) {
+        gapAfter = bStart - slotEnd;
+      }
+    }
+
+    const bufferMs = (settings.buffer_between_meetings || 0) * 60000;
+    const hasConflict = existing.some(b => {
+      return (
+        b.start < slotEnd + bufferMs &&
+        b.end > slotStart - bufferMs
+      );
+    });
+    if (hasConflict) {
+      // context.log(`⛔ Slot ${eventId} krockar med möte inom buffer (${settings.buffer_between_meetings || 0} min) – hoppar`);
+      // existing.forEach(b => {
+      //   const bStartStr = new Date(b.start).toISOString();
+      //   const bEndStr = new Date(b.end).toISOString();
+      //   if (
+      //     b.start < slotEnd + bufferMs &&
+      //     b.end > slotStart - bufferMs
+      //   ) {
+      //     context.log(`   ⚠️  Konflikt med: ${bStartStr} → ${bEndStr}`);
+      //   }
+      // });
+      continue;
+    }
+    // Blockera även om sloten börjar exakt när ett event börjar, eller slutar exakt när ett event slutar
+    const hardMatchConflict = existing.some(b => {
+      return (
+        b.start === slotStart || b.end === slotEnd
+      );
+    });
+    if (hardMatchConflict) {
+      // context.log(`⛔ Slot ${eventId} börjar eller slutar exakt när ett event börjar/slutar – hoppar`);
+      continue;
+    }
+
+
+    // Standardpoäng är 10. Dra av poäng för stor lucka före eller efter.
+    let fragmentationPenalty = 0;
+    if ((gapBefore && gapBefore > 45 * 60000) || (gapAfter && gapAfter > 45 * 60000)) {
+      fragmentationPenalty = 1;
+    }
+
+    slot.score = 10 - fragmentationPenalty;
+
+    slots.push(slot);
+    // if (isDebug && travelSource === 'fallback') {
+    //   context.log(`⚠️ Slot ${eventId} använder fallback för restid (ingen accessToken)`);
+    // }
+  }
+
+  // Separera förmiddag och eftermiddag
+  const fmSlots = slots.filter(slot => slot.slot_part === 'fm');
+  const emSlots = slots.filter(slot => slot.slot_part === 'em');
+
+  // Sorteringsfunktion: högst poäng först, därefter kortast restid, därefter tidigast tid
+  const sortSlots = (a, b) =>
+    b.score - a.score ||
+    a.travel_time_min - b.travel_time_min ||
+    new Date(a.slot_iso) - new Date(b.slot_iso);
+
+  // Sortera båda grupper
+  fmSlots.sort(sortSlots);
+  emSlots.sort(sortSlots);
+
+  // Välj bästa fm och em (om de finns)
+  const bestFm = fmSlots[0];
+  const bestEm = emSlots.find(em => !bestFm || em.slot_iso !== bestFm.slot_iso);
+
+  // Returnera endast de två bästa
+  const topSlots = [bestFm, bestEm].filter(Boolean);
+  const allSlots = [...fmSlots, ...emSlots];
+  // === LOG SELECTED TOP SLOTS ===
+  if (isDebug) {
+    if (topSlots.length > 0) {
+      context.log(`✅ Slot-kandidater valda för ${slotDateIso}:`);
+      topSlots.forEach(slot => {
+        const icon = slot.slot_part === 'fm' ? '☀️' : '🌙';
+        const t = DateTime.fromISO(slot.slot_iso).setZone(timezone).toFormat("yyyy-MM-dd HH:mm");
+        context.log(`   ${icon} ${slot.slot_part.toUpperCase()} ${t} (${slot.score}/10, ${slot.travel_time_min} min restid)`);
+      });
+    } else {
+      context.log(`⛔ Inga valda slot-kandidater för ${slotDateIso}`);
+    }
+  }
+  // === BLOCK: Slot-summering/debug innan slots loggas ===
+  if (isDebug) {
+    const blockedSummary = [];
+    if (startTimes.length === 0) {
+      blockedSummary.push("⛔ Inga starttider genererades p.g.a. heldagsevent, helgdag eller block");
+    }
+    if (fullDayBlock) {
+      blockedSummary.push("⛔ Dagen blockeras helt p.g.a. heldagsevent");
+    }
+    if (startTimes.length > 0 && allSlots.length === 0) {
+      blockedSummary.push("⛔ Alla slots filtrerades bort av regler: t.ex. restid, konflikt, öppettid, veckokvot, m.m.");
+    }
+    if (blockedSummary.length > 0) {
+      context.log(`🧾 Slot-summering ${slotDateIso}:`);
+      for (const line of blockedSummary) context.log("   " + line);
+    }
+  }
+  allSlots.forEach(s => {
+    const icon = s.slot_part === 'fm' ? '☀️' : '🌙';
+    if (isDebug) context.log(`${icon} ${s.slot_part.toUpperCase()}: ${s.slot_iso} – score: ${s.score}`);
+  });
+  return topSlots;
+}
+
+
+async function generateSlotChunks({
+  days,
+  context,
+  contact,
+  contact_id,
+  meeting_type,
+  meeting_length,
+  bookingsByDay,
+  weeklyMinutesByType,
+  settings,
+  graphClient,
+  appleClient,
+  travelCache,
+  accessToken,
+  timezone,
+  debugHelper
+}) {
+  const { debugLog, skipReasons } = debugHelper || {};
+  const chosen = [];
+
+  if (days.length === 0) {
+    const fallbackDate = new Date().toISOString().split('T')[0];
+    const { rows } = await pool.query(
+      'SELECT slots FROM slot_cache WHERE slot_day = $1 LIMIT 1',
+      [fallbackDate]
+    );
+    if (rows.length > 0) {
+      context.log(`✅ Använder slot_cache som fallback (${fallbackDate})`);
+      return {
+        chosenSlots: rows[0].slots || [],
+        slotMapResult: {},
+        slotLogSummary: { 'fallback_used': 1 }
+      };
+    }
+  }
+
+  let startIso, endIso;
+  try {
+    startIso = days[0] instanceof Date ? days[0].toISOString() : new Date(days[0]).toISOString();
+    endIso = new Date((days[days.length - 1] instanceof Date ? days[days.length - 1] : new Date(days[days.length - 1])).getTime() + 86400000).toISOString();
+  } catch (err) {
+    context.log("⛔ Fel vid toISOString på days[] – ersätter med dagens datum");
+    const today = new Date();
+    startIso = today.toISOString();
+    endIso = new Date(today.getTime() + 7 * 86400000).toISOString(); // +7 dagar fallback
+  }
+
+  // === LÄGG TILL EXTERNA BOKNINGAR (MS + Apple) I bookingsByDay ===
+
+  // Microsoft Graph
+  try {
+    const msEvents = await graphClient.listUpcomingEvents?.(days.length + 1) || [];
+    let msAddedCount = 0;
+    for (const ev of msEvents) {
+      const start = new Date(ev.start).getTime();
+      const end = new Date(ev.end).getTime();
+      if (isNaN(start) || isNaN(end)) continue;
+      const date = new Date(ev.start).toISOString().split("T")[0];
+      if (!bookingsByDay[date]) bookingsByDay[date] = [];
+      bookingsByDay[date].push({ start, end });
+      msAddedCount++;
+    }
+    if (isDebug) {
+      context.log(`📆 MS Graph: ${msEvents.length} händelser analyserades, ${msAddedCount} lades till bookingsByDay`);
+    }
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda MS-bokningar: ${err.message}`);
+  }
+
+  // Apple Calendar
+  try {
+    const startDate = days[0] instanceof Date ? days[0] : new Date(days[0]);
+    const endDate = days[days.length - 1] instanceof Date
+      ? new Date(days[days.length - 1].getTime() + 86400000)
+      : new Date(new Date(days[days.length - 1]).getTime() + 86400000);
+    if (isNaN(startDate) || isNaN(endDate)) {
+      context.log("⛔ Ogiltiga datum skickas till Apple i slotEngine:", { startDate, endDate });
+    }
+    const appleEvents = await appleClient.fetchEventsByDateRange?.(startDate, endDate) || [];
+    let appleAddedCount = 0;
+    for (const ev of appleEvents) {
+      try {
+        // Ensure start and end are cast to numbers explicitly
+        const start = Number(new Date(ev.dtstart));
+        const end = Number(new Date(ev.dtend));
+        if (isNaN(start) || isNaN(end)) continue;
+        const date = new Date(ev.dtstart).toISOString().split("T")[0];
+        if (!bookingsByDay[date]) bookingsByDay[date] = [];
+        bookingsByDay[date].push({ start, end });
+        appleAddedCount++;
+      } catch (err) {
+        context.log(`⚠️ Apple event parsing error: ${err.message}`);
+      }
+    }
+    if (isDebug) {
+      context.log(`🍏 Apple Calendar: ${appleEvents.length} händelser analyserades`);
+    }
+  } catch (err) {
+    context.log(`⚠️ Kunde inte ladda Apple-bokningar: ${err.message}`);
+  }
+
+  context.bookingsByDay = bookingsByDay;
+
+  const slotCandidatePromises = days.map(day => {
+    const dayStr = day.toISOString().split("T")[0];
+    return generateSlotCandidates({
+      day: dayStr,
+      settings,
+      contact,
+      pool: context.client || pool,
+      context,
+      graphClient,
+      appleClient,
+      meeting_length,
+      meeting_type,
+      eventCache: context.eventCache instanceof Map ? context.eventCache : new Map()
+    });
+  });
+
+  const slotCandidatesPerDay = await Promise.all(slotCandidatePromises);
+
+  const slotMap = {};
+  days.forEach((day, index) => {
+    const dayStr = day.toISOString().split("T")[0];
+    const slotCandidates = slotCandidatesPerDay[index];
+    for (const slot of slotCandidates) {
+      const key = `${dayStr}_${slot.slot_part}`;
+      if (!slotMap[key]) slotMap[key] = [];
+      slotMap[key].push(slot);
+    }
+  });
+
+  const bestPerGroup = {};
+  for (const [key, slots] of Object.entries(slotMap)) {
+    if (slots.length === 0) continue;
+    const [datePart, part] = key.split('_');
+    if (!bestPerGroup[datePart]) bestPerGroup[datePart] = {};
+    if (!bestPerGroup[datePart][part]) {
+      bestPerGroup[datePart][part] = slots
+        .sort((a, b) => {
+          if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+          return new Date(a.slot_iso) - new Date(b.slot_iso);
+        })[0];
+    }
+  }
+
+  for (const day in bestPerGroup) {
+    for (const part in bestPerGroup[day]) {
+      const slot = bestPerGroup[day][part];
+      const weekKeyStr = day;
+      const usedMinutes = (weeklyMinutesByType[meeting_type]?.[weekKeyStr] || 0);
+      if (usedMinutes + slot.meeting_length <= settings.max_weekly_booking_minutes) {
+        chosen.push(slot);
+      } else {
+        debugLog?.(`⛔ Överskrider veckokvot (${usedMinutes + slot.meeting_length} > ${settings.max_weekly_booking_minutes}) – hoppar ${day}_${part}`);
+      }
+    }
+  }
+
+  if (isDebug) {
+    for (const day in bestPerGroup) {
+      for (const part in bestPerGroup[day]) {
+        const slot = bestPerGroup[day][part];
+        context.log(`📆 Slot: ${slot.slot_iso} score=${slot.score}`);
+      }
+    }
+  }
+
+  const durationMs = Date.now() - context.startTime;
+  if (isDebug) context.log(`⏱️ Slotgenerering klar på ${durationMs} ms`);
+  if (isDebug) context.log(`📤 Response skickas med antal slots: ${chosen.length}`);
+  return {
+    chosenSlots: chosen.sort((a, b) => new Date(a.slot_iso) - new Date(b.slot_iso)),
+    slotMapResult: slotMap,
+    slotLogSummary: skipReasons
+  };
+}
+
+module.exports = {
+  generateSlotCandidates,
+  generateSlotChunks
+};
+END: slotEngine.js
+
+START: index.js
+// ⚠️ Filen 'index.js' hittades inte
+END: index.js
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 .funcignore
+   # Exclude dev-only files and folders
+   .git
+   .vscode
+   .env
+   *.log
+   test/
+   tests/
+   
+   # Explicitly include all required files and folders
+   !host.json
+   !package.json
+   !package-lock.json
+   
+   !node_modules/
+   !node_modules/**
+   
+   !shared/
+   !shared/**
+   
+   !bookings/
+   !bookings/**
+   !getavailableslots/
+   !getavailableslots/**
+   !validate_contact/
+   !validate_contact/**
+   !meeting_types/
+   !meeting_types/**
+   !refreshCalendarOrigins/
+   !refreshCalendarOrigins/**
+   !refreshTravelTimes/
+   !refreshTravelTimes/**
+   !booking_settings/
+   !booking_settings/**
+   !test_azurecloud/
+   !test_azurecloud/**
+   !tracking/
+   !tracking/**
+   !verify_token/
+   !verify_token/**
+   !request_verification/
+   !request_verification/**
+📄 booking_settings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "booking_settings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 bookings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "bookings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 getavailableslots/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "getavailableslots"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 host.json
+   {
+     "version": "2.0",
+     "extensionBundle": {
+       "id": "Microsoft.Azure.Functions.ExtensionBundle",
+       "version": "[4.*, 5.0.0)"
+     },
+     "extensions": {
+       "http": {
+         "cors": {
+           "allowedOrigins": [
+             "https://www.klrab.se"
+           ],
+           "supportCredentials": false
+         }
+       }
+     }
+   }
+📄 local_frontend/package.json
+   {
+     "name": "local_frontend",
+     "version": "1.0.0",
+     "type": "module",
+     "main": "vite.config.js",
+     "scripts": {
+       "dev": "vite",
+       "build": "vite build",
+       "preview": "vite preview"
+     },
+     "keywords": [],
+     "author": "",
+     "license": "ISC",
+     "dependencies": {
+       "react": "^19.1.0",
+       "react-dom": "^19.1.0",
+       "react-icons": "^5.5.0",
+       "react-router-dom": "^6.30.1",
+       "vite": "^6.3.5"
+     },
+     "devDependencies": {
+       "@tailwindcss/postcss": "^4.1.8",
+       "@vitejs/plugin-react": "^4.5.1",
+       "autoprefixer": "^10.4.21",
+       "postcss": "^8.5.4",
+       "tailwindcss": "^4.1.8"
+     },
+     "description": ""
+   }
+
+📄 meeting_types/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": [ "get" ],
+         "route": "meeting_types"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 package.json
+   {
+     "name": "macspot-api",
+     "version": "1.0.0",
+     "description": "Azure Functions backend för MacSpot CRM/ERP",
+     "scripts": {
+       "start": "func start",
+       "dev": "func start --verbose",
+       "deploy": "func azure functionapp publish macspotbackend",
+       "build": "echo 'Nothing to build'"
+     },
+     "dependencies": {
+       "@azure/functions": "^4.7.0",
+       "@azure/msal-node": "^3.5.1",
+       "@microsoft/microsoft-graph-client": "^3.0.0",
+       "date-holidays": "^3.24.3",
+       "dav": "^1.8.0",
+       "dotenv": "^16.5.0",
+       "isomorphic-fetch": "^3.0.0",
+       "jsonwebtoken": "^9.0.0",
+       "luxon": "^3.4.4",
+       "node-fetch": "^2.7.0",
+       "node-ical": "^0.20.1",
+       "p-limit": "^6.2.0",
+       "pg": "^8.15.6",
+       "react": "^19.1.0",
+       "react-dom": "^19.1.0",
+       "uuid": "^9.0.0",
+       "vite": "^6.3.5",
+       "xml2js": "^0.6.2"
+     },
+     "devDependencies": {
+       "autoprefixer": "^10.4.21",
+       "postcss": "^8.5.4",
+       "tailwindcss": "^4.1.8"
+     }
+   }
+
+📄 refreshCalendarOrigins/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 refreshTravelTimes/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 request_verification/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "request_verification"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 test_azurecloud/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "test_azurecloud"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 tracking/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "tracking"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 validate_contact/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get", "post"],
+         "route": "validate_contact"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 verify_token/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "verify_token"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 495
+🧩 Totalt antal funktioner: 11
+🧠 Total komplexitetspoäng: 72
+🧪 Antal TODO/FIXME totalt: 0
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+slotEngine.js,495,11,72,51,7
+📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • meeting_type (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • email (text)
+  • apple_uid (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'magnus.stode@loomis.com', 'label': ''}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46 8 522 920 20 31'}, {'label': '_$!<Mobile>!$_', 'number': '+46 70 643 20 31'}], 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson'}, 'nickname': '', 'addresses': [{'city': '', 'label': '_$!<Home>!$_', 'state': '', 'street': '', 'country': 'Sweden', 'postalCode': ''}], 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'job_title': '', 'last_name': 'Stöde', 'department': '', 'first_name': 'Magnus', 'middle_name': '', 'organization': 'PricewaterhouseCoopers', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, updated_at=2025-06-24 21:41:35.245695+02:00, email=magnus.stode@loomis.com, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/86997398', 'label': '_$!<HomePage>!$_'}, {'url': 'www.wilton-row.com', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'pontus.aldell@jpmorgan.com', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+44 (77) 7599 4555'}, {'label': '_$!<Work>!$_', 'number': '+44 (0) 207 742 7953'}], 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'birthday': '1975-12-11T00:00:00Z', 'metadata': {'origin': 'macos', 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'job_title': 'Executive Director', 'last_name': 'Aldell', 'department': '', 'first_name': 'Pontus', 'middle_name': '', 'organization': 'J.P. Morgan Private Bank', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=pontus-aldell-87217525&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=da7d9009-e4d1-4a84-90e3-5ae2c868bf2b, updated_at=2025-06-24 21:41:35.245695+02:00, email=pontus.aldell@jpmorgan.com, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/91817493', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'inge.lindberg@lernia.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46771650650'}, {'label': '_$!<Home>!$_', 'number': '+46734252645'}, {'label': '_$!<Mobile>!$_', 'number': '+46704133240'}], 'apple_id': '035D2313-A074-4FF5-ACE3-69AB7C1C87C0:ABPerson', 'birthday': '1965-04-26T00:00:00Z', 'metadata': {'origin': 'macos', 'apple_id': '035D2313-A074-4FF5-ACE3-69AB7C1C87C0:ABPerson', 'apple_uid': '035D2313-A074-4FF5-ACE3-69AB7C1C87C0:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '035D2313-A074-4FF5-ACE3-69AB7C1C87C0:ABPerson', 'job_title': 'CFO/Ekonomidirektör', 'last_name': 'Lindberg', 'department': '', 'first_name': 'Inge', 'middle_name': '', 'organization': 'Lernia', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=inge-lindberg-1598bb26&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=1c780731-254a-44b8-9d4c-4baa37edf0c1, updated_at=2025-06-24 21:41:35.245695+02:00, email=inge.lindberg@lernia.se, apple_uid=None
+    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'benny.karlsson@vattenfall.com', 'label': ''}], 'phones': [{'label': '_$!<WorkFAX>!$_', 'number': '+46 8 687 81 52'}, {'label': '_$!<Work>!$_', 'number': '+46 8 739 73 05'}, {'label': '_$!<Mobile>!$_', 'number': '+46 70 539 73 05'}], 'apple_id': '0377DF26-9C0E-4266-8A77-B078D0210BD3:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '0377DF26-9C0E-4266-8A77-B078D0210BD3:ABPerson', 'apple_uid': '0377DF26-9C0E-4266-8A77-B078D0210BD3:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Vattenfalls Pensionsstiftelse\nSturegatan 10, Stockholm', 'country': 'Sweden', 'postalCode': 'SE-162 87'}], 'apple_uid': '0377DF26-9C0E-4266-8A77-B078D0210BD3:ABPerson', 'job_title': 'VD', 'last_name': 'Karlsson', 'department': '', 'first_name': 'Benny', 'middle_name': '', 'organization': 'Vattenfalls Pensionsstiftelse', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=faf1a7fc-b9dd-4015-a618-4b9a6bae0a3c, updated_at=2025-06-24 21:41:35.245695+02:00, email=benny.karlsson@vattenfall.com, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/106655683', 'label': '_$!<HomePage>!$_'}, {'url': 'http://www.xlntwellness.se', 'label': '_$!<HomePage>!$_'}, {'url': 'http://xlntwellness.blogspot.com/', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'info@xlntwellness.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46739354547'}], 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'STOCKHOLM', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Luxgatan 6', 'country': 'Sweden', 'postalCode': '11262'}, {'city': 'Marbella Area, Spain', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'job_title': 'Personal Trainer', 'last_name': 'Villanueva', 'department': '', 'first_name': 'Antonio', 'middle_name': '', 'organization': 'Sportlife Odenplan', 'social_profiles': [{'url': 'http://twitter.com/TrainerAntonio', 'label': '', 'service': 'Twitter'}, {'url': 'https://www.linkedin.com/profile/view?id=antonio-villanueva-0578762b&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=8d5cb261-5e1f-441d-945e-a330b356ccca, updated_at=2025-06-24 21:41:35.245695+02:00, email=info@xlntwellness.se, apple_uid=None
+
+📁 Tabell: transaction
+  • id (uuid)
+  • date (date)
+  • description (text)
+  • series (text)
+  • ver_no (integer)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • status (text)
+  • currency_code (text)
+  • exchange_rate (numeric)
+  • total_amount_original (numeric)
+  • created_by (uuid)
+  🔑 [p] transaction_pkey: PRIMARY KEY (id)
+  🔑 [u] unique_verifikat: UNIQUE (series, ver_no)
+  🔑 [c] transaction_status_check: CHECK ((status = ANY (ARRAY['prelim'::text, 'posted'::text, 'locked'::text])))
+  🔑 [f] transaction_created_by_fkey: FOREIGN KEY (created_by) REFERENCES contact(id)
+
+📁 Tabell: booking_settings
+  • key (text)
+  • value (jsonb)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  🔑 [p] booking_settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 22:46:14.058171+02:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 12:37:53.619684+02:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
+📁 Tabell: vat_rate
+  • id (uuid)
+  • name (text)
+  • percentage (numeric)
+  • account_sales (uuid)
+  • account_vat (uuid)
+  • created_at (timestamp with time zone)
+  🔑 [p] vat_rate_pkey: PRIMARY KEY (id)
+  🔑 [f] vat_rate_account_sales_fkey: FOREIGN KEY (account_sales) REFERENCES account(id)
+  🔑 [f] vat_rate_account_vat_fkey: FOREIGN KEY (account_vat) REFERENCES account(id)
+
+📁 Tabell: company
+  • name (text)
+  • org_number (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  🔑 [p] company_pkey: PRIMARY KEY (id)
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🔑 [u] unique_translation_key: UNIQUE (key)
+  🔑 [p] translation_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: journal_series
+  • series (text)
+  • name (text)
+  • description (text)
+  • next_ver_no (integer)
+  🔑 [p] journal_series_pkey: PRIMARY KEY (series)
+  🧪 Topp 5 rader:
+    - series=A, name=Huvudbok, description=Ordinarie verifikatserie för huvudbok, next_ver_no=11
+
+📁 Tabell: period
+  • id (uuid)
+  • name (text)
+  • start_date (date)
+  • end_date (date)
+  • locked (boolean)
+  • created_at (timestamp with time zone)
+  🔑 [p] period_pkey: PRIMARY KEY (id)
+
+📁 Tabell: ccrelation
+  • contact_id (uuid)
+  • company_id (uuid)
+  • role (text)
+  • main_contact (boolean)
+  • start_date (date)
+  • end_date (date)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  🔑 [p] ccrelation_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_ccrelation_contact_id: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE
+  🔑 [f] fk_ccrelation_company_id: FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+
+📁 Tabell: currency
+  • code (text)
+  • name (text)
+  • symbol (text)
+  • exchange_rate (numeric)
+  • updated_at (timestamp with time zone)
+  🔑 [p] currency_pkey: PRIMARY KEY (code)
+
+📁 Tabell: template_transaction
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • default_amount (numeric)
+  • default_account_debit (uuid)
+  • default_account_credit (uuid)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  🔑 [p] template_transaction_pkey: PRIMARY KEY (id)
+  🔑 [f] template_transaction_default_account_debit_fkey: FOREIGN KEY (default_account_debit) REFERENCES account(id)
+  🔑 [f] template_transaction_default_account_credit_fkey: FOREIGN KEY (default_account_credit) REFERENCES account(id)
+
+📁 Tabell: pending_changes
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • change_type (text)
+  • direction (text)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • operation (text)
+  • payload (jsonb)
+  • booking_id (uuid)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - id=02a9056a-4ba1-409e-bebc-360c26baf9a6, table_name=contact, record_id=6e96b2bb-8851-4c2b-bbc7-de8d89bec889, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 17:53:16.586406+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'gunnar.andersson@garev.se', 'label': '_$!<Other>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '0501-399 311'}, {'label': '_$!<Main>!$_', 'number': '0501-474 90'}], 'apple_id': 'A91932E0-C632-4E51-B947-C295E3CB0709:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'A91932E0-C632-4E51-B947-C295E3CB0709:ABPerson', 'apple_uid': 'A91932E0-C632-4E51-B947-C295E3CB0709:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Mariestad', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Karlagatan 5', 'country': '', 'postalCode': '542 30'}], 'apple_uid': 'A91932E0-C632-4E51-B947-C295E3CB0709:ABPerson', 'job_title': '', 'last_name': 'Andersson', 'department': '', 'first_name': 'Gunnar', 'middle_name': '', 'organization': 'GA Revision', 'social_profiles': []}, booking_id=None
+    - id=e3a2d2b6-7f13-40a8-8fb9-1368b54c448e, table_name=contact, record_id=9b7a1021-5fce-4b0e-8d21-e69574a7d25b, change_type=new_contact, direction=out, processed=True, created_at=2025-06-24 17:23:47.934438+02:00, operation=INSERT, payload={'note': '', 'urls': [], 'emails': [{'email': 'ann-louise.berglund@nordea.se', 'label': '_$!<Work>!$_'}], 'phones': [], 'apple_id': 'C7C81E3C-912E-49A0-A292-EBE6FF1709A9:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': 'C7C81E3C-912E-49A0-A292-EBE6FF1709A9:ABPerson', 'apple_uid': 'C7C81E3C-912E-49A0-A292-EBE6FF1709A9:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': 'C7C81E3C-912E-49A0-A292-EBE6FF1709A9:ABPerson', 'job_title': '', 'last_name': 'Berglund', 'department': '', 'first_name': 'Ann-Louise', 'middle_name': '', 'organization': 'Nordea Sollentuna', 'social_profiles': []}, booking_id=None
+    - id=2b0a42c9-ebe0-48a7-8151-a1f85acfb310, table_name=contact, record_id=bcb61ec1-85ee-4136-8027-8818dfe5ca8e, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 17:59:55.863519+02:00, operation=UPDATE, payload={'note': '', 'urls': [{'url': 'linkedin://#profile/216730546', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'karinofredrik@hotmail.com', 'label': '_$!<Work>!$_'}], 'phones': [], 'apple_id': '97B02670-9311-4D8F-B1D3-84811D175524:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': '97B02670-9311-4D8F-B1D3-84811D175524:ABPerson', 'apple_uid': '97B02670-9311-4D8F-B1D3-84811D175524:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Kungälv, Sverige', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '97B02670-9311-4D8F-B1D3-84811D175524:ABPerson', 'job_title': 'Leg psykolog och Leg psykoterapeut KBT', 'last_name': 'Angantyr', 'department': '', 'first_name': 'Karin', 'middle_name': '', 'organization': 'Närhälsan Stora Höga vårdcentral', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=karin-angantyr-92a6ba60&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, booking_id=None
+    - id=e531e2ae-29b7-49e3-b68d-60d3b2bdc3e0, table_name=contact, record_id=1f82eb7a-a54d-4963-9c4a-292bfb52d02f, change_type=new_contact, direction=out, processed=True, created_at=2025-06-24 17:23:51.132868+02:00, operation=INSERT, payload={'note': '', 'urls': [], 'emails': [{'email': 'crown@scandichotels.com', 'label': '_$!<Home>!$_'}], 'phones': [{'label': '_$!<Main>!$_', 'number': '+46 31 751 51 00'}, {'label': '_$!<WorkFAX>!$_', 'number': '+46 31 751 51 11'}], 'apple_id': 'C80C7F7B-D8A5-4F7D-815C-F3ED627C62E9:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': 'C80C7F7B-D8A5-4F7D-815C-F3ED627C62E9:ABPerson', 'apple_uid': 'C80C7F7B-D8A5-4F7D-815C-F3ED627C62E9:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'GÖTEBORG', 'label': '_$!<Home>!$_', 'state': '', 'street': 'Polhemsplatsen 3', 'country': 'Sweden', 'postalCode': '411 11'}], 'apple_uid': 'C80C7F7B-D8A5-4F7D-815C-F3ED627C62E9:ABPerson', 'job_title': '', 'last_name': '', 'department': '', 'first_name': '', 'middle_name': '', 'organization': 'Scandic Crown Göteborg', 'social_profiles': []}, booking_id=None
+    - id=2b4ef881-81f8-4055-8a18-585dc4e35bff, table_name=contact, record_id=6a2407f1-e45c-42a5-9b2b-375e6c232896, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 17:59:05.640855+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'zimme2008@gmail.com', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '0708872872'}], 'apple_id': '97B0CC6F-7A4F-464C-9F02-692B796F40AE:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': '97B0CC6F-7A4F-464C-9F02-692B796F40AE:ABPerson', 'apple_uid': '97B0CC6F-7A4F-464C-9F02-692B796F40AE:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': '97B0CC6F-7A4F-464C-9F02-692B796F40AE:ABPerson', 'job_title': '', 'last_name': 'Zimmerlund', 'department': '', 'first_name': 'Daniel', 'middle_name': '', 'organization': 'Avjämningsteknik Stockholm AB', 'social_profiles': []}, booking_id=None
+
+📁 Tabell: entry_tag
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • created_at (timestamp with time zone)
+  🔑 [p] entry_tag_pkey: PRIMARY KEY (id)
+
+📁 Tabell: account
+  • id (uuid)
+  • number (text)
+  • name (text)
+  • type (text)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • is_active (boolean)
+  • account_group (text)
+  • report_type (text)
+  • report_group (text)
+  🔑 [p] account_pkey: PRIMARY KEY (id)
+  🔑 [u] account_number_key: UNIQUE (number)
+  🧪 Topp 5 rader:
+    - id=84d18e0a-2338-4c67-8151-5a44f6131d3f, number=1930, name=Företagskonto, type=tillgång, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, number=3001, name=Försäljning Sverige 25%, type=intäkt, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, number=2611, name=Utgående moms 25%, type=skuld, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=f826389c-d9ec-42db-8f17-920ea0e082cd, number=2010, name=Eget kapital, type=eget_kapital, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=5e3ba7a3-1683-42a3-afe5-e03839170542, number=2390, name=Övriga långfristiga skulder, type=skuld, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
+📁 Tabell: report_structure
+  • id (integer)
+  • report_type (text)
+  • group_name (text)
+  • account_number (text)
+  • account_range (text)
+  • order_index (integer)
+  🔑 [p] report_structure_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - id=1, report_type=resultat, group_name=Intäkter, account_number=None, account_range=3000-3999, order_index=10
+    - id=2, report_type=resultat, group_name=Varukostnader, account_number=None, account_range=4000-4999, order_index=20
+    - id=3, report_type=resultat, group_name=Övriga externa kostnader, account_number=None, account_range=5000-5999, order_index=30
+    - id=4, report_type=resultat, group_name=Personalkostnader, account_number=None, account_range=6000-6999, order_index=40
+    - id=5, report_type=resultat, group_name=Avskrivningar, account_number=None, account_range=7000-7999, order_index=50
+
+📁 Tabell: transaction_translation
+  • transaction_id (uuid)
+  • language (text)
+  • description (text)
+  🔑 [p] transaction_translation_pkey: PRIMARY KEY (transaction_id, language)
+  🔑 [f] transaction_translation_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
+📁 Tabell: account_translation
+  • account_id (uuid)
+  • language (text)
+  • name (text)
+  🔑 [p] account_translation_pkey: PRIMARY KEY (account_id, language)
+  🔑 [f] account_translation_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - account_id=84d18e0a-2338-4c67-8151-5a44f6131d3f, language=en, name=Corporate Bank Account
+    - account_id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, language=en, name=Sales Sweden 25% VAT
+    - account_id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, language=en, name=Output VAT 25%
+    - account_id=f826389c-d9ec-42db-8f17-920ea0e082cd, language=en, name=Equity
+    - account_id=5e3ba7a3-1683-42a3-afe5-e03839170542, language=en, name=Other Long-term Liabilities
+
+📁 Tabell: settings
+  • key (text)
+  • value (text)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  🔑 [p] settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=default_language, value=sv, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=reporting_currency, value=SEK, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=period_start_month, value=1, value_type=integer, updated_at=2025-06-03 16:17:04.085806+02:00
+
+📁 Tabell: budget
+  • year (integer)
+  • month (integer)
+  • account_number (text)
+  • amount (numeric)
+
+📁 Tabell: bank_statement
+  • id (uuid)
+  • date (date)
+  • balance (numeric)
+  • source (text)
+  • metadata (jsonb)
+  🔑 [p] bank_statement_pkey: PRIMARY KEY (id)
+
+📁 Tabell: pending_verification
+  • id (uuid)
+  • email (text)
+  • token (text)
+  • metadata (jsonb)
+  • created_at (timestamp without time zone)
+  • used_at (timestamp without time zone)
+  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+  🔑 [u] pending_verification_token_key: UNIQUE (token)
+
+📁 Tabell: tracking_event
+  • id (uuid)
+  • visitor_id (text)
+  • event_type (text)
+  • timestamp (timestamp with time zone)
+  • metadata (jsonb)
+  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - id=65448382-0365-4057-8c78-2d7ef1bbfd18, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:19.476000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'performance_now': 1523, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=0d4bfbba-1290-4092-8b9a-708ffffb761c, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:39.933000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1310, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 21982, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=4f52e783-cb5f-4d4a-bd67-9bf601667129, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=click, timestamp=2025-06-24 17:55:47.207000+02:00, metadata={'tag': 'A', 'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'href': 'https://www.klrab.se/sustainability', 'text': 'HÅLLBARHET', 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 813, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 29256, 'hardwareConcurrency': 4, 'timezone_offset_min': -120, 'time_since_page_load_ms': 29250}
+    - id=a0f20249-cc96-474c-94ea-ba6d9fe68659, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:47.580000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 363, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=acc6e76d-bc03-4d85-bacc-c6ab4c5390ac, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:51.856000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1223, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 4640, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+
+📁 Tabell: entry
+  • id (uuid)
+  • transaction_id (uuid)
+  • account_id (uuid)
+  • amount (numeric)
+  • description (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • amount_original (numeric)
+  🔑 [p] entry_pkey: PRIMARY KEY (id)
+  🔑 [f] entry_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+  🔑 [f] entry_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT
+
+📁 Tabell: attachment
+  • id (uuid)
+  • transaction_id (uuid)
+  • filename (text)
+  • content_type (text)
+  • data (bytea)
+  • uploaded_at (timestamp with time zone)
+  • metadata (jsonb)
+  🔑 [p] attachment_pkey: PRIMARY KEY (id)
+  🔑 [f] attachment_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
+📁 Tabell: entry_tag_relation
+  • entry_id (uuid)
+  • tag_id (uuid)
+  🔑 [p] entry_tag_relation_pkey: PRIMARY KEY (entry_id, tag_id)
+  🔑 [f] entry_tag_relation_entry_id_fkey: FOREIGN KEY (entry_id) REFERENCES entry(id) ON DELETE CASCADE
+  🔑 [f] entry_tag_relation_tag_id_fkey: FOREIGN KEY (tag_id) REFERENCES entry_tag(id) ON DELETE CASCADE
+
+📁 Tabell: event_log
+  • source (text)
+  • event_type (text)
+  • payload (jsonb)
+  • received_at (timestamp with time zone)
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • action (text)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=38d75043-8239-45aa-bf67-921675749983, table_name=contact, record_id=61b2a257-9368-4017-9552-0c22810a03cb, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=c0aaac8a-2080-47e6-a185-abd24b718595, table_name=contact, record_id=e17c6638-c18b-472c-a566-a3785f82135c, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=5b6fdb0f-f11c-4fcb-88fa-670d15a065eb, table_name=contact, record_id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=6839af9a-3393-46a9-b0f8-e511d3775806, table_name=contact, record_id=c6a9bd11-8cca-4ad0-888c-40e8136720d2, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=e2fde31b-4acb-4349-a00c-db9f22a9f9c3, table_name=contact, record_id=c02f4a7e-00b4-4671-bc9b-362ad00ed1e8, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+

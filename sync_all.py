@@ -119,7 +119,7 @@ try:
 
     # Kör sync_from_pending_to_apple.py för att spegla kontaktändringar → Apple Kontakter
     try:
-        run_script("🍎 Spegla till Apple Kontakter...", "local_backend/sync_from_pending_to_apple.py")
+        run_script("🍎 Spegla till Apple Kontakter...", "sync_from_to_apple.py")
     except Exception as e:
         print(f"❌ Fel vid spegling till Apple Kontakter: {e}")
 

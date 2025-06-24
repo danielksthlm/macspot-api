@@ -1,0 +1,3204 @@
+📂 KODTRÄD
+==========
+├── Documents
+│   ├── KLR_AI
+│   │   ├── Projekt_MacSpot
+│   │   │   ├── macspot-api
+│   │   │   │   ├── AllSyncCodes_history
+│   │   │   │   │   ├── 🏠_lokal_temp.txt
+│   │   │   │   │   ├── 🧊_azure_temp.txt
+│   │   │   │   │   ├── 🧮_diff_output.txt
+│   │   │   │   ├── healthcheck_sync.py
+│   │   │   │   ├── sync.py
+│   │   │   │   ├── sync_all.py
+│   │   │   │   ├── sync_from_cloud.py
+│   │   │   │   ├── sync_generate_fromcloud_pending.py
+│   │   │   │   ├── sync_generate_pending_from_diff.py
+│   │   │   │   ├── sync_plist.xml
+│   │   │   │   ├── sync_static_tables.py
+│   │   │   │   ├── sync_to_cloud.py
+├── Library
+│   ├── LaunchAgents
+│   │   ├── com.macspot.sync.plist
+==========
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_from_cloud.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-19 23:57:34
+📏 Antal rader: 181
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 17
+🧪 TODO/FIXME: 0
+====================
+START: sync_from_cloud.py
+import psycopg2
+import json
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+def safe_json_load(data, default={}):
+    try:
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return default
+
+def metadata_equal(meta1, meta2):
+    m1 = safe_json_load(meta1)
+    m2 = safe_json_load(meta2)
+    return m1 == m2
+
+def apply_change(cur, table, operation, payload):
+    try:
+        if operation == "INSERT":
+            cols = ", ".join(payload.keys())
+            placeholders = ", ".join(["%s"] * len(payload))
+            sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING"
+            cur.execute(sql, [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()])
+
+        elif operation == "UPDATE":
+            sets = ", ".join([f"{col} = %s" for col in payload if col != "id"])
+            values = [json.dumps(payload[col]) if isinstance(payload[col], dict) else payload[col]
+                      for col in payload if col != "id"]
+            values.append(payload["id"])
+            sql = f"UPDATE {table} SET {sets} WHERE id = %s"
+            cur.execute(sql, values)
+
+        elif operation == "DELETE":
+            cur.execute(f"DELETE FROM {table} WHERE id = %s", [payload["id"]])
+            print(f"🗑️ Raderade post {payload['id']} från {table}")
+
+    except Exception as e:
+        print(f"❌ Fel i apply_change för {table} ({operation}): {e}")
+        raise
+
+def sync():
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+    remote_cur = remote_conn.cursor()
+
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    local_cur = local_conn.cursor()
+
+    try:
+        remote_cur.execute("""
+            SELECT id, table_name, record_id, operation, payload
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                FROM pending_changes
+                WHERE direction = 'out' AND processed = false
+                  AND table_name IN ('contact', 'bookings')
+            ) sub
+            WHERE rn = 1
+            ORDER BY created_at ASC, id
+        """)
+        rows = remote_cur.fetchall()
+
+        remote_cur.execute("""
+            DELETE FROM pending_changes
+            WHERE id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY record_id ORDER BY created_at ASC) AS rn
+                    FROM pending_changes
+                    WHERE direction = 'out' AND processed = false
+                ) sub
+                WHERE rn = 1
+            ) AND direction = 'out' AND processed = false AND operation = 'UPDATE';
+        """)
+
+        count = 0
+        for row in rows:
+            change_id, table, record_id, operation, payload_json = row
+            try:
+                payload = safe_json_load(payload_json)
+                # Removed 'if not isinstance(payload.get("id"), str)' check per instructions
+
+                apply_change(local_cur, table, operation, payload)
+
+                if table == "bookings" and operation == "INSERT":
+                    local_cur.execute("""
+                        UPDATE pending_changes
+                        SET booking_id = %s
+                        WHERE record_id = %s AND table_name = 'bookings' AND booking_id IS NULL
+                    """, (record_id, record_id))
+
+                # Simplified kontaktimport log
+                if table == "contact":
+                    print(f"📥 Importerad kontakt: {payload.get('booking_email', '(okänd e-post)')}")
+
+                local_cur.execute("""
+                    INSERT INTO event_log (id, source, event_type, payload, received_at)
+                    VALUES (gen_random_uuid(), %s, %s, %s, now())
+                """, ('sync', f"{operation.lower()}_{table}", json.dumps(payload)))
+
+                remote_cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", [change_id])
+                remote_conn.commit()
+                local_conn.commit()
+                count += 1
+
+            except Exception as e:
+                print(f"❌ Fel vid synk för {table} (id={change_id}): {e}")
+                continue
+
+        tracking_count = sync_tracking_events(local_conn, remote_conn)
+        return count, tracking_count
+
+    # Sync tracking_event rows from cloud to local
+    except Exception as e:
+        print(f"❌ Fel i sync-funktionen: {e}")
+    finally:
+        local_cur.close()
+        remote_cur.close()
+        local_conn.close()
+        remote_conn.close()
+    return count
+
+
+def sync_tracking_events(local_conn, remote_conn):
+    remote_cur = remote_conn.cursor()
+    local_cur = local_conn.cursor()
+
+    tracking_synced = 0
+
+    try:
+        remote_cur.execute("""
+            SELECT id, visitor_id, event_type, timestamp, metadata
+            FROM tracking_event
+            WHERE synced_at IS NULL
+            ORDER BY timestamp ASC
+            LIMIT 100
+        """)
+        rows = remote_cur.fetchall()
+
+        for row in rows:
+            try:
+                insert_sql = """
+                    INSERT INTO tracking_event (id, visitor_id, event_type, timestamp, metadata)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                """
+                local_cur.execute(insert_sql, [
+                    row[0],  # id
+                    row[1],  # visitor_id
+                    row[2],  # event_type
+                    row[3],  # timestamp
+                    json.dumps(row[4])  # metadata
+                ])
+                remote_cur.execute("UPDATE tracking_event SET synced_at = now() WHERE id = %s", [row[0]])
+                tracking_synced += 1
+            except Exception as e:
+                print(f"❌ Tracking-event synkfel: {e}")
+                continue
+
+        local_conn.commit()
+        remote_conn.commit()
+
+        # Rensa alla synkade tracking_event från molnet direkt efter synk
+        try:
+            remote_cur.execute("""
+                DELETE FROM tracking_event
+                WHERE synced_at IS NOT NULL
+            """)
+            remote_conn.commit()
+            print("🧹 Rensade alla synkade tracking_event från molnet.")
+        except Exception as e:
+            print(f"⚠️ Kunde inte rensa molndata: {e}")
+    finally:
+        local_cur.close()
+        remote_cur.close()
+
+    return tracking_synced
+
+
+if __name__ == "__main__":
+    print(sync())
+END: sync_from_cloud.py
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_to_cloud.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-19 23:58:32
+📏 Antal rader: 158
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 20
+🧪 TODO/FIXME: 0
+====================
+START: sync_to_cloud.py
+import psycopg2
+import json
+from datetime import datetime, timezone
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+def safe_json_load(data, default={}):
+    try:
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return default
+
+
+def fetch_pending_changes(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, table_name, record_id, operation, payload
+            FROM pending_changes
+            WHERE processed = false AND direction = 'out'
+            ORDER BY created_at ASC
+        """)
+        return cur.fetchall()
+
+def get_table_columns(conn, table_name):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = %s
+        """, (table_name,))
+        return [row[0] for row in cur.fetchall()]
+
+def build_insert_sql(table_name, payload):
+    cols = ", ".join(payload.keys())
+    placeholders = ", ".join(["%s"] * len(payload))
+    values = [json.dumps(v) if isinstance(v, dict) else v for v in payload.values()]
+    return f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING", values
+
+def build_update_sql(table_name, payload):
+    cleaned_payload = {k: v for k, v in payload.items() if k != "id"}
+
+    set_clause = ", ".join([f"{k} = %s" for k in cleaned_payload])
+    values = [
+        json.dumps(v) if isinstance(v, dict) else v
+        for v in cleaned_payload.values()
+    ]
+    values.append(payload["id"])
+    return f"UPDATE {table_name} SET {set_clause} WHERE id = %s", values
+
+def sync():
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+
+    try:
+        # Hämta tillåtna kolumner för varje tabell
+        allowed_columns = {
+            'contact': get_table_columns(remote_conn, 'contact'),
+            'bookings': get_table_columns(remote_conn, 'bookings')
+        }
+
+        changes = fetch_pending_changes(local_conn)
+        print(f"📦 {len(changes)} ändringar att synka...")
+
+        for change in changes:
+            change_id, table_name, record_id, operation, payload_json = change
+            print(f"🔄 Hanterar {operation} för {table_name} (ID: {record_id})")
+            try:
+                payload = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
+                
+                origin = payload.get("metadata", {}).get("origin", "") if isinstance(payload.get("metadata"), dict) else ""
+                if table_name == "contact" and origin != "klrab.se":
+                    print(f"⏭️ Skipping contact sync to cloud (origin is not klrab.se): {payload.get('email')}")
+                    continue
+                
+                # Filtrera payload till endast tillåtna kolumner
+                payload = {k: v for k, v in payload.items() if k in allowed_columns.get(table_name, [])}
+                with remote_conn.cursor() as cur:
+                    if operation == "INSERT":
+                        sql, values = build_insert_sql(table_name, payload)
+                        cur.execute(sql, values)
+                        print(f"✅ INSERT till {table_name} klar (ID: {record_id})")
+                        # Logga till event_log
+                        cur.execute("""
+                            INSERT INTO event_log (id, source, event_type, payload, received_at)
+                            VALUES (gen_random_uuid(), %s, %s, %s, now())
+                        """, (
+                            'sync',
+                            f"sync_to_cloud_insert_{table_name}",
+                            json.dumps({
+                                "record_id": record_id,
+                                "table": table_name,
+                                "operation": operation,
+                                "email": payload.get("booking_email", None)
+                            })
+                        ))
+
+                    elif operation == "UPDATE":
+                        sql, values = build_update_sql(table_name, payload)
+                        cur.execute(sql, values)
+                        if cur.rowcount == 0:
+                            print(f"⚠️ UPDATE påverkade inga rader i {table_name} (ID: {record_id})")
+                        else:
+                            print(f"✅ UPDATE till {table_name} klar (ID: {record_id})")
+                        # Verifiering av UPDATE
+                        cur.execute(f"SELECT * FROM {table_name} WHERE id = %s", (record_id,))
+                        after = cur.fetchone()
+                        print(f"🔍 Verifiering av UPDATE för {table_name} ID: {record_id} → {after}")
+                        # Logga till event_log
+                        cur.execute("""
+                            INSERT INTO event_log (id, source, event_type, payload, received_at)
+                            VALUES (gen_random_uuid(), %s, %s, %s, now())
+                        """, (
+                            'sync',
+                            f"sync_to_cloud_update_{table_name}",
+                            json.dumps({
+                                "record_id": record_id,
+                                "table": table_name,
+                                "operation": operation,
+                                "email": payload.get("booking_email", None)
+                            })
+                        ))
+
+                    elif operation == "DELETE":
+                        cur.execute(f"DELETE FROM {table_name} WHERE id = %s", [record_id])
+                        print(f"🗑️ DELETE från {table_name} klar (ID: {record_id})")
+                        # Logga till event_log
+                        cur.execute("""
+                            INSERT INTO event_log (id, source, event_type, payload, received_at)
+                            VALUES (gen_random_uuid(), %s, %s, %s, now())
+                        """, (
+                            'sync',
+                            f"sync_to_cloud_delete_{table_name}",
+                            json.dumps({
+                                "record_id": record_id,
+                                "table": table_name,
+                                "operation": operation,
+                                "email": payload.get("booking_email", None)
+                            })
+                        ))
+
+                with local_conn.cursor() as local_cur:
+                    local_cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", [change_id])
+                    local_conn.commit()
+                    print(f"📍 Markerat som bearbetad: {change_id}")
+
+            except Exception as op_err:
+                print(f"❌ Fel vid hantering av ändring ({operation}) för {table_name} – {op_err}")
+
+    except Exception as e:
+        print(f"❌ Fel under synk: {e}")
+
+    finally:
+        local_conn.close()
+        remote_conn.close()
+
+if __name__ == "__main__":
+    sync()
+END: sync_to_cloud.py
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_static_tables.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-04-24 17:01:52
+📏 Antal rader: 61
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 6
+🧪 TODO/FIXME: 0
+====================
+START: sync_static_tables.py
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+import psycopg2
+import json
+from datetime import datetime
+
+
+TABLES = ["translation", "booking_settings"]
+
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+
+def fetch_all_from_local(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT * FROM {table}")
+        colnames = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
+        return colnames, rows
+
+
+def clear_remote_table(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"DELETE FROM {table}")
+        conn.commit()
+
+
+def insert_to_remote(conn, table, columns, rows):
+    with conn.cursor() as cur:
+        placeholders = ', '.join(['%s'] * len(columns))
+        colnames = ', '.join(columns)
+        for row in rows:
+            # Hantera jsonb-värden som json-strängar
+            formatted_row = []
+            for i, col in enumerate(columns):
+                value = row[i]
+                if table == 'booking_settings' and col == 'value':
+                    formatted_row.append(json.dumps(value))
+                else:
+                    formatted_row.append(value)
+            cur.execute(f"INSERT INTO {table} ({colnames}) VALUES ({placeholders})", formatted_row)
+        conn.commit()
+
+
+def sync_static_tables():
+    local_conn = connect_db(LOCAL_DB_CONFIG)
+    remote_conn = connect_db(REMOTE_DB_CONFIG)
+
+    for table in TABLES:
+        print(f"\n⏳ Synkar tabell: {table}...")
+        columns, rows = fetch_all_from_local(local_conn, table)
+        clear_remote_table(remote_conn, table)
+        insert_to_remote(remote_conn, table, columns, rows)
+        print(f"✅ Klar med tabell: {table} ({len(rows)} rader)")
+
+    local_conn.close()
+    remote_conn.close()
+
+
+if __name__ == "__main__":
+    sync_static_tables()
+
+END: sync_static_tables.py
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-02 22:04:06
+📏 Antal rader: 130
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 22
+🧪 TODO/FIXME: 0
+====================
+START: sync.py
+import psycopg2
+import json
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+
+def safe_json(data):
+    return json.loads(data) if isinstance(data, str) else data
+
+
+# Deep diff for metadata fields
+def deep_metadata_diff(meta1, meta2):
+    m1 = safe_json(meta1)
+    m2 = safe_json(meta2)
+    diffs = []
+    all_keys = set(m1.keys()).union(m2.keys())
+    for key in sorted(all_keys):
+        v1 = m1.get(key)
+        v2 = m2.get(key)
+        if v1 != v2:
+            diffs.append(f"    • metadata.{key}: lokal='{v1}' vs moln='{v2}'")
+    return diffs
+
+def connect_db(config):
+    return psycopg2.connect(**config)
+
+def fetch_contacts(conn):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM contact")
+        colnames = [desc[0] for desc in cur.description]
+        return {
+            row[colnames.index("id")]: dict(zip(colnames, row))
+            for row in cur.fetchall()
+        }
+
+def fetch_bookings(conn):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM bookings")
+        colnames = [desc[0] for desc in cur.description]
+        return {
+            row[colnames.index("id")]: dict(zip(colnames, row))
+            for row in cur.fetchall()
+        }
+
+def compare_and_print(local_data, cloud_data, label, local):
+    print(f"\n📋 Jämför {label}...")
+    for cid, local_item in sorted(local_data.items(), key=lambda item: item[1].get("booking_email", "")):
+        cloud = cloud_data.get(cid)
+        if not cloud:
+            print(f"🆕 Finns lokalt men inte i molnet: {local_item.get('booking_email', '(okänd)')}")
+            continue
+
+        differences = []
+        # Jämför varje fält i raden (förutom id)
+        for key in local_item:
+            if key == 'id':
+                continue
+            local_val = local_item[key]
+            cloud_val = cloud.get(key)
+            if key == 'metadata':
+                meta_diffs = deep_metadata_diff(
+                    safe_json(local_val),
+                    safe_json(cloud_val)
+                )
+                if meta_diffs:
+                    differences.append(f"  🔹 {key}: METADATA skiljer sig")
+                    differences.extend(meta_diffs)
+            elif local_val != cloud_val:
+                if key == 'updated_at':
+                    # Jämför även timestamp exakt
+                    if local_val == cloud_val:
+                        differences.append(f"  ⚠️ Mismatch i {key} men identisk updated_at – kontrollera dataintegritet")
+                        with local.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO event_log (id, source, event_type, payload, received_at)
+                                VALUES (gen_random_uuid(), %s, %s, %s, now())
+                            """, (
+                                'sync',
+                                f"sync_warning_{label}",
+                                json.dumps({
+                                    "email": local_item.get("booking_email", "(okänd)"),
+                                    "warning": f"MATCH updated_at men data skiljer sig",
+                                    "field": key,
+                                    "local": str(local_val),
+                                    "cloud": str(cloud_val)
+                                })
+                            ))
+                        local.commit()
+                differences.append(f"  🔸 {key}: lokal='{local_val}' vs moln='{cloud_val}'")
+
+        if differences:
+            print(f"✏️ Skillnad för {local_item.get('booking_email', '(okänd)')}")
+            for diff in differences:
+                print(diff)
+
+            with local.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO event_log (id, source, event_type, payload, received_at)
+                    VALUES (gen_random_uuid(), %s, %s, %s, now())
+                """, (
+                    'sync',
+                    f"sync_local_diff_{label}",
+                    json.dumps({
+                        "email": local_item.get("booking_email", "(okänd)"),
+                        "diff_summary": differences
+                    })
+                ))
+            # Observera: sync.py lägger bara till diff i event_log – ingen ändring sker i pending_changes.
+            local.commit()
+
+    for cid, cloud in sorted(cloud_data.items(), key=lambda item: item[1].get("booking_email", "")):
+        if cid in local_data:
+            continue
+        print(f"🆕 Finns i molnet men inte lokalt: {cloud.get('booking_email', '(okänd)')}")
+
+
+if __name__ == "__main__":
+    try:
+        local = connect_db(LOCAL_DB_CONFIG)
+        cloud = connect_db(REMOTE_DB_CONFIG)
+    except Exception as e:
+        print(f"❌ Fel vid databasanslutning: {e}")
+        exit(1)
+    local_contacts = fetch_contacts(local)
+    cloud_contacts = fetch_contacts(cloud)
+    compare_and_print(local_contacts, cloud_contacts, "contacts", local)
+
+    local_bookings = fetch_bookings(local)
+    cloud_bookings = fetch_bookings(cloud)
+    compare_and_print(local_bookings, cloud_bookings, "bookings", local)
+    local.close()
+    cloud.close()
+
+END: sync.py
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-21 15:13:44
+📏 Antal rader: 234
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 8 – ['import os', 'import subprocess', 'import sys', 'import psycopg2', 'import json', 'import socket', 'import traceback', 'import subprocess']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 24
+🧪 TODO/FIXME: 0
+====================
+START: sync_all.py
+BASE = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api"
+
+
+import os
+import subprocess
+from datetime import datetime, timezone
+import sys
+import psycopg2
+import json
+from sync_from_cloud import sync as sync_from_cloud
+
+with open("/tmp/launchd_debug.txt", "a") as f:
+    f.write("[sync_all.py] Körning initierad\n")
+
+# Logga varje körning till /tmp/debug_sync.txt för att bekräfta att launchd triggar scriptet
+with open("/tmp/debug_sync.txt", "a") as f:
+    f.write(f"[{datetime.now()}] sync_all.py kördes\n")
+
+
+# Delad json- och metadata-funktionalitet som används i flera synkmoduler
+def safe_json_load(data, default={}):
+    try:
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return default
+
+def metadata_equal(meta1, meta2):
+    m1 = safe_json_load(meta1)
+    m2 = safe_json_load(meta2)
+    return m1 == m2
+
+log_dir = "/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot"
+log_out = os.path.join(log_dir, "macspot_sync.log")
+log_err = os.path.join(log_dir, "macspot_sync_error.log")
+
+# Se till att loggfilerna existerar
+for path in [log_out, log_err]:
+    if not os.path.exists(path):
+        with open(path, 'w'):
+            pass
+
+# Skriv ut manuell/automatisk körningsinfo till loggen
+is_manual = os.environ.get("LAUNCHD_RUN") != "true"
+log_mode = "MANUELL" if is_manual else "AUTOMATISK (launchd)"
+with open("/tmp/env_debug.txt", "a") as f:
+    f.write(f"LAUNCHD_RUN: {os.environ.get('LAUNCHD_RUN')}\n")
+# Debug environment variables to file
+with open("/tmp/env_debug.txt", "w") as f:
+    f.write(str(dict(os.environ)))
+out = open(log_out, 'a')
+err = open(log_err, 'a')
+sys.stdout = out
+sys.stderr = err
+
+def run_script(name, script_path):
+    subprocess.run(["/Users/danielkallberg/Documents/KLR_AI/venv/bin/python", f"{BASE}/{script_path}"], check=True)
+
+try:
+    start_time = datetime.now(timezone.utc)
+    local_db_ok = True
+    cloud_db_ok = True
+    def is_database_online(host, port):
+        import socket
+        try:
+            socket.create_connection((host, port), timeout=2)
+            return True
+        except:
+            return False
+
+    def run_healthcheck():
+        try:
+            subprocess.run(
+                ["/Users/danielkallberg/Documents/KLR_AI/venv/bin/python", f"{BASE}/healthcheck_sync.py"],
+                stdout=out,
+                stderr=err,
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"[{datetime.now()}] ❌ Healthcheck misslyckades: {e}")
+
+    # Kontrollera att båda databaser är online innan sync startar
+    if not is_database_online("localhost", 5433):
+        local_db_ok = False
+        exit(1)
+
+    if not is_database_online("macspotpg.postgres.database.azure.com", 5432):
+        cloud_db_ok = False
+        exit(1)
+
+    run_healthcheck()
+
+    # Kör Apple Kontakter-synk via Swift
+    try:
+        print("🍎 Kör Apple Contact Sync...")
+        subprocess.run([
+            "/usr/bin/swift",
+            "run"
+        ], cwd=f"{BASE}/local_backend/apple_contact_sync", check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Swift-synk misslyckades: {e}")
+
+    # Kör sync.py först
+    run_script("🟡 Kör sync.py...", "sync.py")
+
+    # Efter sync.py, kontrollera om det finns diffar i event_log
+    with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM event_log
+                WHERE received_at > now() - interval '5 minutes'
+                  AND event_type IN ('sync_local_diff_contacts', 'sync_local_diff_bookings')
+            """)
+            diff_count = cur.fetchone()[0]
+            if diff_count > 0:
+                run_script("⚙️ Kör sync_generate_pending_from_diff.py...", "sync_generate_pending_from_diff.py")
+
+    # Kör sync_to_cloud.py efter kontrollen
+    run_script("🟢 Kör sync_to_cloud.py...", "sync_to_cloud.py")
+
+    # Kör sync_from_pending_to_apple.py för att spegla kontaktändringar → Apple Kontakter
+    try:
+        run_script("🍎 Spegla till Apple Kontakter...", "local_backend/sync_from_pending_to_apple.py")
+    except Exception as e:
+        print(f"❌ Fel vid spegling till Apple Kontakter: {e}")
+
+
+    # Kör generate_fromcloud_pending.py om event_log innehåller sync_fromcloud_mismatch
+    with psycopg2.connect(dbname="macspot", user="postgres", host="localhost", port=5433) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM event_log
+                WHERE received_at > now() - interval '5 minutes'
+                  AND event_type IN ('sync_mismatch_contact', 'sync_fromcloud_mismatch')
+            """)
+            cloud_diff_count = cur.fetchone()[0]
+            if cloud_diff_count > 0:
+                run_script("⚙️ Kör sync_generate_fromcloud_pending.py...", "sync_generate_fromcloud_pending.py")
+
+    today_prefix = datetime.now(timezone.utc).strftime('%Y%m%d')
+    outbox_dir = os.path.join(BASE, 'sync_outbox')
+    files = [f for f in os.listdir(outbox_dir) if f.startswith(today_prefix)]
+    files_with_type = [f for f in files if len(f.split("_")) >= 3]
+    num_changes = len(files_with_type)
+
+    if num_changes != 0:
+        files = [f for f in sorted(os.listdir(outbox_dir)) if f.startswith(today_prefix)]
+        summary = {}
+        for f in files:
+            parts = f.split("_")
+            if len(parts) >= 3:
+                typ = parts[2].split(".")[0]
+                summary[typ] = summary.get(typ, 0) + 1
+
+        # Kontrollera och skriv ut äldre JSON-filer i sync_outbox
+        old_files = [f for f in os.listdir(outbox_dir) if not f.startswith(today_prefix)]
+
+        # Kontroll av återstående ändringar i pending_changes
+        local = psycopg2.connect(
+            dbname="macspot",
+            user="postgres",
+            host="localhost",
+            port=5433
+        )
+        cur_local = local.cursor()
+        cur_local.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+        """)
+        out_local = cur_local.fetchone()[0]
+        cur_local.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+            GROUP BY record_id
+        """)
+        cur_local.close()
+        local.close()
+
+        cloud = psycopg2.connect(
+            dbname="postgres",
+            user="daniel",
+            host="macspotpg.postgres.database.azure.com",
+            port=5432
+        )
+        cur_cloud = cloud.cursor()
+        cur_cloud.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+        """)
+        out_cloud = cur_cloud.fetchone()[0]
+        cur_cloud.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+            GROUP BY record_id
+        """)
+        cur_cloud.close()
+        cloud.close()
+
+    out_cloud, tracking_count = sync_from_cloud()
+
+except Exception as e:
+    import traceback
+
+finally:
+    print(f"🏁 Körning avslutad: {datetime.now(timezone.utc).isoformat()}")
+    duration = datetime.now(timezone.utc) - start_time
+
+    synced_out = out_local if 'out_local' in locals() else 0
+    synced_in = out_cloud if 'out_cloud' in locals() else 0
+
+    print(f"⏱️ Total körtid: {int(duration.total_seconds())} sekunder")
+    import subprocess
+    try:
+        if not local_db_ok or not cloud_db_ok:
+            status_msg = "❌ Fel: "
+            if not local_db_ok:
+                status_msg += "lokal DB nere. "
+            if not cloud_db_ok:
+                status_msg += "moln-DB nere. "
+        else:
+            status_msg = f"✅ Synk klar: {synced_out} ut, {synced_in} in, {tracking_count} tracking-events"
+
+        # Alltid visa notis
+        subprocess.run([
+            "/opt/homebrew/bin/terminal-notifier",
+            "-title", "MacSpot Sync",
+            "-message", status_msg,
+            "-sender", "se.klrab.macspot",
+            "-open", "file:///Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot_sync.log"
+        ])
+    except Exception as e:
+        print(f"⚠️ Kunde inte visa notis med terminal-notifier: {e}")
+    print(f"🧭 Kördes via: {log_mode}")
+    out.close()
+    err.close()
+END: sync_all.py
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_plist.xml
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 📄 Okänt format
+📅 Senast ändrad: 2025-06-02 16:22:08
+📏 Antal rader: 26
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: sync_plist.xml
+cat > ~/Library/LaunchAgents/com.macspot.sync.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.macspot.sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/danielkallberg/Documents/KLR_AI/venv/bin/python3</string>
+    <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api</string>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/macspot_sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/macspot_sync_error.log</string>
+</dict>
+</plist>
+EOF
+END: sync_plist.xml
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_generate_fromcloud_pending.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-02 22:22:42
+📏 Antal rader: 77
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 8
+🧪 TODO/FIXME: 0
+====================
+START: sync_generate_fromcloud_pending.py
+import psycopg2
+import json
+from config import LOCAL_DB_CONFIG
+from datetime import datetime
+
+def connect_db():
+    return psycopg2.connect(**LOCAL_DB_CONFIG)
+
+def get_diff_events(cur):
+    cur.execute("""
+        SELECT payload->>'email' AS email, payload->>'record_id' AS record_id,
+               payload->>'table' AS table_name, payload->>'diff_summary' AS diff,
+               MAX(received_at) AS latest
+        FROM event_log
+        WHERE event_type LIKE 'sync_fromcloud_mismatch%'
+        GROUP BY 1, 2, 3, 4
+        ORDER BY latest DESC
+    """)
+    return cur.fetchall()
+
+def get_latest_payload(cur, table_name, record_id):
+    cur.execute(f"SELECT * FROM {table_name} WHERE id = %s", (record_id,))
+    row = cur.fetchone()
+    if not row:
+        return None
+    colnames = [desc[0] for desc in cur.description]
+    row_dict = dict(zip(colnames, row))
+    
+    def safe_serialize(value):
+        if isinstance(value, dict):
+            return json.dumps(value)
+        elif isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    row_dict = {k: safe_serialize(v) for k, v in row_dict.items()}
+    return row_dict
+
+def create_pending_change(cur, table_name, record_id, payload):
+    cur.execute("""
+        INSERT INTO pending_changes (
+            table_name, record_id, change_type, operation, direction,
+            processed, created_at, payload
+        ) VALUES (
+            %s, %s, 'UPDATE', 'UPDATE', 'out', false, now(), %s
+        )
+    """, (table_name, record_id, json.dumps(payload)))
+
+def main():
+    conn = connect_db()
+    cur = conn.cursor()
+
+    print("🔄 Genererar pending_changes från event_log (moln → lokal)...")
+    events = get_diff_events(cur)
+    print(f"📌 Hittade {len(events)} diff-loggar att bearbeta...")
+
+    count = 0
+    for email, record_id, table_name, _, _ in events:
+        payload = get_latest_payload(cur, table_name, record_id)
+        if not payload:
+            print(f"⚠️ Kunde inte hitta rad i {table_name} för ID: {record_id}")
+            continue
+        try:
+            create_pending_change(cur, table_name, record_id, payload)
+            print(f"📥 Skapade pending_change för {table_name}: {email}")
+            count += 1
+        except Exception as e:
+            print(f"❌ Misslyckades att skapa pending_change: {e}")
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    print(f"✅ Klart – {count} pending_changes skapade.")
+
+if __name__ == "__main__":
+    main()
+END: sync_generate_fromcloud_pending.py
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_generate_pending_from_diff.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-24 18:12:47
+📏 Antal rader: 91
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import json']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 13
+🧪 TODO/FIXME: 0
+====================
+START: sync_generate_pending_from_diff.py
+import psycopg2
+import json
+from config import LOCAL_DB_CONFIG
+from datetime import datetime
+
+def connect_local():
+    return psycopg2.connect(**LOCAL_DB_CONFIG)
+
+def extract_pending_changes_from_eventlog(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, event_type, payload, received_at
+            FROM event_log
+            WHERE event_type LIKE 'sync_local_diff_%'
+            AND received_at > now() - interval '1 hour'
+            ORDER BY received_at DESC
+        """)
+        rows = cur.fetchall()
+
+    count = 0
+    with conn.cursor() as cur:
+
+        def safe_serialize(value):
+            if isinstance(value, dict):
+                return json.dumps(value)
+            elif isinstance(value, datetime):
+                return value.isoformat()
+            return value
+
+        for row in rows:
+            event_id, event_type, payload_json, _ = row
+            payload = payload_json if isinstance(payload_json, dict) else json.loads(payload_json)
+            email = payload.get("email") or (payload.get("metadata") or {}).get("email")
+            table = "contact" if "contacts" in event_type else "bookings"
+
+            if not email:
+                continue
+
+            # Hämta aktuell post från databasen
+            if table == "contact":
+                cur.execute("""
+                    SELECT c.*, ccr.metadata->>'email' AS ccr_email
+                    FROM contact c
+                    JOIN ccrelation ccr ON c.id = ccr.contact_id
+                    WHERE ccr.metadata->>'email' = %s
+                    LIMIT 1
+                """, (email,))
+            else:
+                cur.execute(f"SELECT * FROM {table} WHERE email = %s", (email,))
+            result = cur.fetchone()
+            if not result:
+                if table == "contact":
+                    print(f"⚠️ Ingen contact/ccrelation hittades för e-post: {email}")
+                else:
+                    print(f"⚠️ Ingen rad hittades för {email} i {table}")
+                continue
+
+            colnames = [desc[0] for desc in cur.description]
+            row_dict = dict(zip(colnames, result))
+            row_id = row_dict["id"]
+            row_dict = {k: safe_serialize(v) for k, v in row_dict.items()}
+
+            # Kontrollera om redan finns
+            cur.execute("""
+                SELECT 1 FROM pending_changes
+                WHERE table_name = %s AND record_id = %s AND direction = 'out' AND processed = false
+            """, (table, row_id))
+            if cur.fetchone():
+                print(f"⏩ Redan pending: {email} i {table}")
+                continue
+
+            cur.execute("""
+                INSERT INTO pending_changes (
+                    table_name, record_id, change_type, operation, direction,
+                    processed, created_at, payload
+                ) VALUES (
+                    %s, %s, 'UPDATE', 'UPDATE', 'out', false, now(), %s
+                )
+            """, (table, row_id, json.dumps(row_dict)))
+            count += 1
+
+    conn.commit()
+    return count
+
+if __name__ == "__main__":
+    conn = connect_local()
+    try:
+        total = extract_pending_changes_from_eventlog(conn)
+        print(f"✅ Skapade {total} nya pending_changes från event_log.")
+    finally:
+        conn.close()
+END: sync_generate_pending_from_diff.py
+
+====================
+📄 Fil: Library/LaunchAgents/com.macspot.sync.plist
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 📄 Okänt format
+📅 Senast ändrad: 2025-06-10 15:35:30
+📏 Antal rader: 28
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 0 – Inga
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 0
+🧪 TODO/FIXME: 0
+====================
+START: com.macspot.sync.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.macspot.sync</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/danielkallberg/Documents/KLR_AI/venv/bin/python</string>
+		<string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/sync_all.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/tmp/macspot_sync_error.log</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/macspot_sync.log</string>
+	<key>StartInterval</key>
+	<integer>300</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>LAUNCHD_RUN</key>
+		<string>true</string>
+	</dict>
+</dict>
+</plist>
+
+END: com.macspot.sync.plist
+
+====================
+📄 Fil: Documents/KLR_AI/Projekt_MacSpot/macspot-api/healthcheck_sync.py
+📂 Kodtyp: 📄 Övrigt
+🗂 Filtyp: 🐍 Python
+📅 Senast ändrad: 2025-06-04 20:17:44
+📏 Antal rader: 302
+🧩 Antal funktioner: 0
+💬 Kommentarstäckning: 0 rader (0.0%)
+📥 Imports: 2 – ['import psycopg2', 'import sys']
+🔍 Längsta funktion: 0 rader
+🧠 Komplexitetspoäng: 49
+🧪 TODO/FIXME: 0
+====================
+START: healthcheck_sync.py
+# 📄 Förbättrad version av healthcheck_sync.py
+
+import psycopg2
+from config import LOCAL_DB_CONFIG, REMOTE_DB_CONFIG
+from datetime import datetime, timezone
+import sys
+
+__version__ = "1.0.1"
+SILENT_IF_OK = True
+output_buffer = []
+def log(msg):
+    output_buffer.append(msg)
+    if not SILENT_IF_OK:
+        print(msg)
+
+def get_pending_count(conn, label):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT COUNT(*) FROM pending_changes
+            WHERE direction = 'out' AND processed = false
+        """)
+        count = cur.fetchone()[0]
+        log(f"🔍 {label}: {count} osynkade förändringar")
+        return count
+
+def check_db_connection(name, config):
+    try:
+        start = datetime.now(timezone.utc)
+        conn = psycopg2.connect(**config)
+        latency = (datetime.now(timezone.utc) - start).total_seconds()
+        log(f"✅ Anslutning till {name} OK (latens: {latency:.2f} sek)")
+        return conn
+    except Exception as e:
+        print(f"❌ Fel vid anslutning till {name}: {e}")
+        return None
+
+def main():
+    log(f"\n📋 Healthcheck MacSpot sync v{__version__} – {datetime.now(timezone.utc).isoformat()} UTC\n")
+    errors = 0
+
+    local_conn = check_db_connection("Lokal databas", LOCAL_DB_CONFIG)
+    if local_conn:
+        get_pending_count(local_conn, "Lokal → moln")
+        local_conn.close()
+    else:
+        errors += 1
+
+    remote_conn = check_db_connection("Molndatabas", REMOTE_DB_CONFIG)
+    if remote_conn:
+        get_pending_count(remote_conn, "Moln → lokal")
+        # --- Kontaktjämförelse mellan lokal och moln ---
+        try:
+            log("\n🔍 Jämför kontaktposter mellan lokal och moln...")
+            with psycopg2.connect(**LOCAL_DB_CONFIG) as local_conn, psycopg2.connect(**REMOTE_DB_CONFIG) as remote_conn:
+                with local_conn.cursor() as local_cur, remote_conn.cursor() as remote_cur:
+                    local_cur.execute("SELECT id, metadata FROM contact")
+                    remote_cur.execute("SELECT id, metadata FROM contact")
+
+                    local_contacts = {str(row[0]): row[1] for row in local_cur.fetchall()}
+                    remote_contacts = {str(row[0]): row[1] for row in remote_cur.fetchall()}
+
+                    mismatch_count = 0
+                    for contact_id, local_meta in local_contacts.items():
+                        remote_meta = remote_contacts.get(contact_id)
+                        if remote_meta is None:
+                            log(f"⚠️ Kontakt {contact_id} finns inte i molnet.")
+                            mismatch_count += 1
+                        elif local_meta != remote_meta:
+                            if {k: v for k, v in local_meta.items() if k != 'updated_at'} != {k: v for k, v in remote_meta.items() if k != 'updated_at'}:
+                                log(f"⚠️ Kontakt {contact_id} skiljer sig mellan lokal och moln (förutom updated_at).")
+                                mismatch_count += 1
+
+                    for contact_id in remote_contacts:
+                        if contact_id not in local_contacts:
+                            log(f"⚠️ Kontakt {contact_id} finns i molnet men saknas lokalt.")
+                            mismatch_count += 1
+
+                    if mismatch_count == 0:
+                        log("✅ Alla kontakter matchar mellan lokal och moln.")
+                    else:
+                        log(f"❗ Totalt {mismatch_count} avvikelse(r) i kontaktmetadata.")
+        except Exception as e:
+            print(f"⚠️ Fel vid jämförelse av kontakter: {e}")
+        remote_conn.close()
+    else:
+        errors += 1
+
+    # Hämta senaste mismatch-loggar från event_log
+    try:
+        with psycopg2.connect(**LOCAL_DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT event_type, payload->>'email', payload->>'diff_summary', received_at
+                    FROM event_log
+                    WHERE received_at > now() - interval '10 minutes'
+                      AND event_type IN (
+                          'sync_local_diff', 'sync_mismatch_contact', 'sync_fromcloud_mismatch', 'sync_forced_rewrite'
+                      )
+                    ORDER BY received_at DESC
+                    LIMIT 10
+                """)
+                rows = cur.fetchall()
+                if rows:
+                    log("\n🚨 Senaste synkavvikelser:")
+                    for event_type, email, diff, timestamp in rows:
+                        log(f"• {event_type}: {email} – {diff} @ {timestamp}")
+                else:
+                    log("\n✅ Inga mismatch-loggar i event_log senaste 10 minuterna.")
+    except Exception as e:
+        print(f"⚠️ Kunde inte läsa mismatch-loggar: {e}")
+
+    # Lista alla tabeller i lokal och molndatabas
+    def list_tables(conn, label):
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name
+                """)
+                tables = [row[0] for row in cur.fetchall()]
+                log(f"\n📋 Tabeller i {label}:")
+                for t in tables:
+                    log(f"• {t}")
+        except Exception as e:
+            print(f"⚠️ Kunde inte hämta tabeller från {label}: {e}")
+
+    # Lista triggers per tabell
+    def list_triggers(conn, label):
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT event_object_table, trigger_name, action_timing, event_manipulation
+                    FROM information_schema.triggers
+                    ORDER BY event_object_table, trigger_name
+                """)
+                rows = cur.fetchall()
+                if rows:
+                    log(f"\n📌 Triggers i {label}:")
+                    for table, trigger, timing, event in rows:
+                        log(f"• {table} – {trigger} ({timing} {event})")
+                else:
+                    log(f"\nℹ️ Inga triggers i {label}.")
+        except Exception as e:
+            print(f"⚠️ Kunde inte hämta triggers från {label}: {e}")
+
+    def analyze_triggers(conn, table_name, label):
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT trigger_name, action_timing, event_manipulation, action_statement
+                    FROM information_schema.triggers
+                    WHERE event_object_table = %s
+                """, (table_name,))
+                rows = cur.fetchall()
+                if rows:
+                    log(f"\n🔍 Triggers för tabell '{table_name}' i {label}:")
+                    for trigger_name, timing, event, stmt in rows:
+                        log(f"• {trigger_name} – {timing} {event}: {stmt}")
+                else:
+                    log(f"\nℹ️ Inga triggers för tabell '{table_name}' i {label}.")
+        except Exception as e:
+            print(f"⚠️ Fel vid analys av triggers i {label}: {e}")
+
+    def list_columns(conn, table_name, label):
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT column_name, data_type
+                    FROM information_schema.columns
+                    WHERE table_name = %s
+                    ORDER BY ordinal_position
+                """, (table_name,))
+                rows = cur.fetchall()
+                log(f"\n📑 Kolumner för '{table_name}' i {label}:")
+                for name, dtype in rows:
+                    log(f"• {name} ({dtype})")
+        except Exception as e:
+            print(f"⚠️ Fel vid kolumnhämtning i {label} för tabell '{table_name}': {e}")
+
+    # Anropa för båda databaser om öppna
+    if local_conn:
+        local_conn = check_db_connection("Lokal databas", LOCAL_DB_CONFIG)
+        if local_conn:
+            list_tables(local_conn, "lokal databas")
+            list_triggers(local_conn, "lokal databas")
+            local_conn.close()
+    if remote_conn:
+        remote_conn = check_db_connection("Molndatabas", REMOTE_DB_CONFIG)
+        if remote_conn:
+            list_tables(remote_conn, "molndatabas")
+            list_triggers(remote_conn, "molndatabas")
+            remote_conn.close()
+
+    if local_conn := check_db_connection("Lokal databas", LOCAL_DB_CONFIG):
+        for tabell in ["contact", "bookings"]:
+            analyze_triggers(local_conn, tabell, "lokal databas")
+        local_conn.close()
+
+    if remote_conn := check_db_connection("Molndatabas", REMOTE_DB_CONFIG):
+        for tabell in ["contact", "bookings"]:
+            analyze_triggers(remote_conn, tabell, "molndatabas")
+        remote_conn.close()
+
+    if local_conn := check_db_connection("Lokal databas", LOCAL_DB_CONFIG):
+        for tabell in ["contact", "bookings"]:
+            list_columns(local_conn, tabell, "lokal databas")
+        local_conn.close()
+
+    if remote_conn := check_db_connection("Molndatabas", REMOTE_DB_CONFIG):
+        for tabell in ["contact", "bookings"]:
+            list_columns(remote_conn, tabell, "molndatabas")
+        remote_conn.close()
+
+    def verify_trigger_connections():
+        log("\n📎 Verifierar att triggers är kopplade till rätt funktioner...")
+        for label, config in [("lokal databas", LOCAL_DB_CONFIG), ("molndatabas", REMOTE_DB_CONFIG)]:
+            try:
+                with psycopg2.connect(**config) as conn:
+                    with conn.cursor() as cur:
+                        for table, trigger, function in [
+                            ("contact", "audit_sync_contact_trigger", "log_contact_change"),
+                            ("bookings", "audit_sync_bookings_trigger", "log_bookings_change")
+                        ]:
+                            cur.execute("""
+                                SELECT trigger_name, action_statement
+                                FROM information_schema.triggers
+                                WHERE event_object_table = %s AND trigger_name = %s
+                            """, (table, trigger))
+                            row = cur.fetchone()
+                            if row:
+                                if function in row[1]:
+                                    log(f"✅ {label}: {trigger} på '{table}' kör {function}()")
+                                else:
+                                    log(f"❌ {label}: {trigger} hittades men pekar inte på {function}()")
+                            else:
+                                log(f"❌ {label}: Trigger '{trigger}' på tabell '{table}' saknas")
+            except Exception as e:
+                print(f"⚠️ Kunde inte verifiera triggers i {label}: {e}")
+
+    def verify_trigger_cloud():
+        log("\n🌩️ Verifierar triggerfunktioner i molndatabasen separat...")
+        try:
+            with psycopg2.connect(**REMOTE_DB_CONFIG) as conn:
+                with conn.cursor() as cur:
+                    for table, trigger, expected_func in [
+                        ("contact", "audit_sync_contact_trigger", "log_contact_change"),
+                        ("bookings", "audit_sync_bookings_trigger", "log_bookings_change")
+                    ]:
+                        cur.execute("""
+                            SELECT trigger_name, action_statement
+                            FROM information_schema.triggers
+                            WHERE event_object_table = %s AND trigger_name = %s
+                        """, (table, trigger))
+                        row = cur.fetchone()
+                        if row:
+                            if expected_func in row[1]:
+                                log(f"✅ Molndatabas: {trigger} på '{table}' kör {expected_func}()")
+                            else:
+                                log(f"❌ Molndatabas: {trigger} pekar INTE på {expected_func}()")
+                        else:
+                            log(f"❌ Molndatabas: Trigger '{trigger}' saknas på tabell '{table}'")
+        except Exception as e:
+            print(f"⚠️ Kunde inte verifiera molntriggers: {e}")
+
+    verify_trigger_connections()
+    verify_trigger_cloud()
+
+    # Visa de senaste 5 event_log-posterna med e-post och diff_summary
+    try:
+        with psycopg2.connect(**LOCAL_DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT received_at, event_type, payload->>'email', payload->>'diff_summary'
+                    FROM event_log
+                    WHERE payload->>'email' IS NOT NULL
+                    ORDER BY received_at DESC
+                    LIMIT 5
+                """)
+                rows = cur.fetchall()
+                if rows:
+                    log("\n📜 Senaste 5 event_log-poster:")
+                    log(f"| {'tidpunkt':<20} | {'event_type':<25} | {'e-post':<30} | {'diff_summary':<40} |")
+                    log("|" + "-"*22 + "|" + "-"*27 + "|" + "-"*32 + "|" + "-"*42 + "|")
+                    for t, e, m, d in rows:
+                        log(f"| {t.strftime('%Y-%m-%d %H:%M:%S')} | {e:<25} | {m:<30} | {d or '':<40} |")
+                else:
+                    log("ℹ️ Inga loggposter hittades.")
+    except Exception as e:
+        print(f"⚠️ Kunde inte hämta senaste event_log-poster: {e}")
+
+    if errors > 0:
+        for line in output_buffer:
+            print(line)
+        print(f"\n❌ Healthcheck avslutades med {errors} fel.\n")
+        sys.exit(1)
+    else:
+        print(f"✅ Healthcheck OK – {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
+
+if __name__ == "__main__":
+    main()
+END: healthcheck_sync.py
+
+📁 KONFIGURATIONSFILER (function.json / host.json / package.json / .funcignore)
+====================================
+
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/.funcignore
+   # Exclude dev-only files and folders
+   .git
+   .vscode
+   .env
+   *.log
+   test/
+   tests/
+   
+   # Explicitly include all required files and folders
+   !host.json
+   !package.json
+   !package-lock.json
+   
+   !node_modules/
+   !node_modules/**
+   
+   !shared/
+   !shared/**
+   
+   !bookings/
+   !bookings/**
+   !getavailableslots/
+   !getavailableslots/**
+   !validate_contact/
+   !validate_contact/**
+   !meeting_types/
+   !meeting_types/**
+   !refreshCalendarOrigins/
+   !refreshCalendarOrigins/**
+   !refreshTravelTimes/
+   !refreshTravelTimes/**
+   !booking_settings/
+   !booking_settings/**
+   !test_azurecloud/
+   !test_azurecloud/**
+   !tracking/
+   !tracking/**
+   !verify_token/
+   !verify_token/**
+   !request_verification/
+   !request_verification/**
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/booking_settings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "booking_settings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/bookings/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "bookings"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/getavailableslots/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "getavailableslots"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/host.json
+   {
+     "version": "2.0",
+     "extensionBundle": {
+       "id": "Microsoft.Azure.Functions.ExtensionBundle",
+       "version": "[4.*, 5.0.0)"
+     },
+     "extensions": {
+       "http": {
+         "cors": {
+           "allowedOrigins": [
+             "https://www.klrab.se"
+           ],
+           "supportCredentials": false
+         }
+       }
+     }
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/local_frontend/package.json
+   {
+     "name": "local_frontend",
+     "version": "1.0.0",
+     "type": "module",
+     "main": "vite.config.js",
+     "scripts": {
+       "dev": "vite",
+       "build": "vite build",
+       "preview": "vite preview"
+     },
+     "keywords": [],
+     "author": "",
+     "license": "ISC",
+     "dependencies": {
+       "react": "^19.1.0",
+       "react-dom": "^19.1.0",
+       "react-icons": "^5.5.0",
+       "react-router-dom": "^6.30.1",
+       "vite": "^6.3.5"
+     },
+     "devDependencies": {
+       "@tailwindcss/postcss": "^4.1.8",
+       "@vitejs/plugin-react": "^4.5.1",
+       "autoprefixer": "^10.4.21",
+       "postcss": "^8.5.4",
+       "tailwindcss": "^4.1.8"
+     },
+     "description": ""
+   }
+
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/meeting_types/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": [ "get" ],
+         "route": "meeting_types"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/package.json
+   {
+     "name": "macspot-api",
+     "version": "1.0.0",
+     "description": "Azure Functions backend för MacSpot CRM/ERP",
+     "scripts": {
+       "start": "func start",
+       "dev": "func start --verbose",
+       "deploy": "func azure functionapp publish macspotbackend",
+       "build": "echo 'Nothing to build'"
+     },
+     "dependencies": {
+       "@azure/functions": "^4.7.0",
+       "@azure/msal-node": "^3.5.1",
+       "@microsoft/microsoft-graph-client": "^3.0.0",
+       "date-holidays": "^3.24.3",
+       "dav": "^1.8.0",
+       "dotenv": "^16.5.0",
+       "isomorphic-fetch": "^3.0.0",
+       "jsonwebtoken": "^9.0.0",
+       "luxon": "^3.4.4",
+       "node-fetch": "^2.7.0",
+       "node-ical": "^0.20.1",
+       "p-limit": "^6.2.0",
+       "pg": "^8.15.6",
+       "react": "^19.1.0",
+       "react-dom": "^19.1.0",
+       "uuid": "^9.0.0",
+       "vite": "^6.3.5",
+       "xml2js": "^0.6.2"
+     },
+     "devDependencies": {
+       "autoprefixer": "^10.4.21",
+       "postcss": "^8.5.4",
+       "tailwindcss": "^4.1.8"
+     }
+   }
+
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/refreshCalendarOrigins/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/refreshTravelTimes/function.json
+   {
+     "bindings": [
+       {
+         "name": "myTimer",
+         "type": "timerTrigger",
+         "direction": "in",
+         "schedule": "0 0 * * * *"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/request_verification/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "request_verification"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/test_azurecloud/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get"],
+         "route": "test_azurecloud"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/tracking/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "tracking"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/validate_contact/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["get", "post"],
+         "route": "validate_contact"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📄 Documents/KLR_AI/Projekt_MacSpot/macspot-api/verify_token/function.json
+   {
+     "bindings": [
+       {
+         "authLevel": "anonymous",
+         "type": "httpTrigger",
+         "direction": "in",
+         "name": "req",
+         "methods": ["post", "options"],
+         "route": "verify_token"
+       },
+       {
+         "type": "http",
+         "direction": "out",
+         "name": "res"
+       }
+     ],
+     "scriptFile": "index.js"
+   }
+📈 SUMMERING AV ALLA JS-FILER
+====================================
+📏 Totalt antal rader kod: 1288
+🧩 Totalt antal funktioner: 0
+🧠 Total komplexitetspoäng: 159
+🧪 Antal TODO/FIXME totalt: 0
+
+📊 Per fil:
+fil,rader,funktioner,komplexitet,kommentarer,imports
+sync_from_cloud.py,181,0,17,0,2
+sync_to_cloud.py,158,0,20,0,2
+sync_static_tables.py,61,0,6,0,2
+sync.py,130,0,22,0,2
+sync_all.py,234,0,24,0,8
+sync_plist.xml,26,0,0,0,0
+sync_generate_fromcloud_pending.py,77,0,8,0,2
+sync_generate_pending_from_diff.py,91,0,13,0,2
+com.macspot.sync.plist,28,0,0,0,0
+healthcheck_sync.py,302,0,49,0,2
+📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: tracking_event
+  • id (uuid)
+  • timestamp (timestamp with time zone)
+  • metadata (jsonb)
+  • synced_at (timestamp with time zone)
+  • visitor_id (text)
+  • event_type (text)
+  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+
+📁 Tabell: slot_cache
+  • created_at (timestamp without time zone)
+  • slot_day (date)
+  • slots (jsonb)
+  • id (uuid)
+  • meeting_length (integer)
+  • booking_email (text)
+  • meeting_type (text)
+  • slot_part (text)
+  🔑 [p] slot_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: calendar_origin_cache
+  • created_at (timestamp without time zone)
+  • timestamp (timestamp with time zone)
+  • event_date (date)
+  • id (integer)
+  • end_time (timestamp without time zone)
+  • address (text)
+  • source (text)
+  🔑 [c] calendar_origin_cache_source_check: CHECK ((source = ANY (ARRAY['Apple Calendar'::text, 'Microsoft 365'::text])))
+  🔑 [p] calendar_origin_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: available_slots_cache
+  • id (uuid)
+  • travel_time_min (integer)
+  • generated_at (timestamp without time zone)
+  • expires_at (timestamp without time zone)
+  • meeting_length (integer)
+  • slot_day (date)
+  • slot_score (integer)
+  • meeting_type (text)
+  • slot_part (text)
+  • slot_iso (text)
+  🔑 [p] available_slots_cache_pkey: PRIMARY KEY (id)
+
+📁 Tabell: pending_verification
+  • id (uuid)
+  • metadata (jsonb)
+  • created_at (timestamp without time zone)
+  • used_at (timestamp without time zone)
+  • email (text)
+  • token (text)
+  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+  🔑 [u] pending_verification_token_key: UNIQUE (token)
+
+📁 Tabell: travel_time_cache
+  • travel_minutes (integer)
+  • updated_at (timestamp with time zone)
+  • is_fallback (boolean)
+  • hour (integer)
+  • created_at (timestamp with time zone)
+  • to_address (text)
+  • from_address (text)
+  🔑 [u] unique_travel_key: UNIQUE (from_address, to_address, hour)
+  🧪 Topp 5 rader:
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=10, travel_minutes=33, created_at=2025-06-24 14:00:01.374226+00:00, updated_at=2025-06-24 14:00:01.374226+00:00, is_fallback=False
+    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=14, travel_minutes=32, created_at=2025-06-24 14:00:02.181381+00:00, updated_at=2025-06-24 14:00:02.181381+00:00, is_fallback=False
+
+📁 Tabell: event_log
+  • received_at (timestamp with time zone)
+  • record_id (uuid)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  • id (uuid)
+  • payload (jsonb)
+  • action (text)
+  • event_type (text)
+  • source (text)
+  • table_name (text)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+
+📁 Tabell: booking_settings
+  • value (jsonb)
+  • updated_at (timestamp with time zone)
+  • key (text)
+  • value_type (text)
+  🔑 [u] unique_key: UNIQUE (key)
+  🧪 Topp 5 rader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 20:46:14.058171+00:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 10:37:53.619684+00:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🧪 Topp 5 rader:
+    - key=error_invalid_phone, sv=Ogiltigt telefonnummer. Vi vet att det är svårt att komma ihåg sitt nummer., en=Invalid phone number. We know remembering your own number is hard.
+    - key=error_invalid_name, sv=Namnet är ogiltigt (minst 2 tecken, max 50). Smeknamn som "X" är för Elon., en=Invalid name (min 2 characters, max 50). Nicknames like "X" are taken.
+    - key=error_missing_fields, sv=Alla fält måste vara ifyllda. Vi är petiga så du slipper bli det senare., en=All fields must be filled. We’re picky so you don’t have to be later.
+    - key=error_missing_meeting_link, sv=Möteslänk krävs. Om inte mötet sker via brevduva., en=A meeting link is required. Unless the meeting is via carrier pigeon.
+    - key=error_missing_recaptcha, sv=reCAPTCHA måste verifieras. Nej, det är inte en känslomässig fråga., en=reCAPTCHA verification required. And no, it’s not a personality test.
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • meeting_type (text)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
+📁 Tabell: pending_changes
+  • booking_id (uuid)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • payload (jsonb)
+  • id (uuid)
+  • record_id (uuid)
+  • table_name (text)
+  • operation (text)
+  • change_type (text)
+  • direction (text)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+
+📁 Tabell: contact
+  • updated_at (timestamp with time zone)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • metadata (jsonb)
+  • booking_email (text)
+  • email (text)
+  • apple_uid (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+
+📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL
+====================================
+
+📁 Tabell: bookings
+  • start_time (timestamp with time zone)
+  • end_time (timestamp with time zone)
+  • meeting_type (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • contact_id (uuid)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • booking_email (text)
+  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
+📁 Tabell: contact
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  • updated_at (timestamp with time zone)
+  • email (text)
+  • apple_uid (text)
+  🔑 [p] contact_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'magnus.stode@loomis.com', 'label': ''}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46 8 522 920 20 31'}, {'label': '_$!<Mobile>!$_', 'number': '+46 70 643 20 31'}], 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson'}, 'nickname': '', 'addresses': [{'city': '', 'label': '_$!<Home>!$_', 'state': '', 'street': '', 'country': 'Sweden', 'postalCode': ''}], 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'job_title': '', 'last_name': 'Stöde', 'department': '', 'first_name': 'Magnus', 'middle_name': '', 'organization': 'PricewaterhouseCoopers', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, updated_at=2025-06-24 21:48:55.770785+02:00, email=magnus.stode@loomis.com, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/86997398', 'label': '_$!<HomePage>!$_'}, {'url': 'www.wilton-row.com', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'pontus.aldell@jpmorgan.com', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+44 (77) 7599 4555'}, {'label': '_$!<Work>!$_', 'number': '+44 (0) 207 742 7953'}], 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'birthday': '1975-12-11T00:00:00Z', 'metadata': {'origin': 'macos', 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'job_title': 'Executive Director', 'last_name': 'Aldell', 'department': '', 'first_name': 'Pontus', 'middle_name': '', 'organization': 'J.P. Morgan Private Bank', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=pontus-aldell-87217525&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=da7d9009-e4d1-4a84-90e3-5ae2c868bf2b, updated_at=2025-06-24 21:48:55.770785+02:00, email=pontus.aldell@jpmorgan.com, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/106655683', 'label': '_$!<HomePage>!$_'}, {'url': 'http://www.xlntwellness.se', 'label': '_$!<HomePage>!$_'}, {'url': 'http://xlntwellness.blogspot.com/', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'info@xlntwellness.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46739354547'}], 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'STOCKHOLM', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Luxgatan 6', 'country': 'Sweden', 'postalCode': '11262'}, {'city': 'Marbella Area, Spain', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'job_title': 'Personal Trainer', 'last_name': 'Villanueva', 'department': '', 'first_name': 'Antonio', 'middle_name': '', 'organization': 'Sportlife Odenplan', 'social_profiles': [{'url': 'http://twitter.com/TrainerAntonio', 'label': '', 'service': 'Twitter'}, {'url': 'https://www.linkedin.com/profile/view?id=antonio-villanueva-0578762b&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=8d5cb261-5e1f-441d-945e-a330b356ccca, updated_at=2025-06-24 21:48:55.770785+02:00, email=info@xlntwellness.se, apple_uid=None
+    - metadata={'note': '', 'urls': [{'url': 'www.psykologpartners.se', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'info@psykologpartners.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46841009333'}], 'apple_id': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'apple_uid': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Drottninggatan 97', 'country': 'Sverige', 'postalCode': '113 60'}], 'apple_uid': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'job_title': '', 'last_name': '', 'department': '', 'first_name': 'Psykologpartners W & W AB', 'middle_name': '', 'organization': 'Psykologpartners W & W AB', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=3a1e8bd9-cd1c-4ee5-add7-a6fa1599b189, updated_at=2025-06-24 21:48:55.770785+02:00, email=info@psykologpartners.se, apple_uid=None
+    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'alexander.hallstrom@almequity.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '070-614 70 70'}], 'apple_id': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'apple_uid': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'job_title': 'Biträdande Projektledare', 'last_name': 'Hallström', 'department': '', 'first_name': 'Alexander', 'middle_name': '', 'organization': '', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=8bbda143-5a90-48a1-9f61-5cfc234c08a3, updated_at=2025-06-24 21:48:55.770785+02:00, email=alexander.hallstrom@almequity.se, apple_uid=None
+
+📁 Tabell: transaction
+  • id (uuid)
+  • date (date)
+  • description (text)
+  • series (text)
+  • ver_no (integer)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • metadata (jsonb)
+  • status (text)
+  • currency_code (text)
+  • exchange_rate (numeric)
+  • total_amount_original (numeric)
+  • created_by (uuid)
+  🔑 [p] transaction_pkey: PRIMARY KEY (id)
+  🔑 [u] unique_verifikat: UNIQUE (series, ver_no)
+  🔑 [c] transaction_status_check: CHECK ((status = ANY (ARRAY['prelim'::text, 'posted'::text, 'locked'::text])))
+  🔑 [f] transaction_created_by_fkey: FOREIGN KEY (created_by) REFERENCES contact(id)
+
+📁 Tabell: booking_settings
+  • key (text)
+  • value (jsonb)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  🔑 [p] booking_settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 22:46:14.058171+02:00
+    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 12:37:53.619684+02:00
+    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
+📁 Tabell: vat_rate
+  • id (uuid)
+  • name (text)
+  • percentage (numeric)
+  • account_sales (uuid)
+  • account_vat (uuid)
+  • created_at (timestamp with time zone)
+  🔑 [p] vat_rate_pkey: PRIMARY KEY (id)
+  🔑 [f] vat_rate_account_sales_fkey: FOREIGN KEY (account_sales) REFERENCES account(id)
+  🔑 [f] vat_rate_account_vat_fkey: FOREIGN KEY (account_vat) REFERENCES account(id)
+
+📁 Tabell: company
+  • name (text)
+  • org_number (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  🔑 [p] company_pkey: PRIMARY KEY (id)
+
+📁 Tabell: translation
+  • key (character varying)
+  • sv (text)
+  • en (text)
+  🔑 [u] unique_translation_key: UNIQUE (key)
+  🔑 [p] translation_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
+📁 Tabell: journal_series
+  • series (text)
+  • name (text)
+  • description (text)
+  • next_ver_no (integer)
+  🔑 [p] journal_series_pkey: PRIMARY KEY (series)
+  🧪 Topp 5 rader:
+    - series=A, name=Huvudbok, description=Ordinarie verifikatserie för huvudbok, next_ver_no=11
+
+📁 Tabell: period
+  • id (uuid)
+  • name (text)
+  • start_date (date)
+  • end_date (date)
+  • locked (boolean)
+  • created_at (timestamp with time zone)
+  🔑 [p] period_pkey: PRIMARY KEY (id)
+
+📁 Tabell: ccrelation
+  • contact_id (uuid)
+  • company_id (uuid)
+  • role (text)
+  • main_contact (boolean)
+  • start_date (date)
+  • end_date (date)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • id (uuid)
+  🔑 [p] ccrelation_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_ccrelation_contact_id: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE
+  🔑 [f] fk_ccrelation_company_id: FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+
+📁 Tabell: currency
+  • code (text)
+  • name (text)
+  • symbol (text)
+  • exchange_rate (numeric)
+  • updated_at (timestamp with time zone)
+  🔑 [p] currency_pkey: PRIMARY KEY (code)
+
+📁 Tabell: template_transaction
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • default_amount (numeric)
+  • default_account_debit (uuid)
+  • default_account_credit (uuid)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  🔑 [p] template_transaction_pkey: PRIMARY KEY (id)
+  🔑 [f] template_transaction_default_account_debit_fkey: FOREIGN KEY (default_account_debit) REFERENCES account(id)
+  🔑 [f] template_transaction_default_account_credit_fkey: FOREIGN KEY (default_account_credit) REFERENCES account(id)
+
+📁 Tabell: pending_changes
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • change_type (text)
+  • direction (text)
+  • processed (boolean)
+  • created_at (timestamp with time zone)
+  • operation (text)
+  • payload (jsonb)
+  • booking_id (uuid)
+  🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+  🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - id=48fbb9d7-c365-4836-8bcf-b5f017e74706, table_name=contact, record_id=5dfe78ba-c915-450f-a4df-654831a092e2, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:56.603997+02:00, operation=UPDATE, payload={'note': '', 'urls': [{'url': 'linkedin://#profile/13742424', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'johannes.jogi@swedbank.se', 'label': '_$!<Work>!$_'}, {'email': 'johannes.jogi@j3innovation.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 70-319 12 65'}, {'label': '_$!<Main>!$_', 'number': '+46 8-585 900 00'}], 'apple_id': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'apple_uid': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'STOCKHOLM', 'label': '_$!<Home>!$_', 'state': '', 'street': 'Brunkebergstorg 8', 'country': 'Sweden', 'postalCode': '11151'}, {'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'job_title': 'Owner and Co Founder', 'last_name': 'Jögi', 'department': '', 'first_name': 'Johannes', 'middle_name': '', 'organization': 'Swedbank', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=johannes-j%C3%B6gi-9607284&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, booking_id=None
+    - id=89876f00-8b77-414c-bd75-8a52149223b5, table_name=contact, record_id=47e7ad2f-2b4d-4749-8b9f-eccae751c986, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:16.585313+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'susanne@glendor.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 7 082 23 607'}, {'label': '_$!<Work>!$_', 'number': '+4684289680'}], 'apple_id': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'apple_uid': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Box 22253', 'country': 'Sverige', 'postalCode': '104 22'}, {'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Kungsholmstorg 16', 'country': '', 'postalCode': ''}], 'apple_uid': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'job_title': '', 'last_name': 'Glendor', 'department': '', 'first_name': 'Susanne', 'middle_name': '', 'organization': '', 'social_profiles': []}, booking_id=None
+    - id=bfc95eca-856f-4752-abfd-a49a0ce21f15, table_name=contact, record_id=efe4c159-0bc5-47b7-bf5f-86766c26810b, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:31:57.041584+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'joanna.stillman@kakeldesign.se', 'label': '_$!<Work>!$_'}, {'email': 'stillmanjoanna@gmail.com', 'label': '_$!<Home>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 70-205 73 58'}], 'apple_id': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'apple_uid': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Västerås', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Friledningsgatan 1A', 'country': '', 'postalCode': '721 37'}], 'apple_uid': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'job_title': '', 'last_name': 'Stillman', 'department': '', 'first_name': 'Joanna', 'middle_name': '', 'organization': 'KakelDesign', 'social_profiles': []}, booking_id=None
+    - id=fe09b3c1-ad9d-4838-a71c-d48f704ec532, table_name=contact, record_id=32e951f0-1cb7-4c38-97ac-a0ac3b08c749, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:31:50.653234+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'robmanuell@hotmail.com', 'label': '_$!<Home>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '0730214465'}], 'apple_id': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'apple_uid': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'job_title': '', 'last_name': 'Manuell', 'department': '', 'first_name': 'Robert', 'middle_name': '', 'organization': '', 'social_profiles': []}, booking_id=None
+    - id=5c333847-5688-491d-8cbd-1481bb01860a, table_name=contact, record_id=728c7efb-1c57-459e-874e-0f5125cc3a6b, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:47.415468+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'alexandra.nilsson@apfond6.se', 'label': ''}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 708 74 10 36'}, {'label': '_$!<Work>!$_', 'number': '+46 31 741 10 36'}], 'apple_id': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'apple_uid': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Göteborg', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Sjätte AP-fonden\nÖstra Hamngatan 18', 'country': 'Sweden', 'postalCode': 'SE-411 09'}], 'apple_uid': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'job_title': 'Head of AP Fund Investments', 'last_name': 'Nilsson', 'department': '', 'first_name': 'Alexandra', 'middle_name': '', 'organization': 'Sjätte AP-fonden', 'social_profiles': []}, booking_id=None
+
+📁 Tabell: entry_tag
+  • id (uuid)
+  • name (text)
+  • description (text)
+  • created_at (timestamp with time zone)
+  🔑 [p] entry_tag_pkey: PRIMARY KEY (id)
+
+📁 Tabell: account
+  • id (uuid)
+  • number (text)
+  • name (text)
+  • type (text)
+  • created_at (timestamp with time zone)
+  • updated_at (timestamp with time zone)
+  • is_active (boolean)
+  • account_group (text)
+  • report_type (text)
+  • report_group (text)
+  🔑 [p] account_pkey: PRIMARY KEY (id)
+  🔑 [u] account_number_key: UNIQUE (number)
+  🧪 Topp 5 rader:
+    - id=84d18e0a-2338-4c67-8151-5a44f6131d3f, number=1930, name=Företagskonto, type=tillgång, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, number=3001, name=Försäljning Sverige 25%, type=intäkt, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, number=2611, name=Utgående moms 25%, type=skuld, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=f826389c-d9ec-42db-8f17-920ea0e082cd, number=2010, name=Eget kapital, type=eget_kapital, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+    - id=5e3ba7a3-1683-42a3-afe5-e03839170542, number=2390, name=Övriga långfristiga skulder, type=skuld, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
+📁 Tabell: report_structure
+  • id (integer)
+  • report_type (text)
+  • group_name (text)
+  • account_number (text)
+  • account_range (text)
+  • order_index (integer)
+  🔑 [p] report_structure_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - id=1, report_type=resultat, group_name=Intäkter, account_number=None, account_range=3000-3999, order_index=10
+    - id=2, report_type=resultat, group_name=Varukostnader, account_number=None, account_range=4000-4999, order_index=20
+    - id=3, report_type=resultat, group_name=Övriga externa kostnader, account_number=None, account_range=5000-5999, order_index=30
+    - id=4, report_type=resultat, group_name=Personalkostnader, account_number=None, account_range=6000-6999, order_index=40
+    - id=5, report_type=resultat, group_name=Avskrivningar, account_number=None, account_range=7000-7999, order_index=50
+
+📁 Tabell: transaction_translation
+  • transaction_id (uuid)
+  • language (text)
+  • description (text)
+  🔑 [p] transaction_translation_pkey: PRIMARY KEY (transaction_id, language)
+  🔑 [f] transaction_translation_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
+📁 Tabell: account_translation
+  • account_id (uuid)
+  • language (text)
+  • name (text)
+  🔑 [p] account_translation_pkey: PRIMARY KEY (account_id, language)
+  🔑 [f] account_translation_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+  🧪 Topp 5 rader:
+    - account_id=84d18e0a-2338-4c67-8151-5a44f6131d3f, language=en, name=Corporate Bank Account
+    - account_id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, language=en, name=Sales Sweden 25% VAT
+    - account_id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, language=en, name=Output VAT 25%
+    - account_id=f826389c-d9ec-42db-8f17-920ea0e082cd, language=en, name=Equity
+    - account_id=5e3ba7a3-1683-42a3-afe5-e03839170542, language=en, name=Other Long-term Liabilities
+
+📁 Tabell: settings
+  • key (text)
+  • value (text)
+  • value_type (text)
+  • updated_at (timestamp with time zone)
+  🔑 [p] settings_pkey: PRIMARY KEY (key)
+  🧪 Topp 5 rader:
+    - key=default_language, value=sv, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=reporting_currency, value=SEK, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+    - key=period_start_month, value=1, value_type=integer, updated_at=2025-06-03 16:17:04.085806+02:00
+
+📁 Tabell: budget
+  • year (integer)
+  • month (integer)
+  • account_number (text)
+  • amount (numeric)
+
+📁 Tabell: bank_statement
+  • id (uuid)
+  • date (date)
+  • balance (numeric)
+  • source (text)
+  • metadata (jsonb)
+  🔑 [p] bank_statement_pkey: PRIMARY KEY (id)
+
+📁 Tabell: pending_verification
+  • id (uuid)
+  • email (text)
+  • token (text)
+  • metadata (jsonb)
+  • created_at (timestamp without time zone)
+  • used_at (timestamp without time zone)
+  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+  🔑 [u] pending_verification_token_key: UNIQUE (token)
+
+📁 Tabell: tracking_event
+  • id (uuid)
+  • visitor_id (text)
+  • event_type (text)
+  • timestamp (timestamp with time zone)
+  • metadata (jsonb)
+  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - id=65448382-0365-4057-8c78-2d7ef1bbfd18, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:19.476000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'performance_now': 1523, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=0d4bfbba-1290-4092-8b9a-708ffffb761c, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:39.933000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1310, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 21982, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=4f52e783-cb5f-4d4a-bd67-9bf601667129, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=click, timestamp=2025-06-24 17:55:47.207000+02:00, metadata={'tag': 'A', 'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'href': 'https://www.klrab.se/sustainability', 'text': 'HÅLLBARHET', 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 813, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 29256, 'hardwareConcurrency': 4, 'timezone_offset_min': -120, 'time_since_page_load_ms': 29250}
+    - id=a0f20249-cc96-474c-94ea-ba6d9fe68659, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:47.580000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 363, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+    - id=acc6e76d-bc03-4d85-bacc-c6ab4c5390ac, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:51.856000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1223, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 4640, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+
+📁 Tabell: entry
+  • id (uuid)
+  • transaction_id (uuid)
+  • account_id (uuid)
+  • amount (numeric)
+  • description (text)
+  • metadata (jsonb)
+  • created_at (timestamp with time zone)
+  • amount_original (numeric)
+  🔑 [p] entry_pkey: PRIMARY KEY (id)
+  🔑 [f] entry_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+  🔑 [f] entry_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT
+
+📁 Tabell: attachment
+  • id (uuid)
+  • transaction_id (uuid)
+  • filename (text)
+  • content_type (text)
+  • data (bytea)
+  • uploaded_at (timestamp with time zone)
+  • metadata (jsonb)
+  🔑 [p] attachment_pkey: PRIMARY KEY (id)
+  🔑 [f] attachment_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
+📁 Tabell: entry_tag_relation
+  • entry_id (uuid)
+  • tag_id (uuid)
+  🔑 [p] entry_tag_relation_pkey: PRIMARY KEY (entry_id, tag_id)
+  🔑 [f] entry_tag_relation_entry_id_fkey: FOREIGN KEY (entry_id) REFERENCES entry(id) ON DELETE CASCADE
+  🔑 [f] entry_tag_relation_tag_id_fkey: FOREIGN KEY (tag_id) REFERENCES entry_tag(id) ON DELETE CASCADE
+
+📁 Tabell: event_log
+  • source (text)
+  • event_type (text)
+  • payload (jsonb)
+  • received_at (timestamp with time zone)
+  • id (uuid)
+  • table_name (text)
+  • record_id (uuid)
+  • action (text)
+  • timestamp (timestamp with time zone)
+  • booking_id (uuid)
+  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+  🧪 Topp 5 rader:
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=38d75043-8239-45aa-bf67-921675749983, table_name=contact, record_id=61b2a257-9368-4017-9552-0c22810a03cb, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=c0aaac8a-2080-47e6-a185-abd24b718595, table_name=contact, record_id=e17c6638-c18b-472c-a566-a3785f82135c, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=5b6fdb0f-f11c-4fcb-88fa-670d15a065eb, table_name=contact, record_id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=6839af9a-3393-46a9-b0f8-e511d3775806, table_name=contact, record_id=c6a9bd11-8cca-4ad0-888c-40e8136720d2, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=e2fde31b-4acb-4349-a00c-db9f22a9f9c3, table_name=contact, record_id=c02f4a7e-00b4-4671-bc9b-362ad00ed1e8, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+
+📊 DIFFANALYS Azure vs Lokal
+====================================
+--- Azure
++++ Lokal
+@@ -1,144 +1,329 @@
+-📊 MOLNDATABAS (Azure) – STRUKTUR & INNEHÅLL
+
++📊 LOKAL DATABAS – STRUKTUR & INNEHÅLL
+
+ ====================================
+
+ 
+
+-📁 Tabell: tracking_event
+
+-  • id (uuid)
+
+-  • timestamp (timestamp with time zone)
+
+-  • metadata (jsonb)
+
+-  • synced_at (timestamp with time zone)
+
+-  • visitor_id (text)
+
+-  • event_type (text)
+
+-  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+
+-
+
+-📁 Tabell: slot_cache
+
+-  • created_at (timestamp without time zone)
+
+-  • slot_day (date)
+
+-  • slots (jsonb)
+
+-  • id (uuid)
+
+-  • meeting_length (integer)
+
++📁 Tabell: bookings
+
++  • start_time (timestamp with time zone)
+
++  • end_time (timestamp with time zone)
+
++  • meeting_type (text)
+
++  • metadata (jsonb)
+
++  • created_at (timestamp with time zone)
+
++  • contact_id (uuid)
+
++  • id (uuid)
+
++  • updated_at (timestamp with time zone)
+
+   • booking_email (text)
+
+-  • meeting_type (text)
+
+-  • slot_part (text)
+
+-  🔑 [p] slot_cache_pkey: PRIMARY KEY (id)
+
+-
+
+-📁 Tabell: calendar_origin_cache
+
+-  • created_at (timestamp without time zone)
+
+-  • timestamp (timestamp with time zone)
+
+-  • event_date (date)
+
+-  • id (integer)
+
+-  • end_time (timestamp without time zone)
+
+-  • address (text)
+
+-  • source (text)
+
+-  🔑 [c] calendar_origin_cache_source_check: CHECK ((source = ANY (ARRAY['Apple Calendar'::text, 'Microsoft 365'::text])))
+
+-  🔑 [p] calendar_origin_cache_pkey: PRIMARY KEY (id)
+
+-
+
+-📁 Tabell: available_slots_cache
+
+-  • id (uuid)
+
+-  • travel_time_min (integer)
+
+-  • generated_at (timestamp without time zone)
+
+-  • expires_at (timestamp without time zone)
+
+-  • meeting_length (integer)
+
+-  • slot_day (date)
+
+-  • slot_score (integer)
+
+-  • meeting_type (text)
+
+-  • slot_part (text)
+
+-  • slot_iso (text)
+
+-  🔑 [p] available_slots_cache_pkey: PRIMARY KEY (id)
+
+-
+
+-📁 Tabell: pending_verification
+
+-  • id (uuid)
+
+-  • metadata (jsonb)
+
+-  • created_at (timestamp without time zone)
+
+-  • used_at (timestamp without time zone)
+
++  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+
++  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
++
+
++📁 Tabell: contact
+
++  • metadata (jsonb)
+
++  • created_at (timestamp with time zone)
+
++  • id (uuid)
+
++  • updated_at (timestamp with time zone)
+
+   • email (text)
+
+-  • token (text)
+
+-  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+
+-  🔑 [u] pending_verification_token_key: UNIQUE (token)
+
+-
+
+-📁 Tabell: travel_time_cache
+
+-  • travel_minutes (integer)
+
+-  • updated_at (timestamp with time zone)
+
+-  • is_fallback (boolean)
+
+-  • hour (integer)
+
+-  • created_at (timestamp with time zone)
+
+-  • to_address (text)
+
+-  • from_address (text)
+
+-  🔑 [u] unique_travel_key: UNIQUE (from_address, to_address, hour)
+
+-  🧪 Topp 5 rader:
+
+-    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=10, travel_minutes=33, created_at=2025-06-24 14:00:01.374226+00:00, updated_at=2025-06-24 14:00:01.374226+00:00, is_fallback=False
+
+-    - from_address=Taxgatan 4, 115 45 Stockholm, to_address=Maria Skolgata 79A, 118 53 Stockholm, hour=14, travel_minutes=32, created_at=2025-06-24 14:00:02.181381+00:00, updated_at=2025-06-24 14:00:02.181381+00:00, is_fallback=False
+
+-
+
+-📁 Tabell: event_log
+
+-  • received_at (timestamp with time zone)
+
+-  • record_id (uuid)
+
+-  • timestamp (timestamp with time zone)
+
+-  • booking_id (uuid)
+
+-  • id (uuid)
+
+-  • payload (jsonb)
+
+-  • action (text)
+
+-  • event_type (text)
+
+-  • source (text)
+
+-  • table_name (text)
+
+-  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+
++  • apple_uid (text)
+
++  🔑 [p] contact_pkey: PRIMARY KEY (id)
+
++  🧪 Topp 5 rader:
+
++    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'magnus.stode@loomis.com', 'label': ''}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46 8 522 920 20 31'}, {'label': '_$!<Mobile>!$_', 'number': '+46 70 643 20 31'}], 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson'}, 'nickname': '', 'addresses': [{'city': '', 'label': '_$!<Home>!$_', 'state': '', 'street': '', 'country': 'Sweden', 'postalCode': ''}], 'apple_uid': '00B27ECE-4D7A-46F7-8661-21A10250FD09:ABPerson', 'job_title': '', 'last_name': 'Stöde', 'department': '', 'first_name': 'Magnus', 'middle_name': '', 'organization': 'PricewaterhouseCoopers', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, updated_at=2025-06-24 21:48:55.770785+02:00, email=magnus.stode@loomis.com, apple_uid=None
+
++    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/86997398', 'label': '_$!<HomePage>!$_'}, {'url': 'www.wilton-row.com', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'pontus.aldell@jpmorgan.com', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+44 (77) 7599 4555'}, {'label': '_$!<Work>!$_', 'number': '+44 (0) 207 742 7953'}], 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'birthday': '1975-12-11T00:00:00Z', 'metadata': {'origin': 'macos', 'apple_id': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '0201C818-D38D-4844-9D31-C83A15D0C9D1:ABPerson', 'job_title': 'Executive Director', 'last_name': 'Aldell', 'department': '', 'first_name': 'Pontus', 'middle_name': '', 'organization': 'J.P. Morgan Private Bank', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=pontus-aldell-87217525&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=da7d9009-e4d1-4a84-90e3-5ae2c868bf2b, updated_at=2025-06-24 21:48:55.770785+02:00, email=pontus.aldell@jpmorgan.com, apple_uid=None
+
++    - metadata={'note': '', 'urls': [{'url': 'linkedin://#profile/106655683', 'label': '_$!<HomePage>!$_'}, {'url': 'http://www.xlntwellness.se', 'label': '_$!<HomePage>!$_'}, {'url': 'http://xlntwellness.blogspot.com/', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'info@xlntwellness.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46739354547'}], 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'STOCKHOLM', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Luxgatan 6', 'country': 'Sweden', 'postalCode': '11262'}, {'city': 'Marbella Area, Spain', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': '00CA559B-BF68-4568-9071-B8195B37975A:ABPerson', 'job_title': 'Personal Trainer', 'last_name': 'Villanueva', 'department': '', 'first_name': 'Antonio', 'middle_name': '', 'organization': 'Sportlife Odenplan', 'social_profiles': [{'url': 'http://twitter.com/TrainerAntonio', 'label': '', 'service': 'Twitter'}, {'url': 'https://www.linkedin.com/profile/view?id=antonio-villanueva-0578762b&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, created_at=2025-06-24 17:28:11.571119+02:00, id=8d5cb261-5e1f-441d-945e-a330b356ccca, updated_at=2025-06-24 21:48:55.770785+02:00, email=info@xlntwellness.se, apple_uid=None
+
++    - metadata={'note': '', 'urls': [{'url': 'www.psykologpartners.se', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'info@psykologpartners.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '+46841009333'}], 'apple_id': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'apple_uid': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Drottninggatan 97', 'country': 'Sverige', 'postalCode': '113 60'}], 'apple_uid': '00CD41CB-DCBB-49AB-9D42-B7C4A816F5FA:ABPerson', 'job_title': '', 'last_name': '', 'department': '', 'first_name': 'Psykologpartners W & W AB', 'middle_name': '', 'organization': 'Psykologpartners W & W AB', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=3a1e8bd9-cd1c-4ee5-add7-a6fa1599b189, updated_at=2025-06-24 21:48:55.770785+02:00, email=info@psykologpartners.se, apple_uid=None
+
++    - metadata={'note': '', 'urls': [], 'emails': [{'email': 'alexander.hallstrom@almequity.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Work>!$_', 'number': '070-614 70 70'}], 'apple_id': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'birthday': '', 'metadata': {'origin': 'macos', 'apple_id': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'apple_uid': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': '023413F3-B1A6-4C63-B9A5-F7D68303CF3B:ABPerson', 'job_title': 'Biträdande Projektledare', 'last_name': 'Hallström', 'department': '', 'first_name': 'Alexander', 'middle_name': '', 'organization': '', 'social_profiles': []}, created_at=2025-06-24 17:28:11.571119+02:00, id=8bbda143-5a90-48a1-9f61-5cfc234c08a3, updated_at=2025-06-24 21:48:55.770785+02:00, email=alexander.hallstrom@almequity.se, apple_uid=None
+
++
+
++📁 Tabell: transaction
+
++  • id (uuid)
+
++  • date (date)
+
++  • description (text)
+
++  • series (text)
+
++  • ver_no (integer)
+
++  • created_at (timestamp with time zone)
+
++  • updated_at (timestamp with time zone)
+
++  • metadata (jsonb)
+
++  • status (text)
+
++  • currency_code (text)
+
++  • exchange_rate (numeric)
+
++  • total_amount_original (numeric)
+
++  • created_by (uuid)
+
++  🔑 [p] transaction_pkey: PRIMARY KEY (id)
+
++  🔑 [u] unique_verifikat: UNIQUE (series, ver_no)
+
++  🔑 [c] transaction_status_check: CHECK ((status = ANY (ARRAY['prelim'::text, 'posted'::text, 'locked'::text])))
+
++  🔑 [f] transaction_created_by_fkey: FOREIGN KEY (created_by) REFERENCES contact(id)
+
+ 
+
+ 📁 Tabell: booking_settings
+
++  • key (text)
+
+   • value (jsonb)
+
+-  • updated_at (timestamp with time zone)
+
+-  • key (text)
+
+   • value_type (text)
+
+-  🔑 [u] unique_key: UNIQUE (key)
+
+-  🧪 Topp 5 rader:
+
+-    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 20:46:14.058171+00:00
+
+-    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 10:37:53.619684+00:00
+
+-    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+
+-    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+
+-    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 12:48:49.778155+00:00
+
++  • updated_at (timestamp with time zone)
+
++  🔑 [p] booking_settings_pkey: PRIMARY KEY (key)
+
++  🧪 Topp 5 rader:
+
++    - key=email_subject_templates, value={'zoom': 'Zoommöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'teams': 'Teamsmöte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atclient': 'Möte hos {{company}}: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'atoffice': 'Möte hos KLR AB (Stockholm | Södermalm): {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB', 'facetime': 'FaceTime-möte: {{first_name}} | {{company}} & Daniel | Kinnekulle Ledningsrådgivning AB'}, value_type=json, updated_at=2025-05-30 22:46:14.058171+02:00
+
++    - key=default_language, value=sv, value_type=string, updated_at=2025-05-25 12:37:53.619684+02:00
+
++    - key=default_meeting_length_atclient, value=[90, 180, 270, 360], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
++    - key=default_meeting_length_atoffice, value=[60, 90], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
++    - key=default_meeting_length_digital, value=[10, 20, 60], value_type=array, updated_at=2025-04-23 14:48:49.778155+02:00
+
++
+
++📁 Tabell: vat_rate
+
++  • id (uuid)
+
++  • name (text)
+
++  • percentage (numeric)
+
++  • account_sales (uuid)
+
++  • account_vat (uuid)
+
++  • created_at (timestamp with time zone)
+
++  🔑 [p] vat_rate_pkey: PRIMARY KEY (id)
+
++  🔑 [f] vat_rate_account_sales_fkey: FOREIGN KEY (account_sales) REFERENCES account(id)
+
++  🔑 [f] vat_rate_account_vat_fkey: FOREIGN KEY (account_vat) REFERENCES account(id)
+
++
+
++📁 Tabell: company
+
++  • name (text)
+
++  • org_number (text)
+
++  • metadata (jsonb)
+
++  • created_at (timestamp with time zone)
+
++  • id (uuid)
+
++  🔑 [p] company_pkey: PRIMARY KEY (id)
+
+ 
+
+ 📁 Tabell: translation
+
+   • key (character varying)
+
+   • sv (text)
+
+   • en (text)
+
+-  🧪 Topp 5 rader:
+
+-    - key=error_invalid_phone, sv=Ogiltigt telefonnummer. Vi vet att det är svårt att komma ihåg sitt nummer., en=Invalid phone number. We know remembering your own number is hard.
+
+-    - key=error_invalid_name, sv=Namnet är ogiltigt (minst 2 tecken, max 50). Smeknamn som "X" är för Elon., en=Invalid name (min 2 characters, max 50). Nicknames like "X" are taken.
+
+-    - key=error_missing_fields, sv=Alla fält måste vara ifyllda. Vi är petiga så du slipper bli det senare., en=All fields must be filled. We’re picky so you don’t have to be later.
+
+-    - key=error_missing_meeting_link, sv=Möteslänk krävs. Om inte mötet sker via brevduva., en=A meeting link is required. Unless the meeting is via carrier pigeon.
+
+-    - key=error_missing_recaptcha, sv=reCAPTCHA måste verifieras. Nej, det är inte en känslomässig fråga., en=reCAPTCHA verification required. And no, it’s not a personality test.
+
+-
+
+-📁 Tabell: bookings
+
+-  • start_time (timestamp with time zone)
+
+-  • end_time (timestamp with time zone)
+
+-  • id (uuid)
+
+-  • updated_at (timestamp with time zone)
+
+-  • metadata (jsonb)
+
+-  • created_at (timestamp with time zone)
+
++  🔑 [u] unique_translation_key: UNIQUE (key)
+
++  🔑 [p] translation_pkey: PRIMARY KEY (key)
+
++  🧪 Topp 5 rader:
+
++    - key=error_min_duration_fysiskt_kund, sv=Mötestiden för 'Fysiskt hos kund' måste vara minst {{minutes}} minuter. Du visste det redan., en=The meeting time for 'On-site at customer' must be at least {{minutes}} minutes. You knew that.
+
++    - key=error_min_duration_fysiskt_mig, sv=Mötestiden för 'Fysiskt hos mig' måste vara minst {{minutes}} minuter. Annars hinner vi bara säga hej., en=The meeting time for 'At my office' must be at least {{minutes}} minutes. Otherwise, we’ll only have time to say hello.
+
++    - key=email_body_booking_received, sv=Hej {{name}}! Vi har tagit emot din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}}. Ingen panik – vi återkommer med bekräftelse. / Daniel, en=Hello {{name}}, We’ve received your booking for {{meeting_type}} between {{start_time}} and {{end_time}}. No need to panic – we’ll confirm shortly. / Daniel
+
++    - key=email_body_booking_confirmed, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är nu spikad. Ser fram emot det! / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} is now locked in. Looking forward! / Daniel
+
++    - key=email_body_booking_cancelled, sv=Hej {{name}}! Din bokning för {{meeting_type}} mellan {{start_time}} och {{end_time}} är avbokad. Hör av dig om du vill hitta en ny tid. / Daniel, en=Hello {{name}}, Your booking for {{meeting_type}} between {{start_time}} and {{end_time}} has been cancelled. Let me know if you'd like a new one. / Daniel
+
++
+
++📁 Tabell: journal_series
+
++  • series (text)
+
++  • name (text)
+
++  • description (text)
+
++  • next_ver_no (integer)
+
++  🔑 [p] journal_series_pkey: PRIMARY KEY (series)
+
++  🧪 Topp 5 rader:
+
++    - series=A, name=Huvudbok, description=Ordinarie verifikatserie för huvudbok, next_ver_no=11
+
++
+
++📁 Tabell: period
+
++  • id (uuid)
+
++  • name (text)
+
++  • start_date (date)
+
++  • end_date (date)
+
++  • locked (boolean)
+
++  • created_at (timestamp with time zone)
+
++  🔑 [p] period_pkey: PRIMARY KEY (id)
+
++
+
++📁 Tabell: ccrelation
+
+   • contact_id (uuid)
+
+-  • meeting_type (text)
+
+-  • booking_email (text)
+
+-  🔑 [p] bookings_pkey: PRIMARY KEY (id)
+
+-  🔑 [f] fk_bookings_contact: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL
+
++  • company_id (uuid)
+
++  • role (text)
+
++  • main_contact (boolean)
+
++  • start_date (date)
+
++  • end_date (date)
+
++  • metadata (jsonb)
+
++  • created_at (timestamp with time zone)
+
++  • id (uuid)
+
++  🔑 [p] ccrelation_pkey: PRIMARY KEY (id)
+
++  🔑 [f] fk_ccrelation_contact_id: FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE
+
++  🔑 [f] fk_ccrelation_company_id: FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
+
++
+
++📁 Tabell: currency
+
++  • code (text)
+
++  • name (text)
+
++  • symbol (text)
+
++  • exchange_rate (numeric)
+
++  • updated_at (timestamp with time zone)
+
++  🔑 [p] currency_pkey: PRIMARY KEY (code)
+
++
+
++📁 Tabell: template_transaction
+
++  • id (uuid)
+
++  • name (text)
+
++  • description (text)
+
++  • default_amount (numeric)
+
++  • default_account_debit (uuid)
+
++  • default_account_credit (uuid)
+
++  • metadata (jsonb)
+
++  • created_at (timestamp with time zone)
+
++  🔑 [p] template_transaction_pkey: PRIMARY KEY (id)
+
++  🔑 [f] template_transaction_default_account_debit_fkey: FOREIGN KEY (default_account_debit) REFERENCES account(id)
+
++  🔑 [f] template_transaction_default_account_credit_fkey: FOREIGN KEY (default_account_credit) REFERENCES account(id)
+
+ 
+
+ 📁 Tabell: pending_changes
+
+-  • booking_id (uuid)
+
+-  • processed (boolean)
+
+-  • created_at (timestamp with time zone)
+
+-  • payload (jsonb)
+
+-  • id (uuid)
+
++  • id (uuid)
+
++  • table_name (text)
+
+   • record_id (uuid)
+
+-  • table_name (text)
+
+-  • operation (text)
+
+   • change_type (text)
+
+   • direction (text)
+
++  • processed (boolean)
+
++  • created_at (timestamp with time zone)
+
++  • operation (text)
+
++  • payload (jsonb)
+
++  • booking_id (uuid)
+
+   🔑 [p] pending_changes_pkey: PRIMARY KEY (id)
+
+   🔑 [f] fk_pending_changes_booking_id: FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+
+-
+
+-📁 Tabell: contact
+
+-  • updated_at (timestamp with time zone)
+
+-  • created_at (timestamp with time zone)
+
+-  • id (uuid)
+
+-  • metadata (jsonb)
+
+-  • booking_email (text)
+
++  🧪 Topp 5 rader:
+
++    - id=48fbb9d7-c365-4836-8bcf-b5f017e74706, table_name=contact, record_id=5dfe78ba-c915-450f-a4df-654831a092e2, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:56.603997+02:00, operation=UPDATE, payload={'note': '', 'urls': [{'url': 'linkedin://#profile/13742424', 'label': '_$!<HomePage>!$_'}], 'emails': [{'email': 'johannes.jogi@swedbank.se', 'label': '_$!<Work>!$_'}, {'email': 'johannes.jogi@j3innovation.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 70-319 12 65'}, {'label': '_$!<Main>!$_', 'number': '+46 8-585 900 00'}], 'apple_id': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'apple_uid': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'STOCKHOLM', 'label': '_$!<Home>!$_', 'state': '', 'street': 'Brunkebergstorg 8', 'country': 'Sweden', 'postalCode': '11151'}, {'city': 'Stockholm, Sweden', 'label': '', 'state': '', 'street': '', 'country': '', 'postalCode': ''}], 'apple_uid': 'B5251A85-8C88-49F0-8A62-EE735355B6B6:ABPerson', 'job_title': 'Owner and Co Founder', 'last_name': 'Jögi', 'department': '', 'first_name': 'Johannes', 'middle_name': '', 'organization': 'Swedbank', 'social_profiles': [{'url': 'https://www.linkedin.com/profile/view?id=johannes-j%C3%B6gi-9607284&trk=tardis-contact', 'label': '', 'service': 'LinkedIn'}]}, booking_id=None
+
++    - id=89876f00-8b77-414c-bd75-8a52149223b5, table_name=contact, record_id=47e7ad2f-2b4d-4749-8b9f-eccae751c986, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:16.585313+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'susanne@glendor.se', 'label': '_$!<Work>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 7 082 23 607'}, {'label': '_$!<Work>!$_', 'number': '+4684289680'}], 'apple_id': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'apple_uid': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Box 22253', 'country': 'Sverige', 'postalCode': '104 22'}, {'city': 'Stockholm', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Kungsholmstorg 16', 'country': '', 'postalCode': ''}], 'apple_uid': 'B5330C5C-3BAE-4187-9906-EDEA09CC2A4A:ABPerson', 'job_title': '', 'last_name': 'Glendor', 'department': '', 'first_name': 'Susanne', 'middle_name': '', 'organization': '', 'social_profiles': []}, booking_id=None
+
++    - id=bfc95eca-856f-4752-abfd-a49a0ce21f15, table_name=contact, record_id=efe4c159-0bc5-47b7-bf5f-86766c26810b, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:31:57.041584+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'joanna.stillman@kakeldesign.se', 'label': '_$!<Work>!$_'}, {'email': 'stillmanjoanna@gmail.com', 'label': '_$!<Home>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 70-205 73 58'}], 'apple_id': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'apple_uid': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Västerås', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Friledningsgatan 1A', 'country': '', 'postalCode': '721 37'}], 'apple_uid': 'B56952A3-CBF0-406B-AA4C-11887D8464A4:ABPerson', 'job_title': '', 'last_name': 'Stillman', 'department': '', 'first_name': 'Joanna', 'middle_name': '', 'organization': 'KakelDesign', 'social_profiles': []}, booking_id=None
+
++    - id=fe09b3c1-ad9d-4838-a71c-d48f704ec532, table_name=contact, record_id=32e951f0-1cb7-4c38-97ac-a0ac3b08c749, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:31:50.653234+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'robmanuell@hotmail.com', 'label': '_$!<Home>!$_'}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '0730214465'}], 'apple_id': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'apple_uid': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson'}, 'nickname': '', 'addresses': [], 'apple_uid': 'B58DC3F4-BF04-40A6-842E-9129467A6E16:ABPerson', 'job_title': '', 'last_name': 'Manuell', 'department': '', 'first_name': 'Robert', 'middle_name': '', 'organization': '', 'social_profiles': []}, booking_id=None
+
++    - id=5c333847-5688-491d-8cbd-1481bb01860a, table_name=contact, record_id=728c7efb-1c57-459e-874e-0f5125cc3a6b, change_type=metadata_changed, direction=out, processed=True, created_at=2025-06-24 21:32:47.415468+02:00, operation=UPDATE, payload={'note': '', 'urls': [], 'emails': [{'email': 'alexandra.nilsson@apfond6.se', 'label': ''}], 'phones': [{'label': '_$!<Mobile>!$_', 'number': '+46 708 74 10 36'}, {'label': '_$!<Work>!$_', 'number': '+46 31 741 10 36'}], 'apple_id': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'birthday': '', 'metadata': {'origin': 'klrab.se', 'apple_id': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'apple_uid': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson'}, 'nickname': '', 'addresses': [{'city': 'Göteborg', 'label': '_$!<Work>!$_', 'state': '', 'street': 'Sjätte AP-fonden\nÖstra Hamngatan 18', 'country': 'Sweden', 'postalCode': 'SE-411 09'}], 'apple_uid': 'B5A49029-9EE6-4875-B067-C56030DC8DC8:ABPerson', 'job_title': 'Head of AP Fund Investments', 'last_name': 'Nilsson', 'department': '', 'first_name': 'Alexandra', 'middle_name': '', 'organization': 'Sjätte AP-fonden', 'social_profiles': []}, booking_id=None
+
++
+
++📁 Tabell: entry_tag
+
++  • id (uuid)
+
++  • name (text)
+
++  • description (text)
+
++  • created_at (timestamp with time zone)
+
++  🔑 [p] entry_tag_pkey: PRIMARY KEY (id)
+
++
+
++📁 Tabell: account
+
++  • id (uuid)
+
++  • number (text)
+
++  • name (text)
+
++  • type (text)
+
++  • created_at (timestamp with time zone)
+
++  • updated_at (timestamp with time zone)
+
++  • is_active (boolean)
+
++  • account_group (text)
+
++  • report_type (text)
+
++  • report_group (text)
+
++  🔑 [p] account_pkey: PRIMARY KEY (id)
+
++  🔑 [u] account_number_key: UNIQUE (number)
+
++  🧪 Topp 5 rader:
+
++    - id=84d18e0a-2338-4c67-8151-5a44f6131d3f, number=1930, name=Företagskonto, type=tillgång, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
++    - id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, number=3001, name=Försäljning Sverige 25%, type=intäkt, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
++    - id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, number=2611, name=Utgående moms 25%, type=skuld, created_at=2025-06-03 15:16:53.189475+02:00, updated_at=2025-06-03 15:16:53.189475+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
++    - id=f826389c-d9ec-42db-8f17-920ea0e082cd, number=2010, name=Eget kapital, type=eget_kapital, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
++    - id=5e3ba7a3-1683-42a3-afe5-e03839170542, number=2390, name=Övriga långfristiga skulder, type=skuld, created_at=2025-06-03 16:20:49.857423+02:00, updated_at=2025-06-03 16:20:49.857423+02:00, is_active=True, account_group=None, report_type=None, report_group=None
+
++
+
++📁 Tabell: report_structure
+
++  • id (integer)
+
++  • report_type (text)
+
++  • group_name (text)
+
++  • account_number (text)
+
++  • account_range (text)
+
++  • order_index (integer)
+
++  🔑 [p] report_structure_pkey: PRIMARY KEY (id)
+
++  🧪 Topp 5 rader:
+
++    - id=1, report_type=resultat, group_name=Intäkter, account_number=None, account_range=3000-3999, order_index=10
+
++    - id=2, report_type=resultat, group_name=Varukostnader, account_number=None, account_range=4000-4999, order_index=20
+
++    - id=3, report_type=resultat, group_name=Övriga externa kostnader, account_number=None, account_range=5000-5999, order_index=30
+
++    - id=4, report_type=resultat, group_name=Personalkostnader, account_number=None, account_range=6000-6999, order_index=40
+
++    - id=5, report_type=resultat, group_name=Avskrivningar, account_number=None, account_range=7000-7999, order_index=50
+
++
+
++📁 Tabell: transaction_translation
+
++  • transaction_id (uuid)
+
++  • language (text)
+
++  • description (text)
+
++  🔑 [p] transaction_translation_pkey: PRIMARY KEY (transaction_id, language)
+
++  🔑 [f] transaction_translation_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
++
+
++📁 Tabell: account_translation
+
++  • account_id (uuid)
+
++  • language (text)
+
++  • name (text)
+
++  🔑 [p] account_translation_pkey: PRIMARY KEY (account_id, language)
+
++  🔑 [f] account_translation_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+
++  🧪 Topp 5 rader:
+
++    - account_id=84d18e0a-2338-4c67-8151-5a44f6131d3f, language=en, name=Corporate Bank Account
+
++    - account_id=bc275792-31a3-40b5-8a1d-29cff9d2e7d0, language=en, name=Sales Sweden 25% VAT
+
++    - account_id=2b78ec5e-6f1d-4403-b7af-cc61f611155e, language=en, name=Output VAT 25%
+
++    - account_id=f826389c-d9ec-42db-8f17-920ea0e082cd, language=en, name=Equity
+
++    - account_id=5e3ba7a3-1683-42a3-afe5-e03839170542, language=en, name=Other Long-term Liabilities
+
++
+
++📁 Tabell: settings
+
++  • key (text)
+
++  • value (text)
+
++  • value_type (text)
+
++  • updated_at (timestamp with time zone)
+
++  🔑 [p] settings_pkey: PRIMARY KEY (key)
+
++  🧪 Topp 5 rader:
+
++    - key=default_language, value=sv, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+
++    - key=reporting_currency, value=SEK, value_type=string, updated_at=2025-06-03 16:17:04.085806+02:00
+
++    - key=period_start_month, value=1, value_type=integer, updated_at=2025-06-03 16:17:04.085806+02:00
+
++
+
++📁 Tabell: budget
+
++  • year (integer)
+
++  • month (integer)
+
++  • account_number (text)
+
++  • amount (numeric)
+
++
+
++📁 Tabell: bank_statement
+
++  • id (uuid)
+
++  • date (date)
+
++  • balance (numeric)
+
++  • source (text)
+
++  • metadata (jsonb)
+
++  🔑 [p] bank_statement_pkey: PRIMARY KEY (id)
+
++
+
++📁 Tabell: pending_verification
+
++  • id (uuid)
+
+   • email (text)
+
+-  • apple_uid (text)
+
+-  🔑 [p] contact_pkey: PRIMARY KEY (id)
+
+-
+
++  • token (text)
+
++  • metadata (jsonb)
+
++  • created_at (timestamp without time zone)
+
++  • used_at (timestamp without time zone)
+
++  🔑 [p] pending_verification_pkey: PRIMARY KEY (id)
+
++  🔑 [u] pending_verification_token_key: UNIQUE (token)
+
++
+
++📁 Tabell: tracking_event
+
++  • id (uuid)
+
++  • visitor_id (text)
+
++  • event_type (text)
+
++  • timestamp (timestamp with time zone)
+
++  • metadata (jsonb)
+
++  🔑 [p] tracking_event_pkey: PRIMARY KEY (id)
+
++  🧪 Topp 5 rader:
+
++    - id=65448382-0365-4057-8c78-2d7ef1bbfd18, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:19.476000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'performance_now': 1523, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+
++    - id=0d4bfbba-1290-4092-8b9a-708ffffb761c, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:39.933000+02:00, metadata={'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1310, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 21982, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+
++    - id=4f52e783-cb5f-4d4a-bd67-9bf601667129, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=click, timestamp=2025-06-24 17:55:47.207000+02:00, metadata={'tag': 'A', 'url': '/', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'href': 'https://www.klrab.se/sustainability', 'text': 'HÅLLBARHET', 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'http://m.facebook.com/', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 813, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 1927, 'performance_now': 29256, 'hardwareConcurrency': 4, 'timezone_offset_min': -120, 'time_since_page_load_ms': 29250}
+
++    - id=a0f20249-cc96-474c-94ea-ba6d9fe68659, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=page_view, timestamp=2025-06-24 17:55:47.580000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 0, 'innerHeight': 655}, 'is_mobile': True, 'ip_address': None, 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 363, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+
++    - id=acc6e76d-bc03-4d85-bacc-c6ab4c5390ac, visitor_id=ceb0405d-6f78-42a9-9253-b4235765a287, event_type=scroll_50, timestamp=2025-06-24 17:55:51.856000+02:00, metadata={'url': '/sustainability', 'utm': {'medium': None, 'source': None, 'campaign': None}, 'screen': {'width': 390, 'height': 844, 'devicePixelRatio': 3}, 'language': 'sv-SE', 'nav_type': 0, 'platform': 'iPhone', 'referrer': 'https://www.klrab.se/?fbclid=IwZXh0bgNhZW0CMTEAAR5hzWmOzv6HpUYbozAgHZ2Vx9j0qWTw58evLsXlWjFnkuvI-ev2yHSNbA58RQ_aem_QNWFcdQrigQcphPI8p1LqA', 'timezone': 'Europe/Stockholm', 'viewport': {'scrollY': 1223, 'innerHeight': 769}, 'is_mobile': True, 'ip_address': '94.191.139.100', 'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22F76 [FBAN/FBIOS;FBAV/518.0.0.52.100;FBBV/750192798;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/18.5;FBSS/3;FBID/phone;FBLC/sv_SE;FBOP/5;FBRV/752652323;IABMV/1]', 'color_depth': 24, 'fingerprint': 'c43a04fb73eb91c09e117f6003b3831cbf68534200177807da45a4b9bf593139', 'deviceMemory': None, 'do_not_track': False, 'page_load_ms': 364, 'performance_now': 4640, 'hardwareConcurrency': 4, 'timezone_offset_min': -120}
+
++
+
++📁 Tabell: entry
+
++  • id (uuid)
+
++  • transaction_id (uuid)
+
++  • account_id (uuid)
+
++  • amount (numeric)
+
++  • description (text)
+
++  • metadata (jsonb)
+
++  • created_at (timestamp with time zone)
+
++  • amount_original (numeric)
+
++  🔑 [p] entry_pkey: PRIMARY KEY (id)
+
++  🔑 [f] entry_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
++  🔑 [f] entry_account_id_fkey: FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT
+
++
+
++📁 Tabell: attachment
+
++  • id (uuid)
+
++  • transaction_id (uuid)
+
++  • filename (text)
+
++  • content_type (text)
+
++  • data (bytea)
+
++  • uploaded_at (timestamp with time zone)
+
++  • metadata (jsonb)
+
++  🔑 [p] attachment_pkey: PRIMARY KEY (id)
+
++  🔑 [f] attachment_transaction_id_fkey: FOREIGN KEY (transaction_id) REFERENCES transaction(id) ON DELETE CASCADE
+
++
+
++📁 Tabell: entry_tag_relation
+
++  • entry_id (uuid)
+
++  • tag_id (uuid)
+
++  🔑 [p] entry_tag_relation_pkey: PRIMARY KEY (entry_id, tag_id)
+
++  🔑 [f] entry_tag_relation_entry_id_fkey: FOREIGN KEY (entry_id) REFERENCES entry(id) ON DELETE CASCADE
+
++  🔑 [f] entry_tag_relation_tag_id_fkey: FOREIGN KEY (tag_id) REFERENCES entry_tag(id) ON DELETE CASCADE
+
++
+
++📁 Tabell: event_log
+
++  • source (text)
+
++  • event_type (text)
+
++  • payload (jsonb)
+
++  • received_at (timestamp with time zone)
+
++  • id (uuid)
+
++  • table_name (text)
+
++  • record_id (uuid)
+
++  • action (text)
+
++  • timestamp (timestamp with time zone)
+
++  • booking_id (uuid)
+
++  🔑 [p] event_log_pkey: PRIMARY KEY (id)
+
++  🧪 Topp 5 rader:
+
++    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=38d75043-8239-45aa-bf67-921675749983, table_name=contact, record_id=61b2a257-9368-4017-9552-0c22810a03cb, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+
++    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=c0aaac8a-2080-47e6-a185-abd24b718595, table_name=contact, record_id=e17c6638-c18b-472c-a566-a3785f82135c, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+
++    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=5b6fdb0f-f11c-4fcb-88fa-670d15a065eb, table_name=contact, record_id=570d0c49-dd0a-49bf-84c1-3ee75f4dd33e, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+
++    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=6839af9a-3393-46a9-b0f8-e511d3775806, table_name=contact, record_id=c6a9bd11-8cca-4ad0-888c-40e8136720d2, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+
++    - source=None, event_type=None, payload=None, received_at=2025-06-24 17:28:11.571119+02:00, id=e2fde31b-4acb-4349-a00c-db9f22a9f9c3, table_name=contact, record_id=c02f4a7e-00b4-4671-bc9b-362ad00ed1e8, action=INSERT, timestamp=2025-06-24 17:28:11.571119+02:00, booking_id=None
+
++
+
+
+🌐 HTML-diff finns även här:
+file:///Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/AllSyncCodes_history/🧮_diff_output.html

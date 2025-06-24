@@ -84,16 +84,17 @@
     if (!email.includes('@') || !type) return;
     const payload = { email, meeting_type: type };
     const response = await MacSpotUtils.fetchJSON('/api/validate_contact', payload, 'POST');
-    const { contact_id, missing_fields, status, metadata } = response;
+    const { contact_id, missing_fields, status, metadata, ccrelation_metadata } = response;
     console.log('📦 missing_fields:', missing_fields);
     console.log('📦 metadata:', metadata);
     window.formState = {
       status,
       contact_id,
-      email: metadata?.email || email,
+      email: ccrelation_metadata?.email || email,
       meeting_type: metadata?.meeting_type || type,
       meeting_length: metadata?.meeting_length || MacSpotUtils.getVal('#clt_meetinglength'),
-      metadata
+      metadata,
+      ccrelation_metadata
     };
     const baseRequired = bookingSettings?.required_fields?.base || [];
     const extraRequired = bookingSettings?.required_fields?.[type?.toLowerCase()] || [];
@@ -118,7 +119,7 @@
       if (MacSpotUtils.getVal('#clt_ready') === 'true' && contact_id) {
         console.log('📡 clt_ready är true – triggar initAvailableSlotFetch');
         window.initAvailableSlotFetch?.({
-          email: MacSpotUtils.getVal('#clt_email'),
+          email: ccrelation_metadata?.email || email,
           meeting_type: MacSpotUtils.getVal('#clt_meetingtype'),
           meeting_length: MacSpotUtils.getVal('#clt_meetinglength'),
           contact_id: MacSpotUtils.getVal('#clt_contact_id')
@@ -220,10 +221,11 @@
 
     window.formState = {
       contact_id,
-      email: MacSpotUtils.getVal('#clt_email'),
+      email: window.formState?.ccrelation_metadata?.email || MacSpotUtils.getVal('#clt_email'),
       meeting_type: MacSpotUtils.getVal('#clt_meetingtype'),
       meeting_length: MacSpotUtils.getVal('#clt_meetinglength'),
-      status: newStatus || status
+      status: newStatus || status,
+      ccrelation_metadata: window.formState?.ccrelation_metadata
     };
 
     checkReady();
