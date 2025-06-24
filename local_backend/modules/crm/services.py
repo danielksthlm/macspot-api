@@ -29,7 +29,6 @@ async def get_all_contacts():
             GROUP BY contact_id
         ) b ON c.id = b.contact_id
         ORDER BY c.created_at DESC
-        LIMIT 100
     """)
     await conn.close()
     contacts = []

@@ -383,6 +383,17 @@ def main():
             conn.commit()
             print(f"✅ Skrev kontakt till Apple Kontakter och markerade som klar: {email}")
 
+    try:
+        import subprocess
+        subprocess.run([
+            "/opt/homebrew/bin/terminal-notifier",
+            "-title", "Apple Contact Sync",
+            "-message", f"✅ {num_pending_created} skapade, {num_pending_skipped} hoppade över",
+            "-sender", "se.klrab.macspot",
+            "-remove", "se.klrab.macspot"
+        ])
+    except Exception as e:
+        print(f"⚠️ Kunde inte visa notis: {e}")
     conn.close()
     print(f"✅ Klar med synkning av Apple-kontakter. Totalt {len(changes)} kontakter behandlade.")
     print(f"ℹ️ Skapade pending_changes: {num_pending_created}, hoppade över (duplikat/identiska): {num_pending_skipped}")
