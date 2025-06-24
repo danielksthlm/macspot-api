@@ -1,5 +1,6 @@
 const pool = require('../shared/db/pgPool');
 const { sendMail } = require('../shared/notification/sendMail');
+const { v4: uuidv4 } = require('uuid');
 
 module.exports = async function (context, req) {
   const token = req.body?.token || req.query?.token;
@@ -39,21 +40,34 @@ module.exports = async function (context, req) {
     if (action === 'newsletter') {
       // Kontrollera om kontakt redan finns
       const contactRes = await pool.query(
-        `SELECT id, metadata FROM contact WHERE email = $1 LIMIT 1`,
+        `SELECT c.id AS contact_id, ccr.id AS ccrelation_id, ccr.metadata
+         FROM contact c
+         JOIN ccrelation ccr ON c.id = ccr.contact_id
+         WHERE ccr.metadata->>'email' = $1
+         LIMIT 1`,
         [email]
       );
       if (contactRes.rows.length > 0) {
-        const oldMeta = contactRes.rows[0].metadata || {};
-        const merged = { ...oldMeta, subscribed_to_newsletter: true };
+        const ccrelation_id = contactRes.rows[0].ccrelation_id;
         await pool.query(
-          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE email = $2`,
-          [merged, email]
+          `UPDATE ccrelation
+           SET metadata = jsonb_set(metadata, '{subscribed_to_newsletter}', 'true'::jsonb, true),
+               updated_at = NOW()
+           WHERE id = $1`,
+          [ccrelation_id]
         );
       } else {
+        const newContactId = uuidv4();
         await pool.query(
-          `INSERT INTO contact (id, email, metadata, created_at)
-           VALUES (gen_random_uuid(), $1, $2, NOW())`,
-          [email, { subscribed_to_newsletter: true }]
+          `INSERT INTO contact (id, created_at) VALUES ($1, NOW())`,
+          [newContactId]
+        );
+
+        const newRelationId = uuidv4();
+        await pool.query(
+          `INSERT INTO ccrelation (id, contact_id, metadata, role, created_at)
+           VALUES ($1, $2, $3, 'newsletter', NOW())`,
+          [newRelationId, newContactId, { email, subscribed_to_newsletter: true }]
         );
       }
 

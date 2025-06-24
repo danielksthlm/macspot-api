@@ -43,12 +43,19 @@ def apply_pending_out_contacts(conn):
         for change_id, record_id, operation, payload_json in rows:
             payload = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
             # Kontroll: Hoppa över pending_change utan e-post
-            if not payload.get("email") and not payload.get("emails"):
+            emails = payload.get("emails", [])
+            email = emails[0]["email"] if emails else None
+            if not emails or not email:
                 print(f"⚠️ Hoppar över pending_change utan e-post: {payload}")
                 cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
                 continue
-            emails = payload.get("emails", [])
-            email = emails[0]["email"] if emails else None
+            if email:
+                email = email.lower()
+            # Normalize all emails in payload["emails"]
+            if emails:
+                for item in emails:
+                    if "email" in item and isinstance(item["email"], str):
+                        item["email"] = item["email"].lower()
             apple_id = payload.get("apple_id") or payload.get("metadata", {}).get("apple_id")
 
             # NYTT: Hoppa över tom kontakt
@@ -165,12 +172,11 @@ def apply_pending_out_contacts(conn):
                 cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
                 continue
 
-            # Om kombinationen email + apple_id redan finns med annan id → hämta rätt id
+            # Om kontakt med apple_id redan finns med annan id → hämta rätt id
             cur.execute("""
                 SELECT id FROM contact
-                WHERE LOWER(email) = LOWER(%s)
-                  AND metadata->>'apple_id' = %s
-            """, (email, apple_id))
+                WHERE metadata->>'apple_id' = %s
+            """, (apple_id,))
             existing = cur.fetchone()
             if existing:
                 record_id = existing[0]  # Överskriv med korrekt id
@@ -178,13 +184,12 @@ def apply_pending_out_contacts(conn):
             # UPSERT-logik: Alltid använd UPSERT, och uppdatera även updated_at
             print(f"➕/🔁 Upsert kontakt: {email}")
             cur.execute("""
-                INSERT INTO contact (id, email, metadata, updated_at)
-                VALUES (%s, %s, %s, NOW())
+                INSERT INTO contact (id, metadata, updated_at)
+                VALUES (%s, %s, NOW())
                 ON CONFLICT (id) DO UPDATE
-                SET email = EXCLUDED.email,
-                    metadata = EXCLUDED.metadata,
+                SET metadata = EXCLUDED.metadata,
                     updated_at = NOW()
-            """, (record_id, email, json.dumps(payload | {"metadata": metadata})))
+            """, (record_id, json.dumps(payload | {"metadata": metadata})))
 
             cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
         conn.commit()
@@ -219,6 +224,13 @@ def main():
         apple_id = payload.get("apple_id") or payload.get("metadata", {}).get("apple_id")
         emails = payload.get("emails", [])
         email = emails[0]["email"] if emails else None
+        if email:
+            email = email.lower()
+        # Normalize all emails in payload["emails"]
+        if emails:
+            for item in emails:
+                if "email" in item and isinstance(item["email"], str):
+                    item["email"] = item["email"].lower()
 
         if not any([
             payload.get("first_name"),

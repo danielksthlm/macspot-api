@@ -25,7 +25,13 @@ module.exports = async function (context, req) {
       if (!process.env[key]) throw new Error(`Missing environment variable: ${key}`);
     }
 
-    const contactRes = await pool.query('SELECT * FROM contact WHERE email = $1', [email]);
+    const contactRes = await pool.query(`
+      SELECT c.*, ccr.id AS ccrelation_id, ccr.metadata AS ccrelation_metadata
+      FROM contact c
+      JOIN ccrelation ccr ON c.id = ccr.contact_id
+      WHERE ccr.metadata->>'email' = $1
+      LIMIT 1
+    `, [email]);
     const contact = contactRes.rows[0];
 
     if ((req.body?.write_if_valid || req.query?.write_if_valid) && contact) {
@@ -40,13 +46,23 @@ module.exports = async function (context, req) {
       }
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
         // Fetch existing metadata
-        const existing = await pool.query('SELECT metadata FROM contact WHERE email = $1', [email]);
+        const existing = await pool.query(`
+          SELECT ccr.metadata FROM ccrelation ccr WHERE ccr.metadata->>'email' = $1
+        `, [email]);
         const old = existing.rows[0]?.metadata || {};
         const merged = { ...old, ...metadataFromClient };
-        await pool.query(
-          `UPDATE contact SET metadata = $1, updated_at = NOW() WHERE email = $2`,
-          [merged, email]
-        );
+
+        // Update each key in metadata individually
+        for (const [key, value] of Object.entries(merged)) {
+          await pool.query(
+            `UPDATE ccrelation
+             SET metadata = jsonb_set(ccr.metadata, '{${key}}', to_jsonb($1), true),
+                 updated_at = NOW()
+             FROM ccrelation ccr
+             WHERE ccr.metadata->>'email' = $2`,
+            [value, email]
+          );
+        }
         context.log.info('✏️ Befintlig kontakt uppdaterad via validate_contact');
       }
     }
@@ -63,10 +79,16 @@ module.exports = async function (context, req) {
       if (typeof metadataFromClient === 'object' && metadataFromClient !== null) {
         metadataFromClient.origin = 'klrab.se';
         const newId = uuidv4();
-        await pool.query(
-          `INSERT INTO contact (id, email, metadata, created_at) VALUES ($1, $2, $3, NOW())`,
-          [newId, email, metadataFromClient]
-        );
+        await pool.query(`
+          INSERT INTO contact (id, metadata, created_at) VALUES ($1, $2, NOW())
+        `, [newId, metadataFromClient]);
+
+        const ccrelId = uuidv4();
+        await pool.query(`
+          INSERT INTO ccrelation (id, contact_id, company_id, role, metadata, created_at)
+          VALUES ($1, $2, NULL, 'unknown', jsonb_build_object('email', $3), NOW())
+        `, [ccrelId, newId, email]);
+
         context.log.info('✅ Ny kontakt skapad via validate_contact');
 
         if (process.env.DEBUG === 'true') {
@@ -77,7 +99,8 @@ module.exports = async function (context, req) {
           status: 200,
           body: {
             status: "created",
-            contact_id: newId
+            contact_id: newId,
+            ccrelation_id: ccrelId
           }
         };
         return;
@@ -86,7 +109,9 @@ module.exports = async function (context, req) {
 
     let metadata = {};
     if (contact) {
-      const refreshed = await pool.query('SELECT metadata FROM contact WHERE email = $1', [email]);
+      const refreshed = await pool.query(`
+        SELECT ccr.metadata FROM ccrelation ccr WHERE ccr.metadata->>'email' = $1
+      `, [email]);
       metadata = refreshed.rows[0]?.metadata || {};
     }
 
@@ -146,6 +171,7 @@ module.exports = async function (context, req) {
         body: {
           status: "incomplete",
           contact_id: contact.id,
+          ccrelation_id: contact.ccrelation_id,
           missing_fields: missingFields,
           metadata
         }
@@ -159,6 +185,7 @@ module.exports = async function (context, req) {
         body: {
           status: "existing_customer",
           contact_id: contact.id,
+          ccrelation_id: contact.ccrelation_id,
           metadata
         }
       };

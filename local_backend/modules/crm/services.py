@@ -18,10 +18,11 @@ async def get_all_contacts():
     rows = await conn.fetch("""
         SELECT 
             c.id,
-            c.email,
+            ccr.metadata->>'email' AS email,
             c.metadata,
             COALESCE(b.count, 0) AS booking_count
         FROM contact c
+        JOIN ccrelation ccr ON c.id = ccr.contact_id
         LEFT JOIN (
             SELECT contact_id, COUNT(*) AS count
             FROM bookings
@@ -45,7 +46,7 @@ async def get_all_contacts():
         print("RAW last_name:", metadata.get("last_name"))
         contacts.append({
             "id": str(row["id"]),
-            "email": row["email"],
+            "email": row["email"],  # Now comes from ccr.metadata->>'email'
             "first_name": fix_encoding(metadata.get("first_name")),
             "last_name": fix_encoding(metadata.get("last_name")),
             "company": fix_encoding(metadata.get("company")),
@@ -57,7 +58,13 @@ async def get_all_contacts():
 async def get_contact_by_id(contact_id: str):
     db_url = os.environ["LOCAL_DB_URL"]
     conn = await asyncpg.connect(dsn=db_url)
-    row = await conn.fetchrow("SELECT * FROM contact WHERE id = $1", contact_id)
+    row = await conn.fetchrow("""
+        SELECT c.*, ccr.metadata->>'email' AS email
+        FROM contact c
+        JOIN ccrelation ccr ON c.id = ccr.contact_id
+        WHERE c.id = $1
+        LIMIT 1
+    """, contact_id)
     await conn.close()
     if row:
         return dict(row)

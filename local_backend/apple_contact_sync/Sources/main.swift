@@ -100,7 +100,7 @@ do {
         return
     }
     for emailValue in contact.emailAddresses {
-        let email = emailValue.value as String
+        let email = (emailValue.value as String).lowercased()
         do {
           let firstName = contact.givenName
           let lastName = contact.familyName
@@ -161,7 +161,7 @@ do {
 
                           let emails = contact.emailAddresses.map { [
                               "label": $0.label ?? "",
-                              "email": $0.value as String
+                              "email": ($0.value as String).lowercased()
                           ]}
 
                           let urls = contact.urlAddresses.map { [
@@ -383,7 +383,7 @@ WHERE metadata->>'apple_id' = $1 OR metadata->>'apple_uid' = $1
 
               let emails = contact.emailAddresses.map { [
                   "label": $0.label ?? "",
-                  "email": $0.value as String
+                  "email": ($0.value as String).lowercased()
               ]}
 
               let urls = contact.urlAddresses.map { [

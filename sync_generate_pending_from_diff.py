@@ -30,17 +30,29 @@ def extract_pending_changes_from_eventlog(conn):
         for row in rows:
             event_id, event_type, payload_json, _ = row
             payload = payload_json if isinstance(payload_json, dict) else json.loads(payload_json)
-            email = payload.get("email")
+            email = payload.get("email") or (payload.get("metadata") or {}).get("email")
             table = "contact" if "contacts" in event_type else "bookings"
 
             if not email:
                 continue
 
             # Hämta aktuell post från databasen
-            cur.execute(f"SELECT * FROM {table} WHERE email = %s", (email,))
+            if table == "contact":
+                cur.execute("""
+                    SELECT c.*, ccr.metadata->>'email' AS ccr_email
+                    FROM contact c
+                    JOIN ccrelation ccr ON c.id = ccr.contact_id
+                    WHERE ccr.metadata->>'email' = %s
+                    LIMIT 1
+                """, (email,))
+            else:
+                cur.execute(f"SELECT * FROM {table} WHERE email = %s", (email,))
             result = cur.fetchone()
             if not result:
-                print(f"⚠️ Ingen rad hittades för {email} i {table}")
+                if table == "contact":
+                    print(f"⚠️ Ingen contact/ccrelation hittades för e-post: {email}")
+                else:
+                    print(f"⚠️ Ingen rad hittades för {email} i {table}")
                 continue
 
             colnames = [desc[0] for desc in cur.description]
