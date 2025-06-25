@@ -13,6 +13,7 @@ from local_backend.modules.accounting.tax_reporting.routes import router as tax_
 from local_backend.modules.accounting.closing.routes import router as closing_router
 from local_backend.modules.accounting.invoicing.routes import router as invoicing_router
 from local_backend.modules.accounting.accounts_payable.routes import router as payable_router
+from local_backend.modules.system import routes as system_routes
 
 app = FastAPI()
 
@@ -57,3 +58,4 @@ app.include_router(tax_router)
 app.include_router(closing_router)
 app.include_router(invoicing_router)
 app.include_router(payable_router)
+app.include_router(system_routes.router)

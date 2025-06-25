@@ -42,15 +42,19 @@ def apply_pending_out_contacts(conn):
 
         for change_id, record_id, operation, payload_json in rows:
             payload = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
-            # Kontroll: Hoppa över pending_change utan e-post
+            # Kontroll: Hoppa över pending_change utan giltig e-post
             emails = payload.get("emails", [])
-            email = emails[0]["email"] if emails else None
-            if not emails or not email:
-                print(f"⚠️ Hoppar över pending_change utan e-post: {payload}")
+            email = None
+            for item in emails:
+                if item.get("email"):
+                    email = item["email"]
+                    break
+
+            if not email:
+                print(f"⚠️ Hoppar över pending_change utan giltig e-post: {payload}")
                 cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
                 continue
-            if email:
-                email = email.lower()
+            email = email.lower()
             # Normalize all emails in payload["emails"]
             if emails:
                 for item in emails:
