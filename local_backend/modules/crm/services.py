@@ -12,6 +12,52 @@ def fix_encoding(text):
             return text
     return text
 
+async def get_contacts_with_emails_grouped():
+    db_url = os.environ["LOCAL_DB_URL"]
+    conn = await asyncpg.connect(dsn=db_url)
+    rows = await conn.fetch("""
+        SELECT 
+            c.id,
+            c.metadata,
+            ccr.metadata->>'email' AS email,
+            ccr.role,
+            ccr.main_contact,
+            cmp.metadata->>'name' AS company_name
+        FROM contact c
+        JOIN ccrelation ccr ON c.id = ccr.contact_id
+        LEFT JOIN company cmp ON ccr.company_id = cmp.id
+        ORDER BY c.created_at DESC
+    """)
+    await conn.close()
+
+    contact_map = {}
+    for row in rows:
+        contact_id = str(row["id"])
+        metadata_raw = row["metadata"]
+        metadata = metadata_raw if isinstance(metadata_raw, dict) else json.loads(metadata_raw or "{}")
+        email = row["email"]
+        role = row["role"]
+        if contact_id not in contact_map:
+            contact_map[contact_id] = {
+                "id": contact_id,
+                "first_name": fix_encoding(metadata.get("first_name")),
+                "last_name": fix_encoding(metadata.get("last_name")),
+                "company": fix_encoding(metadata.get("company")),
+                "emails": []
+            }
+        label = "★" if row["main_contact"] else ""
+        contact_map[contact_id]["emails"].append({
+            "email": email,
+            "role": role,
+            "company_name": row["company_name"],
+            "main_contact": row["main_contact"],
+            "label": label
+        })
+    # Sort emails so that main_contact=True comes first for each contact
+    for contact in contact_map.values():
+        contact["emails"].sort(key=lambda x: not x.get("main_contact", False))
+    return list(contact_map.values())
+
 async def get_all_contacts():
     db_url = os.environ["LOCAL_DB_URL"]
     conn = await asyncpg.connect(dsn=db_url)

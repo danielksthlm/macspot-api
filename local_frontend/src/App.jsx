@@ -8,7 +8,7 @@ import Bookings from "./routes/Bookings";
 import Settings from "./routes/Settings";
 import NotFound from "./routes/NotFound";
 
-// Placeholder for Prospects page, can be replaced with real component later
+// Placeholder for Prospects page
 function Prospects() {
   return <div className="p-8 text-lg">Prospekt-sidan är under utveckling.</div>;
 }

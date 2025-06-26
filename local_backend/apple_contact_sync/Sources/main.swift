@@ -47,7 +47,7 @@ do {
   let connection = try PostgresClientKit.Connection(configuration: configuration)
   defer { connection.close() }
 
-  let keysToFetch: [CNKeyDescriptor] = [
+  var keysToFetch: [CNKeyDescriptor] = [
     CNContactIdentifierKey as CNKeyDescriptor,
     CNContactGivenNameKey as CNKeyDescriptor,
     CNContactMiddleNameKey as CNKeyDescriptor,
@@ -65,6 +65,8 @@ do {
     CNContactDatesKey as CNKeyDescriptor,
     CNContactNicknameKey as CNKeyDescriptor
   ]
+  // Lägg till bild-data för Base64
+  keysToFetch.append(CNContactImageDataKey as CNKeyDescriptor)
   let store = CNContactStore()
   let request = CNContactFetchRequest(keysToFetch: keysToFetch)
   var skippedDueToError = 0
@@ -190,6 +192,10 @@ do {
                           ]
                           var safeMetadata = cleanMetadata
                           safeMetadata.removeValue(forKey: "metadata")
+                          // Bild till Base64 om finns
+                          if contact.imageDataAvailable, let imageData = contact.imageData {
+                              safeMetadata["image_base64"] = imageData.base64EncodedString()
+                          }
                           let jsonPayload: [String: Any] = [
                               "apple_id": contact.identifier,
                               "apple_uid": contact.identifier,
@@ -411,6 +417,10 @@ WHERE metadata->>'apple_id' = $1 OR metadata->>'apple_uid' = $1
               ]
               var safeMetadata = cleanMetadata
               safeMetadata.removeValue(forKey: "metadata")
+              // Bild till Base64 om finns
+              if contact.imageDataAvailable, let imageData = contact.imageData {
+                  safeMetadata["image_base64"] = imageData.base64EncodedString()
+              }
               let jsonPayload: [String: Any] = [
                   "apple_id": appleId,
                   "apple_uid": appleId,

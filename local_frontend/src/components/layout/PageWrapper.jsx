@@ -1,25 +1,35 @@
+import { useLocation } from "react-router-dom";
 import React from "react";
 import Header from "./Header.jsx";
 import Sidebar from "./Sidebar.jsx";
 
-function getPageTitle(path) {
-  const map = {
-    "/": "Översikt",
-    "/contacts": "Kontakter",
-    "/bookings": "Bokningar",
-    "/prospects": "Prospekt",
-    "/settings": "Systeminställningar",
+function getHeaderTitles(path) {
+  const structure = {
+    "/contacts": ["Relationer", "Kontakter"],
+    "/bookings": ["Relationer", "Bokningar"],
+    "/prospects": ["Relationer", "Prospekt"],
+    "/campaigns": ["Marknad", "Kampanjer"],
+    "/mailings": ["Marknad", "Utskick"],
+    "/projects": ["Uppdrag", "Projekt"],
+    "/tasks": ["Uppdrag", "Att göra"],
+    "/reports": ["Ekonomi", "Rapporter"],
+    "/invoices": ["Ekonomi", "Fakturor"],
+    "/settings": ["System", "Inställningar"],
   };
-  return map[path] || "Northlight";
+  return structure[path] || ["Northlight", ""];
 }
 
 export default function PageWrapper({ children }) {
+  const location = useLocation();
+  const [mainTitle, subTitle] = getHeaderTitles(location.pathname);
   return (
-    <div className="flex h-screen bg-gray-100 text-gray-900">
+    <div className="flex">
       <Sidebar />
       <div className="flex-1 flex flex-col">
-        <Header title={getPageTitle(window.location.pathname)} />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <Header mainTitle={mainTitle} subTitle={subTitle} />
+        <main className="flex-1">
+          {children}
+        </main>
       </div>
     </div>
   );

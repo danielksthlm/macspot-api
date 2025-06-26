@@ -1,3 +1,8 @@
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
 /* === Apple-liknande inputfält === */
 :root {
   --KLR_Orange: #e9a56f;
@@ -17,16 +22,6 @@
   border-color: #007aff;
   background: white;
 }
-/* === MacSpot Basstil === */
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: #f9f9f9;
-  color: #1e1e1e;
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-}
-
 
 /* === Kontaktkort === */
 .mac-card {
@@ -92,4 +87,81 @@ body {
   background-size: cover;
   background-position: center;
   color: white;
+}
+
+.mac-card,
+.mac-panel {
+  background: transparent !important;
+}
+
+/* === MacSpot Basstil === */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0 0 0.5rem 0;
+}
+h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0 0 0.5rem 0;
+}
+h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0 0 0.4rem 0;
+}
+h5 {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 0.4rem 0;
+}
+h6 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 0 0 0.3rem 0;
+}
+
+/* === Brödtext === */
+p {
+  font-size: 1rem;
+  line-height: 1.6;
+  margin: 0 0 1rem 0;
+}
+
+/* === Klassbaserade typografistilar === */
+.mac-h1 {
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--KLR_Orange);
+  margin-bottom: 4px;
+}
+
+.mac-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.mac-body {
+  font-size: 1rem;
+  line-height: 1.6;
+  margin: 0 0 1rem 0;
 }

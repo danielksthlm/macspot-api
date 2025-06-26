@@ -145,9 +145,14 @@ def apply_pending_out_contacts(conn):
                 print(f"✅ Kontakt skapad i Apple och apple_id satt: {email}")
 
             metadata = payload.get("metadata", {})
+            if "image_base64" in metadata:
+                metadata["image_base64"] = metadata["image_base64"]  # behåll som är
             if apple_id:
                 metadata['apple_id'] = apple_id
             metadata['origin'] = "macos"
+            # Add apple_uid to payload if apple_id exists
+            if apple_id:
+                payload["apple_uid"] = apple_id
             
             print(f"↘️ Skriver till local contact: {email} ({operation})")
 
@@ -188,12 +193,32 @@ def apply_pending_out_contacts(conn):
             # UPSERT-logik: Alltid använd UPSERT, och uppdatera även updated_at
             print(f"➕/🔁 Upsert kontakt: {email}")
             cur.execute("""
-                INSERT INTO contact (id, metadata, updated_at)
-                VALUES (%s, %s, NOW())
+                INSERT INTO contact (id, apple_uid, metadata, updated_at)
+                VALUES (%s, %s, %s, NOW())
                 ON CONFLICT (id) DO UPDATE
                 SET metadata = EXCLUDED.metadata,
+                    apple_uid = EXCLUDED.apple_uid,
                     updated_at = NOW()
-            """, (record_id, json.dumps(payload | {"metadata": metadata})))
+            """, (record_id, apple_id, json.dumps(payload | {"metadata": metadata})))
+
+            # Skapa ccrelation per e-post
+            if emails:
+                for item in emails:
+                    address = item.get("email")
+                    if not address:
+                        continue
+                    address = address.lower()
+                    # Kontrollera om ccrelation med denna e-post redan finns
+                    cur.execute("""
+                        SELECT 1 FROM ccrelation
+                        WHERE contact_id = %s AND metadata->>'email' = %s
+                    """, (record_id, address))
+                    exists = cur.fetchone()
+                    if not exists:
+                        cur.execute("""
+                            INSERT INTO ccrelation (id, contact_id, company_id, role, metadata, created_at)
+                            VALUES (gen_random_uuid(), %s, NULL, %s, jsonb_build_object('email', %s), NOW())
+                        """, (record_id, "imported", address))
 
             cur.execute("UPDATE pending_changes SET processed = true WHERE id = %s", (change_id,))
         conn.commit()

@@ -1,12 +1,29 @@
 import React from "react";
 
-export default function Header({ title, onNewContact }) {
+export default function Header({ mainTitle, subTitle, onNewContact, className = "", style }) {
   return (
-    <header className="h-16 px-6 flex items-center justify-between bg-white shadow-sm">
-      <h1 className="text-xl font-semibold">{title || "Northlight"}</h1>
-      <button className="mac-btn" onClick={onNewContact}>
-        + Ny kontakt
-      </button>
+    <header
+      className={className}
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        padding: "20px",
+        ...style,
+      }}
+    >
+      <div style={{ paddingRight: "10px" }}>
+        <h1 className="mac-h1">
+          {mainTitle || "Northlight"}
+        </h1>
+        <div className="mac-subtitle">
+          {subTitle}
+        </div>
+      </div>
+      {onNewContact && (
+        <button className="mac-btn" onClick={onNewContact}>
+          + Ny kontakt
+        </button>
+      )}
     </header>
   );
 }

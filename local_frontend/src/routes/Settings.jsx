@@ -1,115 +1,142 @@
 import React, { useEffect, useState } from "react";
 
 export default function Settings() {
-  const [settings, setSettings] = useState({});
+  const [bookingSettings, setBookingSettings] = useState({});
+  const [tableMetadata, setTableMetadata] = useState([]);
+  const [activeTab, setActiveTab] = useState("booking");
 
   useEffect(() => {
-    fetch("http://localhost:8000/settings")
+    fetch("http://localhost:8000/booking-settings")
       .then(res => res.json())
-      .then(data => setSettings(data));
+      .then(data => setBookingSettings(data));
+    fetch("http://localhost:8000/table-metadata")
+      .then(res => res.json())
+      .then(data => setTableMetadata(data));
   }, []);
 
-  const updateValue = (key, newValue) => {
-    setSettings((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], value: newValue },
-    }));
-  };
-
-  const saveSetting = (key) => {
-    fetch(`http://localhost:8000/settings/${key}`, {
+  const saveBookingSetting = (key, value) => {
+    fetch(`http://localhost:8000/booking-settings/${key}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: settings[key].value }),
-    }).then(() => alert("Uppdaterat!"));
+      body: JSON.stringify({ value }),
+    });
   };
 
-  const renderInput = (key, value, type) => {
-    if (type === "string") {
-      return (
-        <input
-          className="w-full border p-2 text-sm"
-          value={value}
-          onChange={(e) => updateValue(key, e.target.value)}
-        />
-      );
-    }
+  const saveFieldMetadata = (table, field, newDescription) => {
+    fetch(`http://localhost:8000/table-metadata/${table}/${field}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: newDescription }),
+    });
+  };
 
-    if (type === "array") {
-      return (
-        <div className="space-y-1">
-          {value.map((item, i) => (
-            <div key={i} className="flex gap-2">
-              <input
-                type="number"
-                className="border p-1 w-20"
-                value={item}
-                onChange={(e) => {
-                  const newArray = [...value];
-                  newArray[i] = parseInt(e.target.value);
-                  updateValue(key, newArray);
-                }}
-              />
-              <button
-                className="text-red-500"
-                onClick={() => {
-                  const newArray = value.filter((_, idx) => idx !== i);
-                  updateValue(key, newArray);
-                }}
-              >
-                −
-              </button>
-            </div>
-          ))}
-          <button
-            className="mt-2 text-sm text-blue-600"
-            onClick={() => updateValue(key, [...value, 0])}
-          >
-            + Lägg till värde
-          </button>
-        </div>
-      );
-    }
+  const formatLabel = (str) =>
+    str.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
-    if (type === "json") {
-      return (
-        <div className="space-y-1">
-          {Object.entries(value).map(([subKey, subVal]) => (
-            <div key={subKey}>
-              <label className="block text-xs text-gray-600">{subKey}</label>
-              <input
-                className="w-full border p-1 text-sm"
-                value={subVal}
-                onChange={(e) => {
-                  updateValue(key, { ...value, [subKey]: e.target.value });
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return <pre>{JSON.stringify(value)}</pre>;
+  // Gruppindelning av bokningsinställningar
+  const settingGroups = {
+    "Standardinställningar": [
+      "default_language", "default_meeting_subject", "default_meeting_length_atclient",
+      "default_meeting_length_atoffice", "default_meeting_length_digital",
+      "default_home_address", "default_office_address", "timezone"
+    ],
+    "Tillgänglighet & regler": [
+      "open_time", "close_time", "lunch_start", "lunch_end", "max_days_in_advance",
+      "max_weekly_booking_minutes", "buffer_between_meetings", "block_weekends",
+      "block_holidays", "meeting_types", "meeting_digital", "available_meeting_room",
+      "room_priority_atoffice", "require_approval", "required_fields", "allowed_atclient_meeting_days"
+    ],
+    "Reselogik & restid": [
+      "fallback_travel_time_minutes", "travel_time_window_start", "travel_time_window_end",
+      "include_map_link"
+    ],
+    "E-post & inbjudningar": [
+      "ms_sender_email", "email_invite_template", "email_signature",
+      "email_subject_templates", "email_body_templates"
+    ],
+    "System & cache": [
+      "analytics_enabled", "cache_ttl_minutes"
+    ]
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Systeminställningar</h1>
-      <div className="space-y-4">
-        {Object.entries(settings).map(([key, obj]) => (
-          <div key={key} className="bg-white p-4 shadow rounded">
-            <div className="text-sm text-gray-500 mb-1">{key}</div>
-            {renderInput(key, obj.value, obj.value_type)}
-            <button
-              className="mt-2 px-4 py-1 bg-blue-600 text-white rounded"
-              onClick={() => saveSetting(key)}
-            >
-              Spara
-            </button>
-          </div>
-        ))}
+    <>
+      <div className="flex gap-4 mb-6">
+        <button
+          className={`px-4 py-2 rounded ${activeTab === "booking" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
+          onClick={() => setActiveTab("booking")}
+        >
+          Bokningsregler
+        </button>
+        <button
+          className={`px-4 py-2 rounded ${activeTab === "metadata" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
+          onClick={() => setActiveTab("metadata")}
+        >
+          Fältbeskrivningar
+        </button>
       </div>
-    </div>
+
+      {activeTab === "booking" && (
+        <div className="bg-white/70 backdrop-blur p-6 rounded-xl shadow-md mb-10 border border-blue-100">
+          <h2 className="mac-h2 mb-4">Bokningsregler</h2>
+          {Object.entries(settingGroups).map(([groupLabel, keys]) => (
+            <details key={groupLabel} className="mb-4 border border-gray-300 rounded">
+              <summary className="cursor-pointer bg-gray-100 px-4 py-2 font-medium">{groupLabel}</summary>
+              <div className="grid gap-4 px-4 py-2">
+                {keys.map((key) => (
+                  key in bookingSettings && (
+                    <div key={key}>
+                      <label className="mac-body block mb-1">{formatLabel(key)}</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        value={bookingSettings[key]}
+                        onChange={(e) =>
+                          setBookingSettings((prev) => ({ ...prev, [key]: e.target.value }))
+                        }
+                        onBlur={(e) => saveBookingSetting(key, e.target.value)}
+                      />
+                    </div>
+                  )
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+
+      {activeTab === "metadata" && (
+        <div className="bg-white/70 backdrop-blur p-6 rounded-xl shadow-md mb-10 border border-blue-100">
+          <h2 className="text-xl font-semibold mb-4">Fältbeskrivningar</h2>
+          <div className="overflow-auto max-h-[60vh] border rounded">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-4 py-2">Tabell</th>
+                  <th className="px-4 py-2">Fält</th>
+                  <th className="px-4 py-2">Beskrivning</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableMetadata.map((row, i) => (
+                  <tr key={`table-${row.table_name}__field-${row.field}`}>
+                    <td className="px-4 py-2">{row.table_name}</td>
+                    <td className="px-4 py-2">{row.field}</td>
+                    <td className="px-4 py-2">
+                      <input
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        defaultValue={row.description}
+                        onBlur={(e) =>
+                          saveFieldMetadata(row.table_name, row.field, e.target.value)
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

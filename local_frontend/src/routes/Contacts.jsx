@@ -10,6 +10,7 @@ export default function Contacts() {
   const [sortBy, setSortBy] = useState("last_name");
   const [searchTerm, setSearchTerm] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const selectedContact = contacts.find(c => c.id === selectedId);
 
   useEffect(() => {
@@ -38,9 +39,11 @@ export default function Contacts() {
       const term = searchTerm.toLowerCase();
       const matchesSearch = fullName.includes(term) || email.includes(term) || company.includes(term);
       const matchesCompany = !companyFilter || c.company === companyFilter;
-      return matchesSearch && matchesCompany;
+      const roles = c.emails?.map(e => e.role?.toLowerCase()) || [];
+      const matchesRole = !roleFilter || roles.includes(roleFilter.toLowerCase());
+      return matchesSearch && matchesCompany && matchesRole;
     });
-  }, [contacts, searchTerm, companyFilter]);
+  }, [contacts, searchTerm, companyFilter, roleFilter]);
 
   const sortedContacts = useMemo(() => {
     return [...filteredContacts].sort((a, b) =>
@@ -49,13 +52,10 @@ export default function Contacts() {
   }, [filteredContacts, sortBy]);
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-4 bg-red-100 min-h-full">
       <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-bold">Kontakter</h1>
-          <div className="text-sm text-gray-500">
-            {sortedContacts.length} kontakt{sortedContacts.length !== 1 && "er"} funna
-          </div>
+        <div className="text-sm text-gray-500">
+          {sortedContacts.length} kontakt{sortedContacts.length !== 1 && "er"} funna
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="sort" className="text-sm text-gray-600">Sortera efter:</label>
@@ -82,8 +82,20 @@ export default function Contacts() {
             onChange={(e) => setCompanyFilter(e.target.value)}
           >
             <option value="">Alla företag</option>
-            {uniqueCompanies.map((company) => (
-              <option key={company} value={company}>{company}</option>
+            {uniqueCompanies.map((company, index) => (
+              <option key={`company-${company}-${index}`} value={company}>{company}</option>
+            ))}
+          </select>
+          <select
+            className="border px-2 py-1 rounded text-sm"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="">Alla roller</option>
+            {Array.from(new Set(contacts.flatMap(c => c.emails?.map(e => e.role).filter(Boolean))))
+              .sort()
+              .map((role, index) => (
+                <option key={`role-${role}-${index}`} value={role}>{role}</option>
             ))}
           </select>
           <button onClick={() => setViewMode("grid")} className={`text-sm px-2 py-1 rounded ${viewMode === "grid" ? "bg-blue-500 text-white" : "bg-gray-100"}`}>🔲</button>
@@ -95,7 +107,7 @@ export default function Contacts() {
       </div>
       {error && <p className="text-red-500">Fel: {error.message}</p>}
       <div className="flex gap-6">
-        <div className="w-2/3 max-h-[75vh] overflow-y-auto pr-2">
+        <div className="w-2/3 max-h-[75vh] overflow-y-auto pr-2 bg-red-100">
           <ContactList contacts={sortedContacts} onSelectContact={setSelectedId} viewMode={viewMode} />
         </div>
         <div className="w-1/3">
