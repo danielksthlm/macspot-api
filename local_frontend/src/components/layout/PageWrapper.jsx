@@ -23,7 +23,16 @@ export default function PageWrapper({ children }) {
   const location = useLocation();
   const [mainTitle, subTitle] = getHeaderTitles(location.pathname);
   return (
-    <div className="flex">
+    <div
+      className="flex"
+      style={{
+        backgroundImage: "url('/assets/BackgroundMacSpot.png')",
+        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "top left",
+        minHeight: "100vh"
+      }}
+    >
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header mainTitle={mainTitle} subTitle={subTitle} />

@@ -124,39 +124,8 @@ export default function Sidebar() {
 
   return (
     <div className="mac-sidebar">
-      {/* Rubrik med bildbakgrund */}
-      <div className="font-heading text-center mb-[-8px]">
-        <span
-          style={{
-            borderStyle: "solid",
-            borderWidth: "10px",
-            fontWeight: "800",
-            fontSize: "30px",
-            padding: "20px",
-            borderColor: "rgba(255, 255, 255, 0.5)",
-            lineHeight: "20px",
-            display: "inline-block"
-          }}
-          className="text-[var(--KLR_Whitesmoke)]"
-        >
-          Northlight
-        </span>
-        <div
-          style={{
-            fontSize: "9px",
-            color: "rgba(255, 255, 255, 0.5)",
-            marginTop: "-12px",
-            fontWeight: "800",
-            fontStyle: "italic",
-            lineHeight: "11px",
-            letterSpacing: "0.5px"
-          }}
-        >
-          – navigate your business
-        </div>
-      </div>
 
-      <div className="flex flex-col" style={{gap: '12px', marginTop: '0px'}}>
+      <div className="flex flex-col" style={{gap: '12px', marginTop: '100px'}}>
         {menu.map((group, index) => (
           <div key={index} className={group.title === "System" ? "mt-auto" : undefined}>
             <div

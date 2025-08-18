@@ -83,9 +83,7 @@ html, body {
   flex-direction: column;
   padding: 1.5rem;
   gap: 2rem;
-  background-image: url('/assets/BackgroundMacSpot.png');
-  background-size: cover;
-  background-position: top left;
+  /* bakgrund tas bort */
   color: white;
 }
 
