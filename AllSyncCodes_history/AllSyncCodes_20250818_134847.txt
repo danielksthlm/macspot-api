@@ -3233,3 +3233,6 @@ healthcheck_sync.py,302,0,49,0,2
 
 +
 
+
+🌐 HTML-diff finns även här:
+file:///Users/danielkallberg/Documents/KLR_AI/Projekt_MacSpot/macspot-api/AllSyncCodes_history/🧮_diff_output.html
